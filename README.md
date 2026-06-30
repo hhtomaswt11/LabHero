@@ -11,6 +11,7 @@ The game consists of simulating distinct environmental and genetic modifications
 
  1. [Introduction](#introduction)
  2. [Installation](#installation)
+    - [Web deployment](#web-deployment)
  3. [Game Story](#game-story)
  4. [Controls](#controls)
  5. [Playing LabHero](#playing-labhero)
@@ -109,6 +110,20 @@ LabHero was tested with Python 3.10.11. Newer Python versions (3.13+) work but m
    **Note:** If `python3` doesn't work, try `python` instead.
 
 </details>
+
+### Web deployment
+
+A web deployment setup is available in the `deploy/` directory. It builds the browser version of the game and runs it together with the simulation backend using Docker Compose.
+
+```bash
+cd deploy
+docker compose build
+docker compose up -d
+```
+
+After the services start, the game should be available through the configured web server, and the backend health endpoint can be checked at `/api/health`.
+
+For more details, see `deploy/README.md`.
 
 ## Game Story 
 

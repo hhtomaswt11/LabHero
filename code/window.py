@@ -15,6 +15,85 @@ from async_menu import run_menu
 _YIELD_ON_WEB = sys.platform == 'emscripten'
 
 
+def _selected_menu_value(data, key):
+    value = data.get(key)
+
+    try:
+        return value[0][0]
+    except Exception:
+        return str(value)
+
+
+def _format_gene(gene_id):
+    return GENE_LABELS.get(gene_id, gene_id)
+
+
+def _build_gene_summary(genes):
+    knocked_out_genes = [
+        gene_id for gene_id, is_active in genes.items()
+        if not is_active
+    ]
+
+    if not knocked_out_genes:
+        return 'No gene knockouts.'
+
+    return '\n'.join(
+        f'- {_format_gene(gene_id)}'
+        for gene_id in knocked_out_genes
+    )
+
+
+def _build_environmental_summary(reactions):
+    changed_conditions = []
+    reaction_values = list(reactions.values())
+
+    for i in range(len(REACTIONS.index)):
+        lb_index = i * 2
+        ub_index = lb_index + 1
+
+        if ub_index >= len(reaction_values):
+            break
+
+        lower_bound_open = reaction_values[lb_index]
+        upper_bound_open = reaction_values[ub_index]
+
+        default_lower_bound_open = REACTIONS.lb.iloc[i] != 0
+        default_upper_bound_open = REACTIONS.ub.iloc[i] != 0
+
+        if (
+            lower_bound_open != default_lower_bound_open
+            or upper_bound_open != default_upper_bound_open
+        ):
+            reaction_id = REACTIONS.index[i]
+            reaction_name = REACTIONS.name.iloc[i]
+
+            lower_bound_value = -1000 if lower_bound_open else 0
+            upper_bound_value = 1000 if upper_bound_open else 0
+
+            changed_conditions.append(
+                f'- {reaction_name} ({reaction_id}): '
+                f'Lower Bound {"Open" if lower_bound_open else "Closed"} ({lower_bound_value}), '
+                f'Upper Bound {"Open" if upper_bound_open else "Closed"} ({upper_bound_value})'
+            )
+
+    if not changed_conditions:
+        return 'No environmental changes.'
+
+    return '\n'.join(changed_conditions)
+
+
+def _add_summary_section(menu, title, text):
+    menu.add.label(title, font_size=32, font_color=(20, 0, 150))
+    menu.add.vertical_margin(10)
+    menu.add.label(
+        text,
+        wordwrap=True,
+        padding=(20, 20, 20, 20),
+        background_color='white',
+        font_size=24
+    )
+    menu.add.vertical_margin(25)
+
 class Window:
     def __init__(self, toggle_menu, player) -> None:
 
@@ -138,15 +217,32 @@ class Window:
                                  background_color = "white",
                                  font_size = 26)
         menu_genes.add.vertical_margin(20)
-        label = '{}'
+
         genes_02 = ['b1241','b3115','b3736','b2975','b1524','b2278','b2926','b2297','b0728','b3919']
 
-        for i in range(len(GENES)):
-            txt = label.format(GENES[i])
-            if txt in genes_02:
-                menu_genes.add.toggle_switch(txt, True, kwargs=txt, toggleswitch_id=txt, background_color = "gold", font_color = "black")
+        for i, gene_id in enumerate(GENES):
+            gene_label = GENE_LABELS.get(gene_id, gene_id)
+
+            if gene_id in genes_02:
+                menu_genes.add.toggle_switch(
+                    gene_label,
+                    True,
+                    kwargs=gene_id,
+                    toggleswitch_id=gene_id,
+                    background_color="gold",
+                    font_color="black"
+                )
             else:
-                menu_genes.add.toggle_switch(txt, True, kwargs=txt, toggleswitch_id=txt)
+                menu_genes.add.toggle_switch(
+                    gene_label,
+                    True,
+                    kwargs=gene_id,
+                    toggleswitch_id=gene_id
+                )
+
+
+
+
 
             if _YIELD_ON_WEB and (i + 1) % 8 == 0:
                 await asyncio.sleep(0)
@@ -236,6 +332,48 @@ class Window:
             data_genes = menu_genes.get_input_data()
             data_reac = menu_reactions.get_input_data()
 
+
+
+            menu_summary = pygame_menu.Menu(
+                height=720,
+                center_content=False,
+                onclose=pygame_menu.events.BACK,
+                theme=mytheme,
+                title='Simulation Summary',
+                width=1280,
+                menu_id='menu_simulation_summary'
+            )
+
+            simulation_method = _selected_menu_value(data_simul, 'method')
+            objective_name = _selected_menu_value(data_objective, 'objective')
+
+            menu_summary.add.vertical_margin(30)
+
+            _add_summary_section(
+                menu_summary,
+                'General setup',
+                f'Simulation method: {simulation_method}\nObjective: {objective_name}'
+            )
+
+            _add_summary_section(
+                menu_summary,
+                'Gene knockouts',
+                _build_gene_summary(data_genes)
+            )
+
+            _add_summary_section(
+                menu_summary,
+                'Environmental changes',
+                _build_environmental_summary(data_reac)
+            )
+
+            menu_summary.add.button(
+                'Back',
+                pygame_menu.events.BACK,
+                background_color=(70, 70, 70)
+            )
+
+
             save_simulation_file([data_simul, data_objective, data_genes, data_reac])
             animation_text_save('Running')
             if sys.platform == 'emscripten':
@@ -258,6 +396,15 @@ class Window:
             save_results(self.results)
             save_file([self.player.player_name, self.player.results, self.player.missions_activated, self.player.missions_completed])
             menu_simul.add.vertical_margin(50, margin_id='nr_margin')
+            menu_simul.add.button(
+                'Simulation Summary',
+                menu_summary,
+                font_color='white',
+                background_color=(20, 100, 100),
+                button_id='simulation_summary'
+            )
+            menu_simul.add.vertical_margin(20)
+
             if self.results[1] == 'Status: INFEASIBLE' or self.results[1] == 0.0 or self.results[1] == -0.0:
                 menu_simul.add.image(ecoli_rip, scale=(0.5, 0.5), image_id='ecolidead')
                 menu_simul.add.vertical_margin(50, margin_id='deadmargin')

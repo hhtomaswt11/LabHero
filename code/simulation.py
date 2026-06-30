@@ -56,14 +56,16 @@ def run_simul():
     #         if not x:
     #             envconditions[REACTIONS.index[count-1]] = (0, 0)
 
+    genes_data = simul.find_genes()
 
-    for i,(k,x) in enumerate(genes.items()):
-        if not x:
-            # print(k)
-            # print(simul.find_genes().reactions[i])
-            list_react = simul.find_genes().reactions.iloc[i]
+    for gene_id, is_active in genes.items():
+        if not is_active and gene_id in genes_data.index:
+            list_react = genes_data.loc[gene_id, 'reactions']
             for react in list_react:
-                envconditions[react] = (0,0)
+                envconditions[react] = (0, 0)
+
+
+
 
     # gene knockout:
     # model.genes.b1524.knock_out()

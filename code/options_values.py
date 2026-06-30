@@ -1,5 +1,7 @@
 import sys
-
+import gzip
+import re
+import xml.etree.ElementTree as ET
 import pygame_menu
 
 from utils import *
@@ -21,6 +23,52 @@ tutorial_theme.background_color = (255, 215, 0, 255)
 
 model_path = get_resource_path('data/models/e_coli_core.xml.gz')
 
+
+def _get_attr_ending(attrs, suffix):
+    for key, value in attrs.items():
+        if key == suffix or key.endswith('}' + suffix):
+            return value
+    return None
+
+
+def _load_gene_names_from_sbml(path):
+    """Return gene_id -> common gene name using annotations from the SBML model.
+
+    The game still uses gene ids internally. These names are only used as
+    readable labels in the simulation menu.
+    """
+    gene_names = {}
+    try:
+        with gzip.open(path, 'rb') as handle:
+            root = ET.parse(handle).getroot()
+    except Exception:
+        return gene_names
+
+    for gene_product in root.iter():
+        if not gene_product.tag.endswith('geneProduct'):
+            continue
+
+        gene_id = _get_attr_ending(gene_product.attrib, 'label')
+        if not gene_id:
+            raw_id = _get_attr_ending(gene_product.attrib, 'id')
+            gene_id = raw_id[2:] if raw_id and raw_id.startswith('G_') else raw_id
+
+        if not gene_id:
+            continue
+
+        annotation = ET.tostring(gene_product, encoding='unicode')
+        match = re.search(r'refseq_name/([^"\s<>]+)', annotation)
+        gene_names[gene_id] = match.group(1) if match else ''
+
+    return gene_names
+
+
+def _build_gene_labels(gene_ids, gene_names):
+    labels = {}
+    for gene_id in gene_ids:
+        gene_name = gene_names.get(gene_id, '')
+        labels[gene_id] = f'{gene_id} ({gene_name})' if gene_name and gene_name != gene_id else gene_id
+    return labels
 
 class _IndexableList:
     def __init__(self, items):
@@ -81,6 +129,10 @@ else:
     REACTIONS = simul.find_reactions('EX')
     GENES_v0 = simul.find_genes().name
     GENES = [name for (name, _) in GENES_v0.items()]
+
+
+GENE_NAMES = _load_gene_names_from_sbml(model_path)
+GENE_LABELS = _build_gene_labels(GENES, GENE_NAMES)
 
 
 if __name__ == '__main__':
