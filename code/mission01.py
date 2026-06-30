@@ -9,7 +9,7 @@ from button import Button
 from math import isclose
 from utils import *
 from async_menu import run_menu
-
+from mission03 import Mission03_info
 
 class Mission01: 
     def __init__(self, toggle_menu, player) -> None:
@@ -48,13 +48,49 @@ class Mission01:
         self.m01_step2 = ["Did you already made a simulation?",
                           "Can you show me your results?"]
 
-        self.m01_step3 = ["Thank you! You're pioneering our understanding of E. coli's resilience.",
-                          "Your discoveries will shape our research."]
+
+        # self.m01_step3 = ["Thank you! You're pioneering our understanding of E. coli's resilience.",
+        #                   "Your discoveries will shape our research."]
         
 
+        # self.input()
+        # if '01' in self.missions_completed:
+        #     self.menu_message(self.m01_step3, buttons=False)
+
+        # elif '01' in self.missions_activated:
+        #     self.menu_message(self.m01_step2)
+
+        # else:
+        #     self.menu_message(self.m01_step1)
+
+
+        self.m01_step3 = [
+            "Thank you! You're pioneering our understanding of E. coli's resilience.",
+            "But our work is not finished yet. I have one more environmental challenge for you:",
+            "can we find a replacement for glucose as E. coli's energy source?"
+        ]
+
+        self.m01_step4 = [
+            "Did you already choose the best substitute for glucose?",
+            "If you have your results, show them to me."
+        ]
+
+        self.m01_step5 = [
+            f"Excellent work, {self.player.player_name}!",
+            "You now understand how E. coli responds to oxygen and different carbon sources.",
+            "Your discoveries will shape our research."
+        ]
+                
+
         self.input()
-        if '01' in self.missions_completed:
-            self.menu_message(self.m01_step3, buttons=False)
+        if '01' in self.missions_completed and '03' in self.missions_completed:
+            self.menu_message(self.m01_step5, buttons=False)
+
+        elif '01' in self.missions_completed and '03' in self.missions_activated:
+            self.menu_message(self.m01_step4, target_mission='03')
+
+        elif '01' in self.missions_completed:
+            self.menu_message(self.m01_step3, target_mission='03')
 
         elif '01' in self.missions_activated:
             self.menu_message(self.m01_step2)
@@ -68,7 +104,8 @@ class Mission01:
             await coro_factory()
 
 
-    def menu_message(self, message, buttons = True):
+   # def menu_message(self, message, buttons = True):
+    def menu_message(self, message, buttons=True, target_mission='01'):
 
         menu_border = pygame.draw.rect(self.screen, (255,215,0), [0,500,1280,220], width=5)
         menu_bg = pygame.draw.rect(self.screen, (186,214,177), [5,505,1270,210])
@@ -92,7 +129,12 @@ class Mission01:
 
         if buttons:
             def click_yes():
-                self.pending = self.menu.update
+                if target_mission == '03':
+                    mission03_menu = Mission03_info(self.toggle_menu, self.player)
+                    self.pending = mission03_menu.update
+                else:
+                    self.pending = self.menu.update
+
             botao_teste = Button(200,650,150,50,self.screen, 'Yes', click_yes)
             botao_teste_2 = Button(370,650,220,50,self.screen, 'Not now', self.toggle_menu)
             botao_teste.process()
