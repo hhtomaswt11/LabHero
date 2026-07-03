@@ -107,3 +107,19 @@ class Particle(Generic):
         current_time = pygame.time.get_ticks()
         if current_time - self.start_time > self.duration:
             self.kill()
+
+class CarterRevealSprite(Generic):
+    """Overlay sprite that reveals Carter's villain form after Mission 06 is completed."""
+    def __init__(self, pos, groups, player):
+        self.player = player
+        self.transparent_surf = pygame.Surface((64, 64), pygame.SRCALPHA)
+        evil_path = get_resource_path('graphics/sec-characters/cientista3_malefico.png')
+        self.evil_surf = pygame.image.load(evil_path).convert_alpha()
+        super().__init__(pos, self.transparent_surf, groups, LAYERS['main'])
+
+    def update(self, dt):
+        if '06' in self.player.missions_completed:
+            self.image = self.evil_surf
+        else:
+            self.image = self.transparent_surf
+

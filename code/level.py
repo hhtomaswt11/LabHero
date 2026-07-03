@@ -13,6 +13,7 @@ from ecoli import Ecoli
 from mission01 import Mission01
 from mission02 import Mission02
 from mission03 import Mission03
+from mission06 import Mission06
 from dialogues import Dialogues
 from save_load import save_file
 from functions import *
@@ -46,7 +47,7 @@ class Level:
 		self.talk_2_active = False
 		self.talk_2 = Mission03(self.toggle_talk_2, self.player)
 		self.talk_3_active = False
-		self.talk_3 = Mission02(self.toggle_talk_3, self.player)
+		self.talk_3 = Mission06(self.toggle_talk_3, self.player)
 		self.menu = Menu(self.player, self.toggle_shop)
 		self.window = Window(self.desk_menu, self.player)
 		self.books = Books(self.read_books)
@@ -161,6 +162,11 @@ class Level:
 			if obj.name == 'Coffee':
 				Interaction((obj.x, obj.y), (obj.width, obj.height), self.interaction_sprites, obj.name)
 			
+
+		CarterRevealSprite(
+			pos = (1216, 1024),
+			groups = self.all_sprites,
+			player = self.player)
 
 		Generic(
 			pos = (0,0),

@@ -11,6 +11,38 @@ _simul = get_simulator(_model)
 _genes = _simul.find_genes()
 
 
+def _extract_fluxes(result) -> dict[str, float] | None:
+    fluxes = getattr(result, "fluxes", None)
+    if fluxes is None:
+        return None
+
+    if callable(fluxes):
+        try:
+            fluxes = fluxes()
+        except TypeError:
+            pass
+
+    if hasattr(fluxes, "to_dict"):
+        try:
+            fluxes = fluxes.to_dict()
+        except Exception:
+            pass
+
+    if not isinstance(fluxes, dict):
+        try:
+            fluxes = dict(fluxes)
+        except Exception:
+            return None
+
+    clean_fluxes: dict[str, float] = {}
+    for reaction_id, value in fluxes.items():
+        try:
+            clean_fluxes[str(reaction_id)] = round(float(value), 6)
+        except Exception:
+            continue
+    return clean_fluxes
+
+
 def simulate(req: SimulateRequest) -> SimulateResponse:
     try:
         _simul.objective = req.objective
@@ -38,6 +70,7 @@ def simulate(req: SimulateRequest) -> SimulateResponse:
             objective=req.objective,
             result=value,
             status="ok",
+            fluxes=_extract_fluxes(result),
         )
 
     except Exception as e:

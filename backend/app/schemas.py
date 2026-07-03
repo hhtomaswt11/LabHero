@@ -23,3 +23,4 @@ class SimulateResponse(BaseModel):
     result: float | str
     status: Literal["ok", "infeasible", "error"]
     message: str | None = None
+    fluxes: dict[str, float] | None = None

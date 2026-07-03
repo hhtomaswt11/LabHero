@@ -61,3 +61,23 @@ def save_results(data):
     with open(get_save_path('results.txt'), 'w') as results_file:
         json.dump(data, results_file)
         results_file.close()
+
+def save_challenge_score(data):
+    if _IS_WEB:
+        _MEMSTORE['challenge_score'] = data
+        return
+    with open(get_save_path('challenge_score.txt'), 'w') as score_file:
+        json.dump(data, score_file)
+
+
+def load_challenge_score():
+    if _IS_WEB:
+        return _MEMSTORE.get('challenge_score')
+    try:
+        with open(get_save_path('challenge_score.txt')) as score_file:
+            return json.load(score_file)
+    except FileNotFoundError:
+        return None
+    except Exception:
+        return None
+

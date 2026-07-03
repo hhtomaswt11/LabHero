@@ -82,6 +82,25 @@ def _build_environmental_summary(reactions):
     return '\n'.join(changed_conditions)
 
 
+
+
+def _build_challenge_text(challenge_data):
+    if not challenge_data:
+        return ''
+
+    if challenge_data.get('error'):
+        return f"Mission 06 Challenge\nError: {challenge_data.get('error')}"
+
+    status = 'You win!' if challenge_data.get('win') else 'You need a better balance between growth and ethanol production.'
+    return (
+        'Mission 06 Challenge\n\n'
+        f"Growth ({challenge_data.get('growth_objective')}): {float(challenge_data.get('growth', 0)):.3f}\n"
+        f"Ethanol production flux ({challenge_data.get('production_objective')}): {float(challenge_data.get('production', 0)):.3f}\n"
+        f"Your score: {float(challenge_data.get('score', 0)):.3f}\n"
+        f"Villain score: {float(challenge_data.get('villain_score', 0)):.3f}\n\n"
+        f"{status}"
+    )
+
 def _add_summary_section(menu, title, text):
     menu.add.label(title, font_size=32, font_color=(20, 0, 150))
     menu.add.vertical_margin(10)
@@ -380,6 +399,14 @@ class Window:
                 self.results = run_simul_remote(BACKEND_URL)
             else:
                 self.results = run_simul()
+
+            challenge_data = None
+            if '06' in self.player.missions_activated and '06' not in self.player.missions_completed:
+                if sys.platform == 'emscripten':
+                    challenge_data = run_challenge_score_remote(BACKEND_URL)
+                else:
+                    challenge_data = run_challenge_score()
+
             self.player.results.insert(0,self.results)
             try:
                 menu.remove_widget('new_results')
@@ -404,6 +431,17 @@ class Window:
                 button_id='simulation_summary'
             )
             menu_simul.add.vertical_margin(20)
+
+            if challenge_data is not None:
+                menu_simul.add.label(
+                    _build_challenge_text(challenge_data),
+                    wordwrap=True,
+                    padding=(20, 20, 20, 20),
+                    background_color='white',
+                    font_size=24,
+                    label_id='mission06_challenge'
+                )
+                menu_simul.add.vertical_margin(20)
 
             if self.results[1] == 'Status: INFEASIBLE' or self.results[1] == 0.0 or self.results[1] == -0.0:
                 menu_simul.add.image(ecoli_rip, scale=(0.5, 0.5), image_id='ecolidead')

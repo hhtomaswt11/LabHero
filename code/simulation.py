@@ -1,125 +1,242 @@
+import copy
 import json
 import sys
 
 from save_load import *
 from options_values import *
 
-def run_simul():
-    from mewpy.simulation import get_simulator
 
+CHALLENGE_GROWTH_OBJECTIVE = 'BIOMASS_Ecoli_core_w_GAM'
+CHALLENGE_PRODUCTION_OBJECTIVE = 'EX_etoh_e'
+
+VILLAIN_SCORE = 14000.0
+
+
+def _normalise_result(result):
+    results_str = str(result)
+    try:
+        if str(results_str.splitlines()[1]) == 'Status: INFEASIBLE':
+            return 'Status: INFEASIBLE'
+        return round(float(str(results_str.splitlines()[0])[11:]), 3)
+    except Exception:
+        return results_str
+
+
+def _numeric_result(value):
+    try:
+        return max(float(value), 0.0)
+    except Exception:
+        return 0.0
+
+
+def _read_simulation_file():
     data_simul = load_file(get_save_path('simulation_file'))
-
     method, objective, genes, reactions = data_simul
 
-    method = method['method'][0][0]
+    method_name = method['method'][0][0]
     objective_name = objective['objective'][0][0]
-    # objective_fraction = objective['obj_fraction']
 
+    return method_name, objective_name, genes, reactions
+
+
+def _build_envconditions_from_reactions(reactions, reactions_original):
     envconditions = {}
 
-    # initial simulation:
-    simul = get_simulator(model) #, envcond=envconditions)
+    count = 0
+    count_2 = 0
+    for i, (k, x) in enumerate(reactions.items()):
+        if count >= len(REACTIONS.index):
+            break
 
-
-    reactions_original = simul.find_reactions('EX') # dataframe
-    
-    
-    count = 0 # to access reactions
-    count_2 = 0 # to access flow in and out inside each reaction (pair by pair)
-    for i,(k,x) in enumerate(reactions.items()):
-        if count_2 % 2 == 0: # if it's even, it means the toggle for the flow in
-            envconditions[REACTIONS.index[count]] = (reactions_original.lb.iloc[count], reactions_original.ub.iloc[count])
+        if count_2 % 2 == 0:
+            envconditions[REACTIONS.index[count]] = (
+                reactions_original.lb.iloc[count],
+                reactions_original.ub.iloc[count]
+            )
             if not x:
                 envconditions[REACTIONS.index[count]] = (0, envconditions[REACTIONS.index[count]][1])
             else:
                 envconditions[REACTIONS.index[count]] = (-1000, envconditions[REACTIONS.index[count]][1])
             count_2 += 1
         else:
-            if not x: # if it's uneven, it means the toggle for the flow out
+            if not x:
                 envconditions[REACTIONS.index[count]] = (envconditions[REACTIONS.index[count]][0], 0)
             else:
                 envconditions[REACTIONS.index[count]] = (envconditions[REACTIONS.index[count]][0], 1000)
             count_2 += 1
             count += 1
-        
 
-    # print(envconditions)
+    return envconditions
 
-    # REACTIONS WITH RANGE - deactivated
-    # count = 0
-    # for i,(k, x) in enumerate(reactions.items()):
-    #     if k == REACTIONS.index[count]:
-    #         if reactions_original.lb[count] != x[0] or reactions_original.ub[count] != x[1]:
-    #             envconditions[k] = (x[0], x[1])
-    #     else:
-    #         count += 1
-    #         if not x:
-    #             envconditions[REACTIONS.index[count-1]] = (0, 0)
 
-    genes_data = simul.find_genes()
-
+def _apply_gene_knockouts(envconditions, genes, genes_data):
     for gene_id, is_active in genes.items():
         if not is_active and gene_id in genes_data.index:
             list_react = genes_data.loc[gene_id, 'reactions']
             for react in list_react:
                 envconditions[react] = (0, 0)
+    return envconditions
 
 
+def _build_local_constraints(genes, reactions):
+    from mewpy.simulation import get_simulator
+
+    simul = get_simulator(model)
+    reactions_original = simul.find_reactions('EX')
+    envconditions = _build_envconditions_from_reactions(reactions, reactions_original)
+    genes_data = simul.find_genes()
+    envconditions = _apply_gene_knockouts(envconditions, genes, genes_data)
+    return simul, envconditions
 
 
-    # gene knockout:
-    # model.genes.b1524.knock_out()
-
-
-    # print(envconditions)
-
-    # choose objective (by default Biomass):
-    # objective = ''
+def _simulate_local_objective(method_name, objective_name, genes, reactions):
+    simul, constraints = _build_local_constraints(genes, reactions)
     simul.objective = objective_name
+    result = simul.simulate(method=method_name, constraints=constraints)
+    return _normalise_result(result)
 
-    # add constraints here (modifications on the game)
-    constraints = {}
-    constraints = envconditions
-    # constraints = {'GND': 0, # deletion
-    #                'PYK': 0, # deletion
-    #                'ME2': 0, # deletion
-    #               }
 
-    # chooose simulation method (by default FBA):
-    sim_method = method
+def _extract_from_mapping(data, key):
+    if data is None:
+        return None
 
-    # run a simulation accounting with the new constraint
-    result = simul.simulate(method=sim_method, constraints=constraints)
+    if callable(data):
+        try:
+            data = data()
+        except TypeError:
+            pass
 
-    # print(constraints)
-    results_str = str(result)
-    # print(results_str)
+    if hasattr(data, 'to_dict'):
+        try:
+            data = data.to_dict()
+        except Exception:
+            pass
 
-    
+    if isinstance(data, dict):
+        if key in data:
+            return data[key]
+        # Some objects may use reaction objects as keys. Fall back to string ids.
+        for candidate_key, value in data.items():
+            if str(candidate_key) == key:
+                return value
+        return None
+
+    if hasattr(data, 'get'):
+        try:
+            value = data.get(key)
+            if value is not None:
+                return value
+        except Exception:
+            pass
+
+    if hasattr(data, 'loc'):
+        try:
+            return data.loc[key]
+        except Exception:
+            pass
+
     try:
-        if str(results_str.splitlines()[1]) == 'Status: INFEASIBLE':
-            results = 'Status: INFEASIBLE'
-        else:
-            results = round(float(str(results_str.splitlines()[0])[11:]), 3)
-    except:
-        results = results_str
+        return data[key]
+    except Exception:
+        return None
 
-    # print(result_str)
 
-    # save_results(result)
+def _extract_flux(result, reaction_id):
+    """Read one reaction flux from a MEWpy/Cobra-like simulation result."""
+    for attr_name in ('fluxes', 'flux_distribution', 'values', 'data'):
+        value = _extract_from_mapping(getattr(result, attr_name, None), reaction_id)
+        if value is not None:
+            return value
 
+    for method_name in ('to_dataframe', 'to_frame'):
+        method = getattr(result, method_name, None)
+        if not callable(method):
+            continue
+        try:
+            table = method()
+        except Exception:
+            continue
+
+        if hasattr(table, 'loc'):
+            try:
+                row = table.loc[reaction_id]
+                for column in ('flux', 'Flux', 'value', 'Value'):
+                    try:
+                        return row[column]
+                    except Exception:
+                        pass
+                try:
+                    return float(row)
+                except Exception:
+                    pass
+            except Exception:
+                pass
+
+    return _extract_from_mapping(result, reaction_id)
+
+
+def _as_float_or_none(value):
+    try:
+        return float(value)
+    except Exception:
+        return None
+
+
+def _build_challenge_data(growth, production_flux, error=None):
+    growth_value = _numeric_result(growth)
+    production_value = _numeric_result(production_flux)
+    score = round(growth_value * production_value, 3)
+
+    challenge_data = {
+        'growth_objective': CHALLENGE_GROWTH_OBJECTIVE,
+        'production_objective': CHALLENGE_PRODUCTION_OBJECTIVE,
+        'growth': round(growth_value, 3),
+        'production': round(production_value, 3),
+        'score': score,
+        'villain_score': VILLAIN_SCORE,
+        'win': score > VILLAIN_SCORE,
+    }
+    if error:
+        challenge_data['error'] = error
+    save_challenge_score(challenge_data)
+    return challenge_data
+
+
+def run_simul():
+    method_name, objective_name, genes, reactions = _read_simulation_file()
+    results = _simulate_local_objective(method_name, objective_name, genes, reactions)
     return objective_name, results
 
-    # print(simul.objective)
 
+def run_challenge_score():
+    _method_name, _objective_name, genes, reactions = _read_simulation_file()
+
+    # Mission 06 must evaluate growth and ethanol production in the same
+    # metabolic solution. We therefore run one biomass-optimised FBA and read
+    # the ethanol exchange flux from that solution, instead of maximising
+    # EX_etoh_e separately (which can just hit the 1000 upper bound).
+    simul, constraints = _build_local_constraints(genes, reactions)
+    simul.objective = CHALLENGE_GROWTH_OBJECTIVE
+    result = simul.simulate(method='FBA', constraints=constraints)
+
+    growth = _normalise_result(result)
+    if growth == 'Status: INFEASIBLE':
+        return _build_challenge_data(0.0, 0.0)
+
+    production_flux = _extract_flux(result, CHALLENGE_PRODUCTION_OBJECTIVE)
+    production_value = _as_float_or_none(production_flux)
+    if production_value is None:
+        return _build_challenge_data(
+            growth,
+            0.0,
+            error=f'Could not read {CHALLENGE_PRODUCTION_OBJECTIVE} flux from the FBA solution.'
+        )
+
+    return _build_challenge_data(growth, production_value)
 
 
 def _build_request_payload():
-    data_simul = load_file(get_save_path('simulation_file'))
-    method, objective, genes, reactions = data_simul
-
-    method_name = method['method'][0][0]
-    objective_name = objective['objective'][0][0]
+    method_name, objective_name, genes, reactions = _read_simulation_file()
 
     reactions_original = REACTIONS
 
@@ -127,6 +244,9 @@ def _build_request_payload():
     count = 0
     count_2 = 0
     for i, (k, x) in enumerate(reactions.items()):
+        if count >= len(reactions_original.index):
+            break
+
         rid = reactions_original.index[count]
         if count_2 % 2 == 0:
             lb = -1000 if x else 0
@@ -155,7 +275,7 @@ def _http_post_json(url, payload):
         # as a constructable JsProxy (XMLHttpRequest.new is None and the
         # plain JsProxy is not callable), so we instantiate via js.eval.
         # Synchronous XHR lets us stay inside the sync pygame_menu callback
-        # at window.py:229 — no async bridge needed for the simulate call.
+        # at window.py:data_fun — no async bridge needed for the simulate call.
         import js
         xhr = js.eval("new XMLHttpRequest()")
         xhr.open('POST', url, False)
@@ -186,6 +306,44 @@ def run_simul_remote(backend_url):
     return response.get('objective', payload['objective']), f'Error: {response.get("message", "unknown")}'
 
 
+def _simulate_remote_challenge_solution(backend_url, payload):
+    request_payload = copy.deepcopy(payload)
+    request_payload['method'] = 'FBA'
+    request_payload['objective'] = CHALLENGE_GROWTH_OBJECTIVE
+    return _http_post_json(backend_url.rstrip('/') + '/simulate', request_payload)
+
+
+def run_challenge_score_remote(backend_url):
+    payload = _build_request_payload()
+    try:
+        response = _simulate_remote_challenge_solution(backend_url, payload)
+    except Exception as e:
+        return _build_challenge_data(0.0, 0.0, error=str(e))
+
+    if response.get('status') == 'infeasible':
+        return _build_challenge_data(0.0, 0.0)
+
+    if response.get('status') != 'ok':
+        return _build_challenge_data(
+            0.0,
+            0.0,
+            error=response.get('message', 'unknown backend error')
+        )
+
+    growth = response.get('result', 0.0)
+    fluxes = response.get('fluxes') or {}
+    production_flux = fluxes.get(CHALLENGE_PRODUCTION_OBJECTIVE)
+
+    production_value = _as_float_or_none(production_flux)
+    if production_value is None:
+        return _build_challenge_data(
+            growth,
+            0.0,
+            error=f'Backend did not return {CHALLENGE_PRODUCTION_OBJECTIVE} flux.'
+        )
+
+    return _build_challenge_data(growth, production_value)
+
+
 if __name__ == '__main__':
      print(run_simul())
-    
