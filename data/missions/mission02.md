@@ -1,74 +1,77 @@
-# Mission 02: Genetic Mystery - The Essential Gene
+# Mission 02: Sweet as Glucose
 
-Welcome back, budding scientist! Your journey through the microbial world continues.
+Welcome back, Microbial Explorer! After studying how E. coli reacts without oxygen, Dr. Martinez now asks you to investigate another environmental factor: carbon sources.
 
-In this mission, you'll unravel the secrets of a crucial gene that's vital for E. coli's survival.
+The goal is to find a suitable substitute for glucose, E. coli's preferred carbon source.
 
-Get ready for the Genetic Mystery - The Essential Gene challenge!
+If we can identify a good substitute, it could have implications for applications such as biotechnology, bioprocess optimization and environmental science.
 
 
-## Dialogue with Dr. Silva
+## Dialogue with Dr. Martinez
 
-**Dr. Silva:** Greetings, intrepid explorer of the microbial world! I'm Dr. Silva!
-We've compiled a list of ten genes within E. coli, and we suspect that one of them is essential for its survival. Can you find each one is the essential one to E. coli's?"
+**Dr. Martinez:** "Thank you! You're pioneering our understanding of E. coli's resilience. But our work is not finished yet. I have one more environmental challenge for you: can we find a replacement for glucose as E. coli's energy source?"
 
 
 *After activating the mission:*
 
-**Dr. Silva:** "Did you already find the essential gene? Can you show me your results?"
+**Dr. Martinez:** "Did you already choose the best substitute for glucose? If you have your results, show them to me."
 
 
 *After completing the mission:*
 
-**Dr. Silva:** ""Thank you! Your research will unlock a hidden chapter in E. coli's genetic story. Your discoveries may have far-reaching implications in our understanding of microbial life."
+**Dr. Martinez:** "Excellent work! You now understand how E. coli responds to oxygen and different carbon sources. Your discoveries will shape our research."
 
 
 ## Mission Briefing
 
+Welcome back, Microbial Explorer! In this mission, we're delving into the world of microbial metabolism once more.
+
+Our goal is to find a suitable substitute for glucose, E. coli's preferred carbon source.
+
+If we can identify a good substitute, it could have significant implications for various applications, from biotechnology to environmental science.
+
 
 ### Objective:
 
-Your primary objective in this mission is to identify the essential gene that E. coli cannot live without.
+Your mission is to simulate the growth of E. coli using different carbon sources and determine which one serves as the best substitute for glucose.
 
-Imagine you're solving a microbial puzzle where one missing piece makes all the difference.
-
-List of possible genes that are essential:
-- b1241
-- b3115
-- b3736
-- b2975
-- b1524
-- b2278
-- b2926
-- b2297
-- b0728
-- b3919
+We've provided you with a list of potential candidates:
+            
+- malate
+- lactate
+- glutamate
+- glutamine
+- fumarate
+- fructose
+- ethanol
+- 2-oxoglutarate
+- acetaldehyde
+- acetate
 
 
 ### Tasks:
 
-**Task 1 - The Mystery Genes:**
+**Task 1 - Remove Glucose:**
 
-You'll start with a list of 10 mystery genes, each associated with a specific cellular function. These genes are like keys to E. coli's survival.
+Remove the flux from glucose to guarantee that E. coli only uses the alternative as the carbon source.
 
-**Task 2 - Gene Knockout Simulations:**
+**Task 2 - Test Alternatives:**
 
-Your job is to simulate E. coli's growth without each of these genes, one by one. This process mimics what scientists do in the lab when they "knock out" a gene to observe the consequences.
-            
-**Task 3 - Observe and Compare:**
+Open the lower bound of each alternative, one at a time, to allow E. coli to intake that nutrient.
 
-As you simulate E. coli's growth without each gene, carefully observe the results. Does the absence of a particular gene affect growth? Do some genes appear more critical than others?
-            
-**Task 4 - Unravel the Mystery:**
+**Task 3 - Observe Results:**
 
-Analyze your observations and deductions. Which gene do you suspect is the essential one? Remember, the essential gene is the one that, when missing, significantly impairs E. coli's growth.
-            
-**Task 5 - Report Your Findings:**
+Run the simulation for each alternative and see which one provides the best growth for E. coli.
 
-Compile your findings into a comprehensive report. Explain why you suspect a particular gene is essential and provide evidence from your simulations to support your conclusion.
+**Task 4 - Identify the Best Substitute:**
+
+Based on your observations, determine which carbon source serves as the best substitute for glucose in terms of supporting E. coli growth.
 
 
-### Hints:
+### Why It Matters:
 
-- Ensure that you simulate with only one gene at a time
-- Identify the gene that stops growth
+Understanding which carbon sources E. coli can thrive on is essential for various fields of research and industry. Finding a suitable substitute for glucose can have far-reaching implications, from optimizing bioprocesses to environmental remediation efforts.
+
+**Scientist's Notes:**
+
+Remember, microbial growth can be influenced by various factors, so it's essential to run multiple simulations and ensure the accuracy of your results. Good luck, Microbial Explorer, and may your discoveries be as sweet as fructose!

@@ -9,7 +9,7 @@ from button import Button
 from math import isclose
 from utils import *
 from async_menu import run_menu
-from mission03 import Mission03_info
+from mission02 import Mission02_info
 
 class Mission01: 
     def __init__(self, toggle_menu, player) -> None:
@@ -83,14 +83,14 @@ class Mission01:
                 
 
         self.input()
-        if '01' in self.missions_completed and '03' in self.missions_completed:
+        if '01' in self.missions_completed and '02' in self.missions_completed:
             self.menu_message(self.m01_step5, buttons=False)
 
-        elif '01' in self.missions_completed and '03' in self.missions_activated:
-            self.menu_message(self.m01_step4, target_mission='03')
+        elif '01' in self.missions_completed and '02' in self.missions_activated:
+            self.menu_message(self.m01_step4, target_mission='02')
 
         elif '01' in self.missions_completed:
-            self.menu_message(self.m01_step3, target_mission='03')
+            self.menu_message(self.m01_step3, target_mission='02')
 
         elif '01' in self.missions_activated:
             self.menu_message(self.m01_step2)
@@ -129,9 +129,9 @@ class Mission01:
 
         if buttons:
             def click_yes():
-                if target_mission == '03':
-                    mission03_menu = Mission03_info(self.toggle_menu, self.player)
-                    self.pending = mission03_menu.update
+                if target_mission == '02':
+                    mission02_menu = Mission02_info(self.toggle_menu, self.player)
+                    self.pending = mission02_menu.update
                 else:
                     self.pending = self.menu.update
 

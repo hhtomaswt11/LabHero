@@ -21,7 +21,7 @@ We're trying to understand how this remarkable microbe adapts to different envir
 
 *After completing the mission:*
 
-**Dr. Martinez:** "Thank you! You're pioneering our understanding of E. coli's resilience. Your discoveries will shape our research."
+**Dr. Martinez:** "Thank you! You're pioneering our understanding of E. coli's resilience. But our work is not finished yet. I have one more environmental challenge for you: can we find a replacement for glucose as E. coli's energy source?"
 
 
 ## Mission Briefing

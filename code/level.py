@@ -44,9 +44,9 @@ class Level:
 		self.talk_1_active = False
 		self.talk_1 = Mission01(self.toggle_talk_1, self.player)
 		self.talk_2_active = False
-		self.talk_2 = Mission02(self.toggle_talk_2, self.player)
+		self.talk_2 = Mission03(self.toggle_talk_2, self.player)
 		self.talk_3_active = False
-		self.talk_3 = Mission03(self.toggle_talk_3, self.player)
+		self.talk_3 = Mission02(self.toggle_talk_3, self.player)
 		self.menu = Menu(self.player, self.toggle_shop)
 		self.window = Window(self.desk_menu, self.player)
 		self.books = Books(self.read_books)

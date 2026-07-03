@@ -143,7 +143,7 @@ class Window:
 
         # MENU REACTIONS
         menu_reactions.add.vertical_margin(50)
-        menu_reactions.add.label("TIP for Mission 03:\nThe lower bound tells the cell if it can reverse the reaction and do it the opposite way (e.g., taking in nutrients).\nThe upper bound tells it how fast or how much of the reaction can happen in the forward direction (e.g., producing metabolites).",
+        menu_reactions.add.label("TIP for Mission 02:\nThe lower bound tells the cell if it can reverse the reaction and do it the opposite way (e.g., taking in nutrients).\nThe upper bound tells it how fast or how much of the reaction can happen in the forward direction (e.g., producing metabolites).",
                                 #  max_char=1,
                                  wordwrap=True,
                                 #  align=pygame_menu.locals.ALIGN_CENTER,
@@ -208,7 +208,7 @@ class Window:
         # MENU SUB (Genes)
         menu_genes.add.vertical_margin(50)
         # menu_genes.add.label('TIP')
-        menu_genes.add.label("TIP for Mission 02: \nSome genes are more important than others, maybe you can try to knock out one of them to see if E. coli survives...",
+        menu_genes.add.label("TIP for Mission 03: \nSome genes are more important than others, maybe you can try to knock out one of them to see if E. coli survives...",
                                 #  max_char=1,
                                  wordwrap=True,
                                 #  align=pygame_menu.locals.ALIGN_CENTER,
@@ -218,12 +218,12 @@ class Window:
                                  font_size = 26)
         menu_genes.add.vertical_margin(20)
 
-        genes_02 = ['b1241','b3115','b3736','b2975','b1524','b2278','b2926','b2297','b0728','b3919']
+        genes_03 = ['b1241','b3115','b3736','b2975','b1524','b2278','b2926','b2297','b0728','b3919']
 
         for i, gene_id in enumerate(GENES):
             gene_label = GENE_LABELS.get(gene_id, gene_id)
 
-            if gene_id in genes_02:
+            if gene_id in genes_03:
                 menu_genes.add.toggle_switch(
                     gene_label,
                     True,
