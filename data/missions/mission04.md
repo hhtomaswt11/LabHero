@@ -7,18 +7,18 @@ Dr. Silva
 Genes and knockouts: using a knockout to redirect metabolism toward production.
 
 ## Objective
-Identify which gene knockout can increase succinate production under default/aerobic conditions.
+Identify which gene knockout can increase ethanol production under default/aerobic conditions.
 
 ## Target product
-- Product: succinate
-- Production reaction: `EX_succ_e`
+- Product: ethanol
+- Production reaction: `EX_etoh_e`
 
 ## Correct answer
-- Gene id: `b0723`
-- Common name: `sdhA`
+- Gene id: `b2297`
+- Common name: `pta`
 
 ## Candidate genes
-`b0723`, `b2297`, `b1241`, `b3115`, `b0728`, `b2975`
+`b0728`, `b1241`, `b2975`, `b2297`, `b0723`
 
 ## Player tasks
 1. Activate Mission 04 with Dr. Silva after completing Mission 03.

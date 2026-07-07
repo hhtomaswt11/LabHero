@@ -8,15 +8,16 @@ from functions import animation_text_save
 from button import Button
 from async_menu import run_menu
 from simulation import (
-    MISSION04_PRODUCT_NAME,
-    MISSION04_PRODUCTION_OBJECTIVE,
-    MISSION04_TARGET_GENE,
-    MISSION04_TARGET_GENE_NAME,
-    MISSION04_CANDIDATE_GENES,
+    MISSION05_PRODUCT_NAME,
+    MISSION05_PRODUCTION_OBJECTIVE,
+    MISSION05_TARGET_GENE,
+    MISSION05_TARGET_GENE_NAME,
+    MISSION05_CANDIDATE_GENES,
+    MISSION05_OXYGEN_REACTION,
 )
 
 
-class Mission04:
+class Mission05:
     def __init__(self, toggle_menu, player) -> None:
         # general setup
         self.player = player
@@ -31,7 +32,7 @@ class Mission04:
         self.screen = pygame.display.get_surface()
         self.timer = Timer(200)
 
-        self.menu = Mission04_info(self.toggle_menu, self.player)
+        self.menu = Mission05_info(self.toggle_menu, self.player)
         self.pending = None
 
     def input(self):
@@ -42,32 +43,32 @@ class Mission04:
             self.toggle_menu()
 
     async def update(self):
-        self.m04_step1 = [
-            f"Excellent progress, {self.player.player_name}! I'm Dr. Silva, and I have a new knockout challenge.",
-            "This time, we are not looking for a gene that kills E. coli.",
-            "We want to find a knockout that can redirect metabolism toward a useful product."
+        self.m05_step1 = [
+            f"Excellent work, {self.player.player_name}! You redirected metabolism with a knockout.",
+            "Now we will combine a genetic change with an environmental change.",
+            "Can you improve lactate production when E. coli has no oxygen?"
         ]
 
-        self.m04_step2 = [
-            "Did you already test the production knockout?",
-            "Remember: keep the environmental conditions unchanged and test one gene at a time."
+        self.m05_step2 = [
+            "Did you combine both variables?",
+            "Close the O2 lower bound and test one candidate knockout at a time."
         ]
 
-        self.m04_step3 = [
-            "Great work! You used a knockout as a production strategy, not only as a survival test.",
-            "This is the first step toward metabolic engineering.",
-            "Next time, we can combine genetic and environmental changes for even harder challenges."
+        self.m05_step3 = [
+            f"Outstanding work, {self.player.player_name}!",
+            "You combined environment and genetics to guide metabolism.",
+            "You are ready for harder metabolic engineering challenges."
         ]
 
         self.input()
-        if '04' in self.missions_completed:
-            self.menu_message(self.m04_step3, buttons=False)
+        if '05' in self.missions_completed:
+            self.menu_message(self.m05_step3, buttons=False)
 
-        elif '04' in self.missions_activated:
-            self.menu_message(self.m04_step2)
+        elif '05' in self.missions_activated:
+            self.menu_message(self.m05_step2)
 
         else:
-            self.menu_message(self.m04_step1)
+            self.menu_message(self.m05_step1)
 
         if self.pending is not None:
             coro_factory = self.pending
@@ -102,7 +103,7 @@ class Mission04:
         pygame.display.flip()
 
 
-class Mission04_info:
+class Mission05_info:
     def __init__(self, toggle_menu, player) -> None:
         # general setup
         self.player = player
@@ -117,10 +118,10 @@ class Mission04_info:
         self.index = 0
         self.timer = Timer(200)
 
-        if '04' in self.missions_activated:
-            self.mission04 = True
+        if '05' in self.missions_activated:
+            self.mission05 = True
         else:
-            self.mission04 = False
+            self.mission05 = False
 
         # sounds
         success_path = get_resource_path('audio/success_3.ogg')
@@ -136,7 +137,7 @@ class Mission04_info:
             height=720,
             onclose=self.toggle_menu,
             theme=mytheme,
-            title='Mission 04',
+            title='Mission 05',
             width=1280,
         )
 
@@ -144,21 +145,22 @@ class Mission04_info:
             height=720,
             onclose=self.toggle_menu,
             theme=mytheme,
-            title='Mission 04 Briefing',
+            title='Mission 05 Briefing',
             width=1280
         )
 
-        candidate_text = '  '.join(MISSION04_CANDIDATE_GENES)
+        candidate_text = '  '.join(MISSION05_CANDIDATE_GENES)
 
         menu_text.add.label(
             f"""
-            Welcome to Mission 04: Knockout for Production.
+            Welcome to Mission 05: Knockout for Production under Anaerobic Conditions.
 
-            In Mission 03, you learned that some genes are essential for E. coli's survival.
-            Now, you will learn another important idea: a knockout can also be used to redirect metabolism toward a useful product.
+            In Mission 04, you studied one genetic change under normal aerobic conditions.
+            Now, you will combine two variables: oxygen availability and a gene knockout.
 
-            Target product: {MISSION04_PRODUCT_NAME}
-            Production reaction: {MISSION04_PRODUCTION_OBJECTIVE}
+            Target product: {MISSION05_PRODUCT_NAME}
+            Production reaction: {MISSION05_PRODUCTION_OBJECTIVE}
+            Environmental change: close the lower bound of {MISSION05_OXYGEN_REACTION}
             Target gene to discover: one of the candidate genes below
 
             Candidate genes:
@@ -182,21 +184,23 @@ class Mission04_info:
         )
         menu_text.add.label(
             f"""
-            Task 1 - Keep the environment unchanged:
-            Do not change environmental conditions. This mission is about isolating the effect of one genetic knockout under aerobic/default conditions.
+            Task 1 - Create anaerobic conditions:
+            Go to Environmental Conditions and close the lower bound of {MISSION05_OXYGEN_REACTION}.
+            This prevents E. coli from taking in oxygen.
 
             Task 2 - Test candidate knockouts:
-            Go to the simulation computer and switch off one candidate gene at a time.
+            Go to Genes and switch off one candidate gene at a time.
 
-            Task 3 - Observe {MISSION04_PRODUCT_NAME} production:
-            After each simulation, check the Mission 04 Production Check in the New Results menu.
-            Compare the baseline {MISSION04_PRODUCT_NAME} flux with the current flux.
+            Task 3 - Observe lactate production:
+            After each simulation, check the Mission 05 Production Check in New Results.
+            Compare the anaerobic baseline with the current lactate flux.
 
             Task 4 - Report the production gene:
-            Return to Dr. Silva and report the gene whose knockout improves {MISSION04_PRODUCT_NAME} production.
+            Return to Dr. Silva and report the gene whose knockout improves lactate production.
 
             Hint:
-            The correct answer is a gene id, like b0000. You can also use the common gene name if you know it.
+            This mission requires both changes: oxygen off and the correct knockout.
+            The correct answer is a gene id, like b0000.
             """,
             max_char=-1,
             wordwrap=True,
@@ -209,7 +213,7 @@ class Mission04_info:
 
         menu.add.vertical_margin(20)
         menu.add.label(
-            'Mission 04: Knockout for Production',
+            'Mission 05: Anaerobic Production Knockout',
             wordwrap=False,
             align=pygame_menu.locals.ALIGN_CENTER,
             font_size=34
@@ -217,13 +221,13 @@ class Mission04_info:
 
         menu.add.label(
             f"""
-            In this mission, you will discover how a gene knockout can increase the production of a useful metabolite.
+            This mission combines environment and genetics.
 
-            Target product: {MISSION04_PRODUCT_NAME}
-            Production reaction: {MISSION04_PRODUCTION_OBJECTIVE}
+            Target product: {MISSION05_PRODUCT_NAME}
+            Production reaction: {MISSION05_PRODUCTION_OBJECTIVE}
 
             Important rule:
-            Keep environmental conditions unchanged. Test only gene knockouts.
+            First close the O2 lower bound. Then test one candidate gene knockout.
 
             Candidate genes:
             {candidate_text}
@@ -233,16 +237,16 @@ class Mission04_info:
             font_size=30
         )
 
-        menu.add.button('Mission 04 Briefing', menu_text, font_color='black', background_color=(255, 215, 0, 255))
+        menu.add.button('Mission 05 Briefing', menu_text, font_color='black', background_color=(255, 215, 0, 255))
         menu.add.vertical_margin(50)
 
-        if self.mission04:
+        if self.mission05:
             menu.add.text_input('Production Gene: ', default='', input_underline='_', maxchar=5, onreturn=self.deliver_results)
             menu.add.vertical_margin(50)
             menu.add.label('Mission Activated', font_color=(150, 150, 150))
             menu.add.vertical_margin(20)
         else:
-            menu.add.button('Activate Mission', action=self.activate_mission04, background_color=(50, 100, 100))
+            menu.add.button('Activate Mission', action=self.activate_mission05, background_color=(50, 100, 100))
 
         menu.add.vertical_margin(20)
 
@@ -251,19 +255,19 @@ class Mission04_info:
     def toggle_menu(self):
         self.toggle_talk = not self.toggle_talk
 
-    def activate_mission04(self):
-        self.mission04 = True
-        if '04' not in self.missions_activated:
-            self.missions_activated.insert(0, '04')
-        animation_text_save('Mission 04 Activated')
+    def activate_mission05(self):
+        self.mission05 = True
+        if '05' not in self.missions_activated:
+            self.missions_activated.insert(0, '05')
+        animation_text_save('Mission 05 Activated')
 
     def deliver_results(self, ans):
         right = self.check_results(ans)
 
         if right:
             self.success.play()
-            if '04' not in self.missions_completed:
-                self.missions_completed.insert(0, '04')
+            if '05' not in self.missions_completed:
+                self.missions_completed.insert(0, '05')
             animation_text_save('Congratulations! Mission Completed!', time=2000)
             save_file([self.player.player_name, self.player.results, self.player.missions_activated, self.player.missions_completed])
         else:
@@ -272,7 +276,7 @@ class Mission04_info:
 
     def check_results(self, ans):
         answer = str(ans).strip().lower()
-        return answer in {MISSION04_TARGET_GENE.lower(), MISSION04_TARGET_GENE_NAME.lower()}
+        return answer in {MISSION05_TARGET_GENE.lower(), MISSION05_TARGET_GENE_NAME.lower()}
 
     def input(self):
         keys = pygame.key.get_pressed()

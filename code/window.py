@@ -28,6 +28,47 @@ def _format_gene(gene_id):
     return GENE_LABELS.get(gene_id, gene_id)
 
 
+def _normalise_gene_search_text(value):
+    """Normalise gene search text so b1241, 1241, adhE or adh e all match."""
+    return ''.join(
+        char.lower()
+        for char in str(value)
+        if char.isalnum()
+    )
+
+
+def _gene_matches_search(gene_id, search_text):
+    query = _normalise_gene_search_text(search_text)
+    if not query:
+        return True
+
+    gene_name = GENE_NAMES.get(gene_id, '')
+    gene_label = GENE_LABELS.get(gene_id, gene_id)
+    gene_number = gene_id[1:] if gene_id.startswith('b') else gene_id
+
+    searchable_values = (
+        gene_id,
+        gene_number,
+        gene_name,
+        gene_label,
+        f'{gene_id}{gene_name}',
+        f'{gene_name}{gene_id}',
+    )
+
+    return any(
+        query in _normalise_gene_search_text(value)
+        for value in searchable_values
+    )
+
+
+def _build_clean_gene_data(raw_gene_data):
+    """Keep only real model genes, ignoring UI-only widgets like the search box."""
+    return {
+        gene_id: bool(raw_gene_data.get(gene_id, True))
+        for gene_id in GENES
+    }
+
+
 def _build_gene_summary(genes):
     knocked_out_genes = [
         gene_id for gene_id, is_active in genes.items()
@@ -115,6 +156,39 @@ def _build_mission04_text(production_data):
         f"{environment_note}\n"
         f"{status}"
     )
+
+
+def _build_mission05_text(production_data):
+    if not production_data:
+        return ''
+
+    if production_data.get('error'):
+        return f"Mission 05 Production Check\nError: {production_data.get('error')}"
+
+    oxygen_note = (
+        f"O2 lower bound closed ({production_data.get('oxygen_reaction')}): yes."
+        if production_data.get('oxygen_disabled')
+        else f"O2 is still available. Close the lower bound of {production_data.get('oxygen_reaction')}."
+    )
+    status = (
+        'Lactate production improved. This combination looks promising.'
+        if production_data.get('oxygen_disabled') and production_data.get('improved')
+        else 'Not enough yet. Combine anaerobiosis with the right knockout.'
+    )
+    change = float(production_data.get('production_change', 0))
+    change_prefix = '+' if change > 0 else ''
+
+    return (
+        'Mission 05 Production Check\n\n'
+        f"Target product: {production_data.get('product_name')} ({production_data.get('production_objective')})\n"
+        f"Anaerobic baseline flux: {float(production_data.get('baseline_production', 0)):.3f}\n"
+        f"Current {production_data.get('product_name')} flux: {float(production_data.get('current_production', 0)):.3f}\n"
+        f"Production change: {change_prefix}{change:.3f}\n"
+        f"Current growth: {float(production_data.get('current_growth', 0)):.3f}\n\n"
+        f"{oxygen_note}\n"
+        f"{status}"
+    )
+
 
 def _build_challenge_text(challenge_data):
     if not challenge_data:
@@ -259,7 +333,7 @@ class Window:
         # MENU SUB (Genes)
         menu_genes.add.vertical_margin(50)
         # menu_genes.add.label('TIP')
-        menu_genes.add.label("TIP for Mission 03 and Mission 04: \nSome genes are essential for survival. Others can redirect metabolism toward useful products. Try one highlighted gene knockout at a time.",
+        menu_genes.add.label("TIP for Mission 03, Mission 04 and Mission 05: \nSome genes are essential for survival. Others can redirect metabolism toward useful products. Try one highlighted gene knockout at a time.",
                                 #  max_char=1,
                                  wordwrap=True,
                                 #  align=pygame_menu.locals.ALIGN_CENTER,
@@ -269,14 +343,100 @@ class Window:
                                  font_size = 26)
         menu_genes.add.vertical_margin(20)
 
+        menu_genes.add.label(
+            "Search by gene id, number or name. Examples: b1241, 1241, adhE, pta. Use Reset Genes to reactivate all genes.",
+            wordwrap=True,
+            padding=(20, 20, 20, 20),
+            background_color="white",
+            font_size=24
+        )
+        menu_genes.add.vertical_margin(10)
+
+        gene_toggle_widgets = {}
+        gene_search_input = None
+        gene_search_status = menu_genes.add.label(
+            f"Showing all {len(GENES)} genes.",
+            font_size=22,
+            font_color=(20, 0, 150)
+        )
+
+        def apply_gene_search(search_text=None, **_kwargs):
+            current_search = '' if search_text is None else str(search_text)
+            if search_text is None and gene_search_input is not None:
+                current_search = str(gene_search_input.get_value())
+
+            visible_count = 0
+            for gene_id, widget in gene_toggle_widgets.items():
+                if _gene_matches_search(gene_id, current_search):
+                    widget.show()
+                    visible_count += 1
+                else:
+                    widget.hide()
+
+            if current_search.strip():
+                gene_search_status.set_title(
+                    f"Search: {current_search} | {visible_count} gene(s) found."
+                )
+            else:
+                gene_search_status.set_title(f"Showing all {len(GENES)} genes.")
+
+        def clear_gene_search(*_args, **_kwargs):
+            if gene_search_input is not None:
+                gene_search_input.set_value('')
+            apply_gene_search('')
+
+        def reset_gene_toggles(*_args, **_kwargs):
+            """Reactivate every gene and restore the genes page to its default state."""
+            for widget in gene_toggle_widgets.values():
+                widget.set_value(True)
+
+            if gene_search_input is not None:
+                gene_search_input.set_value('')
+            apply_gene_search('')
+            gene_search_status.set_title(f"All {len(GENES)} genes are active again.")
+
+        gene_search_input = menu_genes.add.text_input(
+            'Search gene: ',
+            default='',
+            input_underline='_',
+            maxchar=30,
+            maxwidth=30,
+            onchange=apply_gene_search,
+            onreturn=apply_gene_search,
+            textinput_id='gene_search',
+            background_color="white",
+            font_color=(20, 0, 150)
+        )
+        menu_genes.add.vertical_margin(10)
+        menu_genes.add.button(
+            'Search / Refresh',
+            apply_gene_search,
+            font_color='white',
+            background_color=(20, 100, 100)
+        )
+        menu_genes.add.button(
+            'Clear Search',
+            clear_gene_search,
+            font_color='white',
+            background_color=(70, 70, 70)
+        )
+        menu_genes.add.button(
+            'Reset Genes',
+            reset_gene_toggles,
+            font_color='white',
+            background_color=(150, 40, 40)
+        )
+        menu_genes.add.vertical_margin(20)
+
         genes_03 = ['b1241','b3115','b3736','b2975','b1524','b2278','b2926','b2297','b0728','b3919']
         genes_04 = MISSION04_CANDIDATE_GENES
+        genes_05 = MISSION05_CANDIDATE_GENES
 
         for i, gene_id in enumerate(GENES):
             gene_label = GENE_LABELS.get(gene_id, gene_id)
 
-            if gene_id in genes_03 or gene_id in genes_04:
-                menu_genes.add.toggle_switch(
+            if gene_id in genes_03 or gene_id in genes_04 or gene_id in genes_05:
+                gene_toggle_widgets[gene_id] = menu_genes.add.toggle_switch(
                     gene_label,
                     True,
                     kwargs=gene_id,
@@ -285,19 +445,17 @@ class Window:
                     font_color="black"
                 )
             else:
-                menu_genes.add.toggle_switch(
+                gene_toggle_widgets[gene_id] = menu_genes.add.toggle_switch(
                     gene_label,
                     True,
                     kwargs=gene_id,
                     toggleswitch_id=gene_id
                 )
 
-
-
-
-
             if _YIELD_ON_WEB and (i + 1) % 8 == 0:
                 await asyncio.sleep(0)
+
+        apply_gene_search('')
         menu_genes.add.vertical_margin(20)
         menu_genes.add.button('Back', pygame_menu.events.BACK, background_color=(70, 70, 70))
         menu_genes.add.vertical_margin(20)
@@ -381,7 +539,8 @@ class Window:
 
             data_simul = menu.get_input_data()
             data_objective = menu_objective.get_input_data()
-            data_genes = menu_genes.get_input_data()
+            raw_data_genes = menu_genes.get_input_data()
+            data_genes = _build_clean_gene_data(raw_data_genes)
             data_reac = menu_reactions.get_input_data()
 
 
@@ -440,6 +599,13 @@ class Window:
                 else:
                     mission04_data = run_mission04_production_check()
 
+            mission05_data = None
+            if '05' in self.player.missions_activated and '05' not in self.player.missions_completed:
+                if sys.platform == 'emscripten':
+                    mission05_data = run_mission05_production_check_remote(BACKEND_URL)
+                else:
+                    mission05_data = run_mission05_production_check()
+
             challenge_data = None
             if '06' in self.player.missions_activated and '06' not in self.player.missions_completed:
                 if sys.platform == 'emscripten':
@@ -480,6 +646,17 @@ class Window:
                     background_color='white',
                     font_size=24,
                     label_id='mission04_production_check'
+                )
+                menu_simul.add.vertical_margin(20)
+
+            if mission05_data is not None:
+                menu_simul.add.label(
+                    _build_mission05_text(mission05_data),
+                    wordwrap=True,
+                    padding=(20, 20, 20, 20),
+                    background_color='white',
+                    font_size=24,
+                    label_id='mission05_production_check'
                 )
                 menu_simul.add.vertical_margin(20)
 

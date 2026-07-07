@@ -10,11 +10,19 @@ CHALLENGE_GROWTH_OBJECTIVE = 'BIOMASS_Ecoli_core_w_GAM'
 CHALLENGE_PRODUCTION_OBJECTIVE = 'EX_etoh_e'
 
 MISSION04_GROWTH_OBJECTIVE = 'BIOMASS_Ecoli_core_w_GAM'
-MISSION04_PRODUCT_NAME = 'succinate'
-MISSION04_PRODUCTION_OBJECTIVE = 'EX_succ_e'
-MISSION04_TARGET_GENE = 'b0723'
-MISSION04_TARGET_GENE_NAME = 'sdhA'
-MISSION04_CANDIDATE_GENES = ['b0723', 'b2297', 'b1241', 'b3115', 'b0728', 'b2975']
+MISSION04_PRODUCT_NAME = 'ethanol'
+MISSION04_PRODUCTION_OBJECTIVE = 'EX_etoh_e'
+MISSION04_TARGET_GENE = 'b2297'
+MISSION04_TARGET_GENE_NAME = 'pta'
+MISSION04_CANDIDATE_GENES = ['b0728', 'b1241', 'b2975', 'b2297', 'b0723']
+
+MISSION05_GROWTH_OBJECTIVE = 'BIOMASS_Ecoli_core_w_GAM'
+MISSION05_PRODUCT_NAME = 'lactate'
+MISSION05_PRODUCTION_OBJECTIVE = 'EX_lac__D_e'
+MISSION05_TARGET_GENE = 'b1241'
+MISSION05_TARGET_GENE_NAME = 'adhE'
+MISSION05_CANDIDATE_GENES = ['b0903', 'b2297', 'b0723', 'b3115', 'b0728', 'b1241']
+MISSION05_OXYGEN_REACTION = 'EX_o2_e'
 
 VILLAIN_SCORE = 14000.0
 
@@ -57,6 +65,33 @@ def _build_default_reactions_data():
 
 def _build_active_genes_data():
     return {gene_id: True for gene_id in GENES}
+
+def _build_anaerobic_reactions_data():
+    reactions_data = _build_default_reactions_data()
+
+    try:
+        oxygen_index = list(REACTIONS.index).index(MISSION05_OXYGEN_REACTION)
+        reactions_data[f'reaction_{oxygen_index}_lb'] = False
+    except ValueError:
+        pass
+
+    return reactions_data
+
+
+def _oxygen_lower_bound_closed(reactions):
+    try:
+        oxygen_index = list(REACTIONS.index).index(MISSION05_OXYGEN_REACTION)
+    except ValueError:
+        return False
+
+    reaction_values = list(reactions.values())
+    lb_index = oxygen_index * 2
+    if lb_index >= len(reaction_values):
+        return False
+
+    return not bool(reaction_values[lb_index])
+
+
 
 
 def _environment_has_changes(reactions):
@@ -317,6 +352,61 @@ def run_mission04_production_check():
     )
 
 
+
+def _build_mission05_data(baseline_growth, baseline_flux, current_growth, current_flux, oxygen_disabled, error=None):
+    baseline_value = _numeric_result(baseline_flux)
+    current_value = _numeric_result(current_flux)
+    production_change = round(current_value - baseline_value, 3)
+
+    mission05_data = {
+        'product_name': MISSION05_PRODUCT_NAME,
+        'production_objective': MISSION05_PRODUCTION_OBJECTIVE,
+        'growth_objective': MISSION05_GROWTH_OBJECTIVE,
+        'target_gene': MISSION05_TARGET_GENE,
+        'target_gene_name': MISSION05_TARGET_GENE_NAME,
+        'oxygen_reaction': MISSION05_OXYGEN_REACTION,
+        'baseline_growth': round(_numeric_result(baseline_growth), 3),
+        'baseline_production': round(baseline_value, 3),
+        'current_growth': round(_numeric_result(current_growth), 3),
+        'current_production': round(current_value, 3),
+        'production_change': production_change,
+        'oxygen_disabled': oxygen_disabled,
+        'improved': current_value > baseline_value,
+    }
+    if error:
+        mission05_data['error'] = error
+    save_mission05_production_check(mission05_data)
+    return mission05_data
+
+
+def run_mission05_production_check():
+    _method_name, _objective_name, genes, reactions = _read_simulation_file()
+
+    baseline_growth, baseline_flux, baseline_error = _simulate_flux_in_biomass_solution(
+        _build_active_genes_data(),
+        _build_anaerobic_reactions_data(),
+        MISSION05_PRODUCTION_OBJECTIVE,
+        MISSION05_GROWTH_OBJECTIVE,
+    )
+
+    current_growth, current_flux, current_error = _simulate_flux_in_biomass_solution(
+        genes,
+        reactions,
+        MISSION05_PRODUCTION_OBJECTIVE,
+        MISSION05_GROWTH_OBJECTIVE,
+    )
+
+    error = baseline_error or current_error
+    return _build_mission05_data(
+        baseline_growth,
+        baseline_flux,
+        current_growth,
+        current_flux,
+        _oxygen_lower_bound_closed(reactions),
+        error=error,
+    )
+
+
 def run_simul():
     method_name, objective_name, genes, reactions = _read_simulation_file()
     results = _simulate_local_objective(method_name, objective_name, genes, reactions)
@@ -489,6 +579,50 @@ def run_mission04_production_check_remote(backend_url):
         current_growth,
         current_flux,
         _environment_has_changes(_read_simulation_file()[3]),
+        error=baseline_error or current_error,
+    )
+
+
+
+def _build_anaerobic_env_conditions_payload():
+    env_conditions = _build_default_env_conditions_payload()
+    if MISSION05_OXYGEN_REACTION in env_conditions:
+        env_conditions[MISSION05_OXYGEN_REACTION][0] = 0
+    return env_conditions
+
+
+def run_mission05_production_check_remote(backend_url):
+    payload = _build_request_payload()
+
+    baseline_payload = copy.deepcopy(payload)
+    baseline_payload['objective'] = MISSION05_GROWTH_OBJECTIVE
+    baseline_payload['gene_knockouts'] = []
+    baseline_payload['env_conditions'] = _build_anaerobic_env_conditions_payload()
+
+    current_payload = copy.deepcopy(payload)
+    current_payload['objective'] = MISSION05_GROWTH_OBJECTIVE
+
+    try:
+        baseline_response = _simulate_remote_flux_solution(backend_url, baseline_payload, MISSION05_GROWTH_OBJECTIVE)
+        current_response = _simulate_remote_flux_solution(backend_url, current_payload, MISSION05_GROWTH_OBJECTIVE)
+    except Exception as e:
+        return _build_mission05_data(0.0, 0.0, 0.0, 0.0, _oxygen_lower_bound_closed(_read_simulation_file()[3]), error=str(e))
+
+    baseline_growth, baseline_flux, baseline_error = _extract_remote_growth_and_flux(
+        baseline_response,
+        MISSION05_PRODUCTION_OBJECTIVE,
+    )
+    current_growth, current_flux, current_error = _extract_remote_growth_and_flux(
+        current_response,
+        MISSION05_PRODUCTION_OBJECTIVE,
+    )
+
+    return _build_mission05_data(
+        baseline_growth,
+        baseline_flux,
+        current_growth,
+        current_flux,
+        _oxygen_lower_bound_closed(_read_simulation_file()[3]),
         error=baseline_error or current_error,
     )
 

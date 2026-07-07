@@ -23,21 +23,21 @@ This shows that metabolic engineering often depends on both the cell's environme
 ## Candidate genes
 
 - `b0903` (`pflB`)
-- `b1241` (`adhE`)
 - `b2297` (`pta`)
 - `b0723` (`sdhA`)
 - `b3115` (`tdcD`)
 - `b0728` (`sucC`)
+- `b1241` (`adhE`)
 
 ## Expected answer
 
 The expected answer is:
 
 ```text
-b0903
+b1241
 ```
 
-The common gene name `pflB` is also accepted.
+The common gene name `adhE` is also accepted.
 
 ## Tasks
 

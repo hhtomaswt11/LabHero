@@ -8,6 +8,7 @@ from functions import animation_text_save
 from button import Button
 from async_menu import run_menu
 from mission04 import Mission04_info
+from mission05 import Mission05_info
 
 
 class Mission03: 
@@ -49,25 +50,43 @@ class Mission03:
                           "Can you show me your results?"]
 
         self.m03_step3 = [
-            "Very good! You learned how a knockout can reveal a gene that is essential for survival.",
+            "Very good! You learned how a knockout can reveal an essential gene.",
             "But knockouts are not only used to test survival.",
-            "They can also redirect metabolism toward useful products. Ready for the next step?"
+            "They can also redirect metabolism toward useful products. Let's go further."
         ]
 
         self.m03_step4 = [
             "Did you already test the production knockout?",
-            "Keep the environmental conditions unchanged and focus only on the genetic change."
+            "Keep the environmental conditions unchanged.",
+            "Focus only on the genetic change."
         ]
 
         self.m03_step5 = [
-            f"Excellent work, {self.player.player_name}!",
-            "You now understand that knockouts can affect survival and production.",
-            "That is a key idea in metabolic engineering."
+            "Excellent! You redirected metabolism in aerobic conditions.",
+            "Now let's combine a knockout with an environmental change.",
+            "What can E. coli produce without oxygen?"
         ]
-        
+
+        self.m03_step6 = [
+            "Did you already combine both variables?",
+            "Close the O2 lower bound and test one candidate knockout at a time."
+        ]
+
+        self.m03_step7 = [
+            f"Excellent work, {self.player.player_name}!",
+            "You now understand essential genes, production knockouts,",
+            "and how environment can change metabolic engineering strategies."
+        ]
+
         self.input()
-        if '03' in self.missions_completed and '04' in self.missions_completed:
-            self.menu_message(self.m03_step5, buttons=False)
+        if '03' in self.missions_completed and '04' in self.missions_completed and '05' in self.missions_completed:
+            self.menu_message(self.m03_step7, buttons=False)
+
+        elif '03' in self.missions_completed and '04' in self.missions_completed and '05' in self.missions_activated:
+            self.menu_message(self.m03_step6, target_mission='05')
+
+        elif '03' in self.missions_completed and '04' in self.missions_completed:
+            self.menu_message(self.m03_step5, target_mission='05')
 
         elif '03' in self.missions_completed and '04' in self.missions_activated:
             self.menu_message(self.m03_step4, target_mission='04')
@@ -114,6 +133,9 @@ class Mission03:
                 if target_mission == '04':
                     mission04_menu = Mission04_info(self.toggle_menu, self.player)
                     self.pending = mission04_menu.update
+                elif target_mission == '05':
+                    mission05_menu = Mission05_info(self.toggle_menu, self.player)
+                    self.pending = mission05_menu.update
                 else:
                     self.pending = self.menu.update
 
