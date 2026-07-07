@@ -81,3 +81,23 @@ def load_challenge_score():
     except Exception:
         return None
 
+
+def save_mission04_production_check(data):
+    if _IS_WEB:
+        _MEMSTORE['mission04_production_check'] = data
+        return
+    with open(get_save_path('mission04_production_check.txt'), 'w') as production_file:
+        json.dump(data, production_file)
+
+
+def load_mission04_production_check():
+    if _IS_WEB:
+        return _MEMSTORE.get('mission04_production_check')
+    try:
+        with open(get_save_path('mission04_production_check.txt')) as production_file:
+            return json.load(production_file)
+    except FileNotFoundError:
+        return None
+    except Exception:
+        return None
+

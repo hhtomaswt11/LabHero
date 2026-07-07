@@ -84,6 +84,38 @@ def _build_environmental_summary(reactions):
 
 
 
+
+def _build_mission04_text(production_data):
+    if not production_data:
+        return ''
+
+    if production_data.get('error'):
+        return f"Mission 04 Production Check\nError: {production_data.get('error')}"
+
+    environment_note = (
+        'Environmental conditions were changed. For Mission 04, keep them unchanged.'
+        if production_data.get('environment_changed')
+        else 'Environmental conditions unchanged.'
+    )
+    status = (
+        'Production improved. This knockout looks promising.'
+        if production_data.get('improved')
+        else 'No improvement yet. Try a different candidate knockout.'
+    )
+    change = float(production_data.get('production_change', 0))
+    change_prefix = '+' if change > 0 else ''
+
+    return (
+        'Mission 04 Production Check\n\n'
+        f"Target product: {production_data.get('product_name')} ({production_data.get('production_objective')})\n"
+        f"Baseline {production_data.get('product_name')} flux: {float(production_data.get('baseline_production', 0)):.3f}\n"
+        f"Current {production_data.get('product_name')} flux: {float(production_data.get('current_production', 0)):.3f}\n"
+        f"Production change: {change_prefix}{change:.3f}\n"
+        f"Current growth: {float(production_data.get('current_growth', 0)):.3f}\n\n"
+        f"{environment_note}\n"
+        f"{status}"
+    )
+
 def _build_challenge_text(challenge_data):
     if not challenge_data:
         return ''
@@ -227,7 +259,7 @@ class Window:
         # MENU SUB (Genes)
         menu_genes.add.vertical_margin(50)
         # menu_genes.add.label('TIP')
-        menu_genes.add.label("TIP for Mission 03: \nSome genes are more important than others, maybe you can try to knock out one of them to see if E. coli survives...",
+        menu_genes.add.label("TIP for Mission 03 and Mission 04: \nSome genes are essential for survival. Others can redirect metabolism toward useful products. Try one highlighted gene knockout at a time.",
                                 #  max_char=1,
                                  wordwrap=True,
                                 #  align=pygame_menu.locals.ALIGN_CENTER,
@@ -238,11 +270,12 @@ class Window:
         menu_genes.add.vertical_margin(20)
 
         genes_03 = ['b1241','b3115','b3736','b2975','b1524','b2278','b2926','b2297','b0728','b3919']
+        genes_04 = MISSION04_CANDIDATE_GENES
 
         for i, gene_id in enumerate(GENES):
             gene_label = GENE_LABELS.get(gene_id, gene_id)
 
-            if gene_id in genes_03:
+            if gene_id in genes_03 or gene_id in genes_04:
                 menu_genes.add.toggle_switch(
                     gene_label,
                     True,
@@ -400,6 +433,13 @@ class Window:
             else:
                 self.results = run_simul()
 
+            mission04_data = None
+            if '04' in self.player.missions_activated and '04' not in self.player.missions_completed:
+                if sys.platform == 'emscripten':
+                    mission04_data = run_mission04_production_check_remote(BACKEND_URL)
+                else:
+                    mission04_data = run_mission04_production_check()
+
             challenge_data = None
             if '06' in self.player.missions_activated and '06' not in self.player.missions_completed:
                 if sys.platform == 'emscripten':
@@ -431,6 +471,17 @@ class Window:
                 button_id='simulation_summary'
             )
             menu_simul.add.vertical_margin(20)
+
+            if mission04_data is not None:
+                menu_simul.add.label(
+                    _build_mission04_text(mission04_data),
+                    wordwrap=True,
+                    padding=(20, 20, 20, 20),
+                    background_color='white',
+                    font_size=24,
+                    label_id='mission04_production_check'
+                )
+                menu_simul.add.vertical_margin(20)
 
             if challenge_data is not None:
                 menu_simul.add.label(

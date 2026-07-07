@@ -9,6 +9,13 @@ from options_values import *
 CHALLENGE_GROWTH_OBJECTIVE = 'BIOMASS_Ecoli_core_w_GAM'
 CHALLENGE_PRODUCTION_OBJECTIVE = 'EX_etoh_e'
 
+MISSION04_GROWTH_OBJECTIVE = 'BIOMASS_Ecoli_core_w_GAM'
+MISSION04_PRODUCT_NAME = 'succinate'
+MISSION04_PRODUCTION_OBJECTIVE = 'EX_succ_e'
+MISSION04_TARGET_GENE = 'b0723'
+MISSION04_TARGET_GENE_NAME = 'sdhA'
+MISSION04_CANDIDATE_GENES = ['b0723', 'b2297', 'b1241', 'b3115', 'b0728', 'b2975']
+
 VILLAIN_SCORE = 14000.0
 
 
@@ -37,6 +44,43 @@ def _read_simulation_file():
     objective_name = objective['objective'][0][0]
 
     return method_name, objective_name, genes, reactions
+
+
+
+def _build_default_reactions_data():
+    reactions_data = {}
+    for i in range(len(REACTIONS.index)):
+        reactions_data[f'reaction_{i}_lb'] = REACTIONS.lb.iloc[i] != 0
+        reactions_data[f'reaction_{i}_ub'] = REACTIONS.ub.iloc[i] != 0
+    return reactions_data
+
+
+def _build_active_genes_data():
+    return {gene_id: True for gene_id in GENES}
+
+
+def _environment_has_changes(reactions):
+    reaction_values = list(reactions.values())
+    for i in range(len(REACTIONS.index)):
+        lb_index = i * 2
+        ub_index = lb_index + 1
+
+        if ub_index >= len(reaction_values):
+            break
+
+        lower_bound_open = reaction_values[lb_index]
+        upper_bound_open = reaction_values[ub_index]
+
+        default_lower_bound_open = REACTIONS.lb.iloc[i] != 0
+        default_upper_bound_open = REACTIONS.ub.iloc[i] != 0
+
+        if (
+            lower_bound_open != default_lower_bound_open
+            or upper_bound_open != default_upper_bound_open
+        ):
+            return True
+
+    return False
 
 
 def _build_envconditions_from_reactions(reactions, reactions_original):
@@ -202,6 +246,77 @@ def _build_challenge_data(growth, production_flux, error=None):
     return challenge_data
 
 
+
+def _simulate_flux_in_biomass_solution(genes, reactions, production_objective, growth_objective):
+    simul, constraints = _build_local_constraints(genes, reactions)
+    simul.objective = growth_objective
+    result = simul.simulate(method='FBA', constraints=constraints)
+
+    growth = _normalise_result(result)
+    if growth == 'Status: INFEASIBLE':
+        return 0.0, 0.0, 'Status: INFEASIBLE'
+
+    production_flux = _extract_flux(result, production_objective)
+    production_value = _as_float_or_none(production_flux)
+    if production_value is None:
+        return growth, 0.0, f'Could not read {production_objective} flux from the FBA solution.'
+
+    return growth, production_value, None
+
+
+def _build_mission04_data(baseline_growth, baseline_flux, current_growth, current_flux, environment_changed, error=None):
+    baseline_value = _numeric_result(baseline_flux)
+    current_value = _numeric_result(current_flux)
+    production_change = round(current_value - baseline_value, 3)
+
+    mission04_data = {
+        'product_name': MISSION04_PRODUCT_NAME,
+        'production_objective': MISSION04_PRODUCTION_OBJECTIVE,
+        'growth_objective': MISSION04_GROWTH_OBJECTIVE,
+        'target_gene': MISSION04_TARGET_GENE,
+        'target_gene_name': MISSION04_TARGET_GENE_NAME,
+        'baseline_growth': round(_numeric_result(baseline_growth), 3),
+        'baseline_production': round(baseline_value, 3),
+        'current_growth': round(_numeric_result(current_growth), 3),
+        'current_production': round(current_value, 3),
+        'production_change': production_change,
+        'environment_changed': environment_changed,
+        'improved': current_value > baseline_value,
+    }
+    if error:
+        mission04_data['error'] = error
+    save_mission04_production_check(mission04_data)
+    return mission04_data
+
+
+def run_mission04_production_check():
+    _method_name, _objective_name, genes, reactions = _read_simulation_file()
+
+    baseline_growth, baseline_flux, baseline_error = _simulate_flux_in_biomass_solution(
+        _build_active_genes_data(),
+        _build_default_reactions_data(),
+        MISSION04_PRODUCTION_OBJECTIVE,
+        MISSION04_GROWTH_OBJECTIVE,
+    )
+
+    current_growth, current_flux, current_error = _simulate_flux_in_biomass_solution(
+        genes,
+        reactions,
+        MISSION04_PRODUCTION_OBJECTIVE,
+        MISSION04_GROWTH_OBJECTIVE,
+    )
+
+    error = baseline_error or current_error
+    return _build_mission04_data(
+        baseline_growth,
+        baseline_flux,
+        current_growth,
+        current_flux,
+        _environment_has_changes(reactions),
+        error=error,
+    )
+
+
 def run_simul():
     method_name, objective_name, genes, reactions = _read_simulation_file()
     results = _simulate_local_objective(method_name, objective_name, genes, reactions)
@@ -304,6 +419,78 @@ def run_simul_remote(backend_url):
     if response.get('status') == 'infeasible':
         return response['objective'], 'Status: INFEASIBLE'
     return response.get('objective', payload['objective']), f'Error: {response.get("message", "unknown")}'
+
+
+
+def _build_default_env_conditions_payload():
+    env_conditions = {}
+    for i in range(len(REACTIONS.index)):
+        rid = REACTIONS.index[i]
+        lb = -1000 if REACTIONS.lb.iloc[i] != 0 else 0
+        ub = 1000 if REACTIONS.ub.iloc[i] != 0 else 0
+        env_conditions[rid] = [lb, ub]
+    return env_conditions
+
+
+def _simulate_remote_flux_solution(backend_url, payload, objective):
+    request_payload = copy.deepcopy(payload)
+    request_payload['method'] = 'FBA'
+    request_payload['objective'] = objective
+    return _http_post_json(backend_url.rstrip('/') + '/simulate', request_payload)
+
+
+def _extract_remote_growth_and_flux(response, production_objective):
+    if response.get('status') == 'infeasible':
+        return 0.0, 0.0, 'Status: INFEASIBLE'
+
+    if response.get('status') != 'ok':
+        return 0.0, 0.0, response.get('message', 'unknown backend error')
+
+    growth = response.get('result', 0.0)
+    fluxes = response.get('fluxes') or {}
+    production_flux = fluxes.get(production_objective)
+
+    production_value = _as_float_or_none(production_flux)
+    if production_value is None:
+        return growth, 0.0, f'Backend did not return {production_objective} flux.'
+
+    return growth, production_value, None
+
+
+def run_mission04_production_check_remote(backend_url):
+    payload = _build_request_payload()
+
+    baseline_payload = copy.deepcopy(payload)
+    baseline_payload['objective'] = MISSION04_GROWTH_OBJECTIVE
+    baseline_payload['gene_knockouts'] = []
+    baseline_payload['env_conditions'] = _build_default_env_conditions_payload()
+
+    current_payload = copy.deepcopy(payload)
+    current_payload['objective'] = MISSION04_GROWTH_OBJECTIVE
+
+    try:
+        baseline_response = _simulate_remote_flux_solution(backend_url, baseline_payload, MISSION04_GROWTH_OBJECTIVE)
+        current_response = _simulate_remote_flux_solution(backend_url, current_payload, MISSION04_GROWTH_OBJECTIVE)
+    except Exception as e:
+        return _build_mission04_data(0.0, 0.0, 0.0, 0.0, _environment_has_changes(_read_simulation_file()[3]), error=str(e))
+
+    baseline_growth, baseline_flux, baseline_error = _extract_remote_growth_and_flux(
+        baseline_response,
+        MISSION04_PRODUCTION_OBJECTIVE,
+    )
+    current_growth, current_flux, current_error = _extract_remote_growth_and_flux(
+        current_response,
+        MISSION04_PRODUCTION_OBJECTIVE,
+    )
+
+    return _build_mission04_data(
+        baseline_growth,
+        baseline_flux,
+        current_growth,
+        current_flux,
+        _environment_has_changes(_read_simulation_file()[3]),
+        error=baseline_error or current_error,
+    )
 
 
 def _simulate_remote_challenge_solution(backend_url, payload):
