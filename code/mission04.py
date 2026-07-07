@@ -265,7 +265,7 @@ class Mission04_info:
             if '04' not in self.missions_completed:
                 self.missions_completed.insert(0, '04')
             animation_text_save('Congratulations! Mission Completed!', time=2000)
-            save_file([self.player.player_name, self.player.results, self.player.missions_activated, self.player.missions_completed])
+            save_file(self.player.get_save_data())
         else:
             self.failed.play()
             animation_text_save('No ... Try again!', time=2000)

@@ -1,8 +1,10 @@
 import json
 import os
 import sys
+import copy
 
 from utils import *
+from settings import DEFAULT_PLAYER_STATE
 
 _IS_WEB = sys.platform == 'emscripten'
 _MEMSTORE = {}
@@ -12,7 +14,55 @@ def _memkey(filename):
     return os.path.basename(filename)
 
 
+def _default_player_state():
+    return copy.deepcopy(DEFAULT_PLAYER_STATE)
+
+
+def _read_existing_player_state():
+    """Return the player_state from the current save, when available.
+
+    This keeps backwards compatibility with older calls to save_file that may
+    still send the old 4-field save format.
+    """
+    try:
+        if _IS_WEB:
+            existing = _MEMSTORE.get('data')
+        else:
+            with open(get_save_path('data.txt')) as test_file:
+                existing = json.load(test_file)
+
+        if isinstance(existing, list) and len(existing) >= 5 and isinstance(existing[4], dict):
+            return existing[4]
+    except Exception:
+        pass
+    return _default_player_state()
+
+
+def normalize_save_data(data):
+    """Normalize save data to the current schema.
+
+    Current schema:
+    [player_name, results, missions_activated, missions_completed, player_state]
+
+    Older saves only had the first 4 fields. They still load correctly; in that
+    case the player_state falls back to the default spawn state.
+    """
+    if not isinstance(data, list):
+        return data
+
+    normalized = list(data)
+
+    while len(normalized) < 4:
+        normalized.append([])
+
+    if len(normalized) < 5 or not isinstance(normalized[4], dict):
+        normalized = normalized[:4] + [_read_existing_player_state()]
+
+    return normalized
+
+
 def save_file(data):
+    data = normalize_save_data(data)
     if _IS_WEB:
         _MEMSTORE['data'] = data
         return
@@ -24,10 +74,10 @@ def load_file(filename):
     if _IS_WEB:
         key = _memkey(filename)
         if key in _MEMSTORE:
-            return _MEMSTORE[key]
+            return normalize_save_data(_MEMSTORE[key])
     with open(f'{filename}.txt') as test_file:
         data = json.load(test_file)
-        return data
+        return normalize_save_data(data)
 
 
 def save_simulation_file(data):
@@ -61,6 +111,7 @@ def save_results(data):
     with open(get_save_path('results.txt'), 'w') as results_file:
         json.dump(data, results_file)
         results_file.close()
+
 
 def save_challenge_score(data):
     if _IS_WEB:
@@ -101,6 +152,7 @@ def load_mission04_production_check():
     except Exception:
         return None
 
+
 def save_mission05_production_check(data):
     if _IS_WEB:
         _MEMSTORE['mission05_production_check'] = data
@@ -119,4 +171,3 @@ def load_mission05_production_check():
         return None
     except Exception:
         return None
-

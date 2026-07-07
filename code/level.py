@@ -220,7 +220,7 @@ class Level:
 
 	def reset(self):
 		#save game
-		save_file([self.player.player_name, self.player.results, self.player.missions_activated, self.player.missions_completed])
+		save_file(self.player.get_save_data())
 
 		# plants
 		self.soil_layer.update_plants()

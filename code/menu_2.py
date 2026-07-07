@@ -37,7 +37,7 @@ class Menu:
 
     def save_game(self, menu):
         self.player.player_name = menu.get_input_data()['name']
-        save_file([self.player.player_name, self.player.results, self.player.missions_activated, self.player.missions_completed])
+        save_file(self.player.get_save_data())
         animation_text_save('Game saved')
     
 
@@ -202,7 +202,11 @@ class Menu:
                 menu.disable()
             menu.add.button('Back to Title', back_to_title)
         else:
-            menu.add.button('Quit Game', pygame_menu.events.EXIT)
+            def save_and_quit():
+                self.save_game(menu)
+                pygame.quit()
+                sys.exit()
+            menu.add.button('Quit Game', save_and_quit)
 
         await run_menu(menu, self.display_surface)
 

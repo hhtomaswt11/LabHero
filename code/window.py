@@ -787,7 +787,7 @@ class Window:
             result_display_text = _build_simulation_results_text(self.results)
             menu_simul.add.label(result_display_text, label_id='results')
             save_results(result_display_text)
-            save_file([self.player.player_name, self.player.results, self.player.missions_activated, self.player.missions_completed])
+            save_file(self.player.get_save_data())
             menu_simul.add.vertical_margin(50, margin_id='nr_margin')
             menu_simul.add.button(
                 'Simulation Summary',

@@ -277,7 +277,7 @@ class Mission06_info:
             if '06' not in self.missions_completed:
                 self.missions_completed.insert(0, '06')
             animation_text_save('Congratulations! You beat the villain score!', time=2500)
-            save_file([self.player.player_name, self.player.results, self.player.missions_activated, self.player.missions_completed])
+            save_file(self.player.get_save_data())
         else:
             self.failed.play()
             animation_text_save('Not enough... Try to improve your growth-production balance!', time=3000)

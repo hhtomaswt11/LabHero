@@ -37,7 +37,14 @@ class Player(pygame.sprite.Sprite):
 
         self.item_inventory = DEFAULT_INVENTORY[0]
 
-        self.player_name, self.results, self.missions_activated, self.missions_completed = inventory2
+        (
+            self.player_name,
+            self.results,
+            self.missions_activated,
+            self.missions_completed,
+            self.player_state
+        ) = self._unpack_save_data(inventory2)
+        self._apply_player_state(self.player_state)
 
         # web-only: when True, the outer LabHero.run() loop breaks back to intro_run()
         self.restart_to_intro = False
@@ -67,6 +74,90 @@ class Player(pygame.sprite.Sprite):
         coffee_path = get_resource_path('audio/coffee.ogg')
         self.coffee = pygame.mixer.Sound(coffee_path)
         self.coffee.set_volume(0.05)
+
+
+    def _unpack_save_data(self, data):
+        """Read both old and new save formats.
+
+        Old format:
+        [player_name, results, missions_activated, missions_completed]
+
+        New format:
+        [player_name, results, missions_activated, missions_completed, player_state]
+        """
+        data = data or DEFAULT_INVENTORY_2
+
+        player_name = data[0] if len(data) > 0 else DEFAULT_INVENTORY_2[0]
+        results = data[1] if len(data) > 1 else []
+        missions_activated = data[2] if len(data) > 2 else []
+        missions_completed = data[3] if len(data) > 3 else []
+        player_state = data[4] if len(data) > 4 and isinstance(data[4], dict) else DEFAULT_PLAYER_STATE.copy()
+
+        return player_name, results, missions_activated, missions_completed, player_state
+
+    def _safe_facing(self, facing):
+        facing = str(facing or 'down').split('_')[0]
+        return facing if facing in ('up', 'down', 'left', 'right') else 'down'
+
+    def _apply_player_state(self, player_state):
+        """Place the player at the saved position/orientation when possible."""
+        if not isinstance(player_state, dict):
+            return
+
+        # The project currently has one playable scene. If a future save points
+        # to a different scene, keep the normal spawn point instead of placing
+        # the player in the wrong map.
+        if player_state.get('scene', DEFAULT_SCENE_ID) != DEFAULT_SCENE_ID:
+            return
+
+        x = player_state.get('x')
+        y = player_state.get('y')
+        if x is not None and y is not None:
+            try:
+                self.pos.update(float(x), float(y))
+                self.rect.center = (round(self.pos.x), round(self.pos.y))
+                self.hitbox.center = self.rect.center
+            except (TypeError, ValueError):
+                pass
+
+        facing = self._safe_facing(player_state.get('facing') or player_state.get('status'))
+        saved_status = str(player_state.get('status') or f'{facing}_idle')
+
+        if saved_status not in self.animations:
+            saved_status = f'{facing}_idle'
+        if saved_status not in self.animations:
+            saved_status = 'down_idle'
+
+        # Load as idle so the player appears facing the same direction but does
+        # not resume mid-step.
+        if not saved_status.endswith('_idle'):
+            saved_status = f'{self._safe_facing(saved_status)}_idle'
+
+        self.status = saved_status
+        self.frame_index = 0
+        self.image = self.animations[self.status][self.frame_index]
+        self.update_interaction_area()
+        self.get_target_pos()
+
+    def get_player_state(self):
+        facing = self._safe_facing(self.status)
+        return {
+            'scene': DEFAULT_SCENE_ID,
+            'x': float(self.pos.x),
+            'y': float(self.pos.y),
+            'facing': facing,
+            'status': self.status
+        }
+
+    def get_save_data(self):
+        """Centralized save payload used by all save_file calls."""
+        return [
+            self.player_name,
+            self.results,
+            self.missions_activated,
+            self.missions_completed,
+            self.get_player_state()
+        ]
 
 
     def use_tool(self):

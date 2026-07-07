@@ -65,9 +65,23 @@ DEFAULT_INVENTORY = [{
                 200]
 
 
+# Current scene/level identifier used by the save/load system.
+# LabHero currently has one main map, but this field keeps the save format ready
+# for future levels/scenes.
+DEFAULT_SCENE_ID = 'main_map'
+
+DEFAULT_PLAYER_STATE = {
+    'scene': DEFAULT_SCENE_ID,
+    'x': None,
+    'y': None,
+    'facing': 'down',
+    'status': 'down_idle'
+}
+
 DEFAULT_INVENTORY_2 = [
     "Margaret Dayhoff",
     [], #'List of Results'
     [], #'List of activated missions'
-    [] #'List of completed missions'
+    [], #'List of completed missions'
+    DEFAULT_PLAYER_STATE #'Player position/orientation/scene'
     ]
