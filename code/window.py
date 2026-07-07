@@ -124,6 +124,87 @@ def _build_environmental_summary(reactions):
 
 
 
+def _build_clean_production_flux_data(raw_flux_data):
+    """Keep only curated production flux toggles from the menu input data."""
+    raw_flux_data = raw_flux_data or {}
+    return {
+        option['id']: bool(raw_flux_data.get(option['id'], False))
+        for option in PRODUCTION_FLUX_OPTIONS
+    }
+
+
+def _selected_production_flux_ids(production_flux_data):
+    return [
+        option['id']
+        for option in PRODUCTION_FLUX_OPTIONS
+        if bool(production_flux_data.get(option['id'], False))
+    ]
+
+
+def _build_production_flux_summary(production_flux_data):
+    selected_ids = _selected_production_flux_ids(production_flux_data)
+    if not selected_ids:
+        return 'No production fluxes selected.'
+
+    return '\n'.join(
+        f"- {PRODUCTION_FLUX_LABELS.get(reaction_id, reaction_id)}"
+        for reaction_id in selected_ids
+    )
+
+
+def _build_production_fluxes_text(production_fluxes):
+    if not production_fluxes or not production_fluxes.get('selected_ids'):
+        return ''
+
+    lines = [
+        'Production fluxes tracked:',
+        '(positive exchange flux = product secreted/exported)'
+    ]
+
+    if production_fluxes.get('error'):
+        lines.append(f"Error: {production_fluxes.get('error')}")
+        return '\n'.join(lines)
+
+    items = production_fluxes.get('items') or []
+    if not items:
+        lines.append('No flux values were returned for the selected products.')
+        return '\n'.join(lines)
+
+    for item in items:
+        label = item.get('label') or item.get('reaction_id')
+        if item.get('error'):
+            lines.append(f"- {label}: not available")
+        else:
+            lines.append(f"- {label}: {float(item.get('production_flux', 0.0)):.3f}")
+
+    return '\n'.join(lines)
+
+
+def _build_simulation_results_text(results):
+    try:
+        objective_name = results[0]
+        objective_result = results[1]
+    except Exception:
+        return str(results)
+
+    text = (
+        'Objective flux:\n'
+        f'{objective_name}: {objective_result}'
+    )
+
+    production_text = ''
+    try:
+        production_text = _build_production_fluxes_text(results[2])
+    except Exception:
+        production_text = ''
+
+    if production_text:
+        text += '\n\n' + production_text
+
+    return text
+
+
+
 
 
 def _build_mission04_text(production_data):
@@ -482,6 +563,65 @@ class Window:
         
         
 
+        # MENU SUB (Production Flux)
+        menu_production_flux = pygame_menu.Menu(
+            height=720,
+            center_content=False,
+            onclose=pygame_menu.events.BACK,
+            theme=mytheme,
+            title='Production Flux',
+            width=1280
+        )
+
+        menu_production_flux.add.vertical_margin(40)
+        menu_production_flux.add.label(
+            "Select the product fluxes you want to measure after each simulation.\nThis does not change the Objective; it only tracks the selected exchange fluxes in New Results.",
+            wordwrap=True,
+            padding=(20, 30, 20, 30),
+            background_color="white",
+            font_size=26
+        )
+        menu_production_flux.add.vertical_margin(20)
+
+        production_flux_widgets = {}
+
+        def clear_production_fluxes(*_args, **_kwargs):
+            for widget in production_flux_widgets.values():
+                widget.set_value(False)
+
+        if PRODUCTION_FLUX_OPTIONS:
+            for option in PRODUCTION_FLUX_OPTIONS:
+                production_flux_widgets[option['id']] = menu_production_flux.add.toggle_switch(
+                    option['label'],
+                    False,
+                    toggleswitch_id=option['id'],
+                    state_text=('Off', 'On'),
+                    state_text_font_size=20,
+                    font_size=24,
+                    state_color=('grey', 'gold'),
+                    state_text_font_color=('black', 'black')
+                )
+                menu_production_flux.add.vertical_margin(10)
+        else:
+            menu_production_flux.add.label(
+                'No curated production fluxes are available for this model.',
+                wordwrap=True,
+                padding=(20, 20, 20, 20),
+                background_color='white',
+                font_size=24
+            )
+
+        menu_production_flux.add.vertical_margin(20)
+        menu_production_flux.add.button(
+            'Clear Production Fluxes',
+            clear_production_fluxes,
+            font_color='white',
+            background_color=(150, 40, 40)
+        )
+        menu_production_flux.add.button('Back', pygame_menu.events.BACK, background_color=(70, 70, 70))
+        menu_production_flux.add.vertical_margin(20)
+
+
         # MENU SUB OBJECTIVE
         menu_objective = pygame_menu.Menu(
             height=720,
@@ -518,6 +658,18 @@ class Window:
                                  background_color = "white",
                                  font_size = 26)
         menu_objective.add.vertical_margin(20)
+        menu_objective.add.label(
+            'Production Flux:',
+            font_size=30,
+            font_color=(20, 0, 150)
+        )
+        menu_objective.add.button(
+            'Select production fluxes to track',
+            menu_production_flux,
+            font_color='white',
+            background_color=(20, 100, 100)
+        )
+        menu_objective.add.vertical_margin(20)
         menu_objective.add.button('Back', pygame_menu.events.BACK, background_color=(70, 70, 70))
 
         
@@ -542,6 +694,7 @@ class Window:
             raw_data_genes = menu_genes.get_input_data()
             data_genes = _build_clean_gene_data(raw_data_genes)
             data_reac = menu_reactions.get_input_data()
+            data_fluxes = _build_clean_production_flux_data(menu_production_flux.get_input_data())
 
 
 
@@ -578,6 +731,12 @@ class Window:
                 _build_environmental_summary(data_reac)
             )
 
+            _add_summary_section(
+                menu_summary,
+                'Production fluxes to track',
+                _build_production_flux_summary(data_fluxes)
+            )
+
             menu_summary.add.button(
                 'Back',
                 pygame_menu.events.BACK,
@@ -585,7 +744,7 @@ class Window:
             )
 
 
-            save_simulation_file([data_simul, data_objective, data_genes, data_reac])
+            save_simulation_file([data_simul, data_objective, data_genes, data_reac, data_fluxes])
             animation_text_save('Running')
             if sys.platform == 'emscripten':
                 self.results = run_simul_remote(BACKEND_URL)
@@ -625,8 +784,9 @@ class Window:
             menu_simul.add.vertical_margin(50)  # Adds margin
             
             menu.add.button('New Results', action=menu_simul, font_color = 'white', background_color=(0,150,50), button_id='new_results')
-            menu_simul.add.label(self.results, label_id='results')
-            save_results(self.results)
+            result_display_text = _build_simulation_results_text(self.results)
+            menu_simul.add.label(result_display_text, label_id='results')
+            save_results(result_display_text)
             save_file([self.player.player_name, self.player.results, self.player.missions_activated, self.player.missions_completed])
             menu_simul.add.vertical_margin(50, margin_id='nr_margin')
             menu_simul.add.button(
@@ -709,6 +869,7 @@ class Window:
                                    default=0,
                                    selection_box_height=5, dropselect_id='method', background_color="white", font_color=(20,0,150))
         menu.add.button('Objective', menu_objective, font_color = (20,0,150), background_color="white")
+        menu.add.button('Production Flux', menu_production_flux, font_color = (20,0,150), background_color="white")
         menu.add.button('Genes', menu_genes, font_color = (20,0,150), background_color="white")
         menu.add.button('Environmental Conditions', menu_reactions, font_color = (20,0,150), background_color="white")
         # menu.add.button('Environmental Conditions', menu_reactions_backup, font_color = (20,0,150), background_color="white")

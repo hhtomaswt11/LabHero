@@ -135,6 +135,62 @@ GENE_NAMES = _load_gene_names_from_sbml(model_path)
 GENE_LABELS = _build_gene_labels(GENES, GENE_NAMES)
 
 
+# Exchange reactions that are useful for the player to monitor as production
+# fluxes. This is intentionally curated instead of reusing every possible
+# objective reaction: internal reactions such as ATPM or ADK1 are not products
+# and would make the simulation menu less clear for beginners.
+PRODUCTION_FLUX_REACTION_IDS = [
+    'EX_ac_e',       # Acetate
+    'EX_acald_e',    # Acetaldehyde
+    'EX_akg_e',      # 2-Oxoglutarate
+    'EX_co2_e',      # CO2
+    'EX_etoh_e',     # Ethanol
+    'EX_for_e',      # Formate
+    'EX_fum_e',      # Fumarate
+    'EX_gln__L_e',   # L-Glutamine
+    'EX_glu__L_e',   # L-Glutamate
+    'EX_lac__D_e',   # D-lactate
+    'EX_mal__L_e',   # L-Malate
+    'EX_pyr_e',      # Pyruvate
+    'EX_succ_e',     # Succinate
+]
+
+
+def _clean_exchange_name(name):
+    name = str(name).replace(' exchange', '').replace('Exchange', '').strip()
+    return name or 'Unknown product'
+
+
+def _build_production_flux_options():
+    reaction_ids = list(REACTIONS.index)
+    options = []
+
+    for reaction_id in PRODUCTION_FLUX_REACTION_IDS:
+        if reaction_id not in reaction_ids:
+            continue
+
+        reaction_index = reaction_ids.index(reaction_id)
+        product_name = _clean_exchange_name(REACTIONS.name.iloc[reaction_index])
+        options.append({
+            'id': reaction_id,
+            'name': product_name,
+            'label': f'{product_name} ({reaction_id})',
+        })
+
+    return options
+
+
+PRODUCTION_FLUX_OPTIONS = _build_production_flux_options()
+PRODUCTION_FLUX_LABELS = {
+    option['id']: option['label']
+    for option in PRODUCTION_FLUX_OPTIONS
+}
+PRODUCTION_FLUX_NAMES = {
+    option['id']: option['name']
+    for option in PRODUCTION_FLUX_OPTIONS
+}
+
+
 if __name__ == '__main__':
     print(GENES)
     print(REACTIONS_v0)

@@ -46,7 +46,7 @@ def _numeric_result(value):
 
 def _read_simulation_file():
     data_simul = load_file(get_save_path('simulation_file'))
-    method, objective, genes, reactions = data_simul
+    method, objective, genes, reactions = data_simul[:4]
 
     method_name = method['method'][0][0]
     objective_name = objective['objective'][0][0]
@@ -65,6 +65,32 @@ def _build_default_reactions_data():
 
 def _build_active_genes_data():
     return {gene_id: True for gene_id in GENES}
+
+
+
+def _read_selected_production_fluxes():
+    """Read the production fluxes selected by the player in the simulation UI.
+
+    Older save files only have method/objective/genes/reactions, so this stays
+    backwards compatible and simply returns an empty selection in that case.
+    """
+    try:
+        data_simul = load_file(get_save_path('simulation_file'))
+    except Exception:
+        return []
+
+    if not isinstance(data_simul, (list, tuple)) or len(data_simul) < 5:
+        return []
+
+    raw_flux_data = data_simul[4] or {}
+    if not isinstance(raw_flux_data, dict):
+        return []
+
+    return [
+        reaction_id
+        for reaction_id in PRODUCTION_FLUX_REACTION_IDS
+        if bool(raw_flux_data.get(reaction_id, False))
+    ]
 
 def _build_anaerobic_reactions_data():
     reactions_data = _build_default_reactions_data()
@@ -261,6 +287,74 @@ def _as_float_or_none(value):
         return None
 
 
+
+def _build_production_flux_data(selected_ids, flux_getter=None, error=None):
+    """Build display-ready production flux data for selected exchange reactions."""
+    selected_ids = [
+        reaction_id
+        for reaction_id in selected_ids
+        if reaction_id in PRODUCTION_FLUX_REACTION_IDS
+    ]
+
+    data = {
+        'selected_ids': selected_ids,
+        'items': [],
+    }
+
+    if error:
+        data['error'] = error
+        return data
+
+    if not selected_ids:
+        return data
+
+    for reaction_id in selected_ids:
+        raw_flux = None
+        if callable(flux_getter):
+            try:
+                raw_flux = flux_getter(reaction_id)
+            except Exception:
+                raw_flux = None
+
+        raw_value = _as_float_or_none(raw_flux)
+        item = {
+            'reaction_id': reaction_id,
+            'product_name': PRODUCTION_FLUX_NAMES.get(reaction_id, reaction_id),
+            'label': PRODUCTION_FLUX_LABELS.get(reaction_id, reaction_id),
+        }
+
+        if raw_value is None:
+            item['error'] = 'Flux not available in this simulation result.'
+        else:
+            # For exchange reactions, positive flux represents secretion/export.
+            # A negative value would mean uptake/consumption, not production.
+            item['raw_flux'] = round(raw_value, 6)
+            item['production_flux'] = round(max(raw_value, 0.0), 3)
+
+        data['items'].append(item)
+
+    return data
+
+
+def _simulate_local_objective_with_production_fluxes(method_name, objective_name, genes, reactions, selected_fluxes):
+    simul, constraints = _build_local_constraints(genes, reactions)
+    simul.objective = objective_name
+    result = simul.simulate(method=method_name, constraints=constraints)
+    objective_result = _normalise_result(result)
+
+    if objective_result == 'Status: INFEASIBLE':
+        return objective_result, _build_production_flux_data(
+            selected_fluxes,
+            error='Simulation infeasible. Production fluxes could not be measured.'
+        )
+
+    production_fluxes = _build_production_flux_data(
+        selected_fluxes,
+        flux_getter=lambda reaction_id: _extract_flux(result, reaction_id)
+    )
+    return objective_result, production_fluxes
+
+
 def _build_challenge_data(growth, production_flux, error=None):
     growth_value = _numeric_result(growth)
     production_value = _numeric_result(production_flux)
@@ -409,8 +503,15 @@ def run_mission05_production_check():
 
 def run_simul():
     method_name, objective_name, genes, reactions = _read_simulation_file()
-    results = _simulate_local_objective(method_name, objective_name, genes, reactions)
-    return objective_name, results
+    selected_fluxes = _read_selected_production_fluxes()
+    results, production_fluxes = _simulate_local_objective_with_production_fluxes(
+        method_name,
+        objective_name,
+        genes,
+        reactions,
+        selected_fluxes,
+    )
+    return objective_name, results, production_fluxes
 
 
 def run_challenge_score():
@@ -499,16 +600,34 @@ def _http_post_json(url, payload):
 
 def run_simul_remote(backend_url):
     payload = _build_request_payload()
+    selected_fluxes = _read_selected_production_fluxes()
     try:
         response = _http_post_json(backend_url.rstrip('/') + '/simulate', payload)
     except Exception as e:
-        return payload['objective'], f'Error: {e}'
+        return payload['objective'], f'Error: {e}', _build_production_flux_data(
+            selected_fluxes,
+            error=f'Backend error: {e}'
+        )
 
     if response.get('status') == 'ok':
-        return response['objective'], response['result']
+        fluxes = response.get('fluxes') or {}
+        return response['objective'], response['result'], _build_production_flux_data(
+            selected_fluxes,
+            flux_getter=lambda reaction_id: fluxes.get(reaction_id)
+        )
     if response.get('status') == 'infeasible':
-        return response['objective'], 'Status: INFEASIBLE'
-    return response.get('objective', payload['objective']), f'Error: {response.get("message", "unknown")}'
+        return response['objective'], 'Status: INFEASIBLE', _build_production_flux_data(
+            selected_fluxes,
+            error='Simulation infeasible. Production fluxes could not be measured.'
+        )
+    return (
+        response.get('objective', payload['objective']),
+        f'Error: {response.get("message", "unknown")}',
+        _build_production_flux_data(
+            selected_fluxes,
+            error=response.get('message', 'unknown backend error')
+        )
+    )
 
 
 
