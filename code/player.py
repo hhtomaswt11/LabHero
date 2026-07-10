@@ -269,7 +269,7 @@ class Player(pygame.sprite.Sprite):
                             if self.interaction_area.colliderect(sprite.hitbox):
                                 if sprite.name == 'Coffee':
                                     self.coffee.play()
-                                    self.speed = 400
+                                    self.speed = 900
                                 if sprite.name in ('Sequeira', 'Pacheco', 'Nuno', 'Fernanda', 'Emanuel', 'Alexandre', 'Capela', 'Marta', 'Oscar', 'Miguel'):
                                     self.character = sprite.name
                                     self.dialogues() # add variable with name character to change message and id
