@@ -1,20 +1,31 @@
 import pygame
 import pygame_menu
+
 from settings import *
 from save_load import *
 from timers import Timer
+from options_values import *
 from functions import animation_text_save
 from button import Button
 from async_menu import run_menu
+from mission08 import Mission08_info
+from mission09 import Mission09_info
 from utils import *
+from simulation import (
+    MISSION07_TARGET_OBJECTIVE,
+    MISSION07_TARGET_PRODUCT,
+    MISSION07_DEFAULT_OBJECTIVE,
+    MISSION08_TARGET_PRODUCT,
+    MISSION09_TARGET_PRODUCT,
+)
 
 
 class Mission07:
-    """Placeholder mission for the first new laboratory NPC.
+    """Mission 07 — Objective Matters.
 
-    This mission is intentionally simple. Its goal is to test the full
-    interaction pipeline for the new Tiled object named Mission07 before we
-    implement the real scientific content for this laboratory.
+    This is the first mission of the new Advanced Strain Design laboratory.
+    It teaches that the objective function selected in FBA changes what the
+    model tries to optimise.
     """
 
     def __init__(self, toggle_menu, player) -> None:
@@ -43,23 +54,57 @@ class Mission07:
     async def update(self):
         self.m07_step1 = [
             f"Hello {self.player.player_name}! Welcome to the Advanced Strain Design Lab.",
-            "This new area will later contain harder metabolic engineering missions.",
-            "For now, let's test if this new scientist is correctly connected to the game."
+            "Until now, you changed nutrients, genes and environmental conditions.",
+            "Now you will learn why the objective function matters in FBA."
         ]
 
         self.m07_step2 = [
-            "Mission 07 is active. This is only a technical test for now.",
-            "Open the mission menu again and complete the test interaction."
+            "Mission 07 is active. Go to the simulation computer.",
+            f"Find which Objective makes the model prioritize {MISSION07_TARGET_PRODUCT} production.",
+            "Keep genes and environmental conditions unchanged, then run simulations."
         ]
 
         self.m07_step3 = [
-            "Great! The new laboratory interaction is working correctly.",
-            "Now this scientist can receive real advanced missions later."
+            "Excellent. You saw that changing the objective changes what the model optimizes.",
+            "But objective choice is only one part of strain design.",
+            "Now let's add environmental constraints to the problem."
+        ]
+
+        self.m08_step1 = [
+            "Mission 08 is active. This time you need two decisions.",
+            f"Target {MISSION08_TARGET_PRODUCT} production and find the right environmental constraint.",
+            "Do not use gene knockouts yet. Focus on objective plus environment."
+        ]
+
+        self.m08_step2 = [
+            f"Excellent work, {self.player.player_name}.",
+            "You now understand that objectives and constraints must work together.",
+            "For the final test, combine objective, environment and one knockout."
+        ]
+
+        self.m09_step1 = [
+            "Mission 09 is active. This is the final Dr. Nova design challenge.",
+            f"Target {MISSION09_TARGET_PRODUCT} using objective, environment and exactly one knockout.",
+            "Use New Results as feedback until the integrated design is ready."
+        ]
+
+        self.m09_step2 = [
+            f"Outstanding, {self.player.player_name}.",
+            "You combined objective choice, environmental constraints and genetic design.",
+            "The Advanced Strain Design Lab is complete for now."
         ]
 
         self.input()
-        if '07' in self.missions_completed:
-            self.menu_message(self.m07_step3, buttons=False)
+        if '09' in self.missions_completed:
+            self.menu_message(self.m09_step2, buttons=False)
+        elif '08' in self.missions_completed and '09' in self.missions_activated:
+            self.menu_message(self.m09_step1, target_mission='09')
+        elif '08' in self.missions_completed:
+            self.menu_message(self.m08_step2, target_mission='09')
+        elif '07' in self.missions_completed and '08' in self.missions_activated:
+            self.menu_message(self.m08_step1, target_mission='08')
+        elif '07' in self.missions_completed:
+            self.menu_message(self.m07_step3, target_mission='08')
         elif '07' in self.missions_activated:
             self.menu_message(self.m07_step2)
         else:
@@ -70,13 +115,14 @@ class Mission07:
             self.pending = None
             await coro_factory()
 
-    def menu_message(self, message, buttons=True):
+    def menu_message(self, message, buttons=True, target_mission='07'):
         pygame.draw.rect(self.screen, (255, 215, 0), [0, 500, 1280, 220], width=5)
         pygame.draw.rect(self.screen, (186, 214, 177), [5, 505, 1270, 210])
 
-        # Temporary portrait. Replace later when the final NPC portrait is chosen.
         imagem_path = get_resource_path('graphics/dialogues/nova.jpg')
         imagem = pygame.image.load(imagem_path).convert()
+        if imagem.get_size() != (150, 150):
+            imagem = pygame.transform.smoothscale(imagem, (150, 150))
         self.screen.blit(imagem, (25, 520))
 
         pygame.draw.rect(self.screen, 'white', [25, 675, 150, 25])
@@ -89,7 +135,14 @@ class Mission07:
 
         if buttons:
             def click_yes():
-                self.pending = self.menu.update
+                if target_mission == '09':
+                    mission09_menu = Mission09_info(self.toggle_menu, self.player)
+                    self.pending = mission09_menu.update
+                elif target_mission == '08':
+                    mission08_menu = Mission08_info(self.toggle_menu, self.player)
+                    self.pending = mission08_menu.update
+                else:
+                    self.pending = self.menu.update
 
             botao_teste = Button(200, 650, 150, 50, self.screen, 'Yes', click_yes)
             botao_teste_2 = Button(370, 650, 220, 50, self.screen, 'Not now', self.toggle_menu)
@@ -117,6 +170,10 @@ class Mission07_info:
         self.success = pygame.mixer.Sound(success_path)
         self.success.set_volume(1.2)
 
+        failed_path = get_resource_path('audio/failed.ogg')
+        self.failed = pygame.mixer.Sound(failed_path)
+        self.failed.set_volume(1.2)
+
     async def setup(self):
         menu = pygame_menu.Menu(
             height=720,
@@ -135,15 +192,53 @@ class Mission07_info:
         )
 
         menu_text.add.label(
-            """
-            Mission 07 is currently a technical placeholder.
+            f"""
+            Welcome to Mission 07: Objective Matters.
 
-            The purpose of this mission is to confirm that the new scientist placed in Tiled is correctly connected to the game logic.
+            In Flux Balance Analysis, the objective tells the model what it should optimize.
+            Until now, the default objective was usually biomass, because biomass tells us how well E. coli can grow.
 
-            Later, this same NPC can be used for advanced strain design missions, such as:
-            - choosing metabolic objectives;
-            - testing double knockouts;
-            - optimizing production while keeping growth above a minimum.
+            In this mission, you must keep the cell unchanged and discover which objective makes the model prioritize a product instead of growth.
+
+            Target product: {MISSION07_TARGET_PRODUCT}
+
+            Rules:
+            - Change only the objective.
+            - Do not change genes.
+            - Do not change environmental conditions.
+
+            Scientific clue:
+            Products are usually inspected through exchange reactions.
+            Look for the exchange reaction that matches the requested product.
+            """,
+            max_char=-1,
+            wordwrap=True,
+            align=pygame_menu.locals.ALIGN_LEFT,
+            margin=(0, 0),
+        )
+        menu_text.add.label(
+            """Tasks:""",
+            max_char=-1,
+            wordwrap=True,
+            align=pygame_menu.locals.ALIGN_LEFT,
+            margin=(100, 0),
+            background_color='gold',
+            font_color='black',
+            font_size=30,
+            padding=(25, 25, 25, 25)
+        )
+        menu_text.add.label(
+            f"""
+            Task 1 - Go to the simulation computer.
+
+            Task 2 - Test objectives until the model clearly targets {MISSION07_TARGET_PRODUCT} production.
+
+            Task 3 - Do not change genes or environmental conditions.
+            This mission is only about choosing the correct objective.
+
+            Task 4 - Run simulations and use Mission 07 Objective Check in New Results as feedback.
+
+            Task 5 - Return to Dr. Nova only when the check says the objective is ready.
             """,
             max_char=-1,
             wordwrap=True,
@@ -155,17 +250,21 @@ class Mission07_info:
 
         menu.add.vertical_margin(20)
         menu.add.label(
-            'Mission 07: New Laboratory Test',
+            'Mission 07: Objective Matters',
             wordwrap=False,
             align=pygame_menu.locals.ALIGN_CENTER,
             font_size=34,
         )
 
         menu.add.label(
-            """
-            This is a temporary test mission for the new scientist.
+            f"""
+            The goal is to prove that the objective function changes the simulation goal.
 
-            If you can activate and complete this mission, then the Mission07 object in Tiled is correctly connected to the code.
+            Target product: {MISSION07_TARGET_PRODUCT}
+
+            Keep the model unchanged.
+            Change only the Objective and discover which option targets this product.
+            Then run simulations and deliver the result.
             """,
             wordwrap=True,
             align=pygame_menu.locals.ALIGN_CENTER,
@@ -176,7 +275,7 @@ class Mission07_info:
         menu.add.vertical_margin(50)
 
         if self.mission07:
-            menu.add.button('Complete Test Mission', action=self.deliver_results, background_color=(50, 100, 100))
+            menu.add.button('Deliver Objective Results', action=self.deliver_results, background_color=(50, 100, 100))
             menu.add.vertical_margin(50)
             menu.add.label('Mission Activated', font_color=(150, 150, 150))
             menu.add.vertical_margin(20)
@@ -187,9 +286,6 @@ class Mission07_info:
 
         await run_menu(menu, self.display_surface)
 
-    def toggle_menu(self):
-        self.toggle_talk = not self.toggle_talk
-
     def activate_mission07(self):
         self.mission07 = True
         if '07' not in self.missions_activated:
@@ -198,18 +294,37 @@ class Mission07_info:
         save_file(self.player.get_save_data())
 
     def deliver_results(self):
-        self.success.play()
-        if '07' not in self.missions_completed:
-            self.missions_completed.insert(0, '07')
-        animation_text_save('Mission 07 Test Completed!', time=2000)
-        save_file(self.player.get_save_data())
+        objective_data = load_mission07_objective_check()
+
+        if not objective_data:
+            self.failed.play()
+            animation_text_save('Run a Mission 07 simulation first!', time=2500)
+            return
+
+        if objective_data.get('ready_to_deliver'):
+            self.success.play()
+            if '07' not in self.missions_completed:
+                self.missions_completed.insert(0, '07')
+            animation_text_save('Congratulations! Mission Completed!', time=2500)
+            save_file(self.player.get_save_data())
+            return
+
+        self.failed.play()
+        if not objective_data.get('objective_correct'):
+            animation_text_save(f'The selected objective is not targeting {MISSION07_TARGET_PRODUCT} yet.', time=3000)
+        elif objective_data.get('environment_changed'):
+            animation_text_save('Keep environmental conditions unchanged for this mission!', time=3000)
+        elif objective_data.get('knocked_out_genes'):
+            animation_text_save('Do not use gene knockouts in Mission 07!', time=3000)
+        else:
+            animation_text_save('Run the objective simulation again and check the result!', time=3000)
 
     def input(self):
         keys = pygame.key.get_pressed()
         self.timer.update()
 
         if keys[pygame.K_ESCAPE]:
-            pass
+            pass  # ESC is handled by pygame-menu's onclose callback
 
     async def update(self):
         self.input()

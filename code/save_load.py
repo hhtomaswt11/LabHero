@@ -171,3 +171,62 @@ def load_mission05_production_check():
         return None
     except Exception:
         return None
+
+def save_mission07_objective_check(data):
+    if _IS_WEB:
+        _MEMSTORE['mission07_objective_check'] = data
+        return
+    with open(get_save_path('mission07_objective_check.txt'), 'w') as objective_file:
+        json.dump(data, objective_file)
+
+
+def load_mission07_objective_check():
+    if _IS_WEB:
+        return _MEMSTORE.get('mission07_objective_check')
+    try:
+        with open(get_save_path('mission07_objective_check.txt')) as objective_file:
+            return json.load(objective_file)
+    except FileNotFoundError:
+        return None
+    except Exception:
+        return None
+
+
+def save_mission08_constraint_check(data):
+    if _IS_WEB:
+        _MEMSTORE['mission08_constraint_check'] = data
+        return
+    with open(get_save_path('mission08_constraint_check.txt'), 'w') as objective_file:
+        json.dump(data, objective_file)
+
+
+def load_mission08_constraint_check():
+    if _IS_WEB:
+        return _MEMSTORE.get('mission08_constraint_check')
+    try:
+        with open(get_save_path('mission08_constraint_check.txt')) as objective_file:
+            return json.load(objective_file)
+    except FileNotFoundError:
+        return None
+    except Exception:
+        return None
+
+def save_mission09_design_check(data):
+    if _IS_WEB:
+        _MEMSTORE['mission09_design_check'] = data
+        return
+    with open(get_save_path('mission09_design_check.txt'), 'w') as design_file:
+        json.dump(data, design_file)
+
+
+def load_mission09_design_check():
+    if _IS_WEB:
+        return _MEMSTORE.get('mission09_design_check')
+    try:
+        with open(get_save_path('mission09_design_check.txt')) as design_file:
+            return json.load(design_file)
+    except FileNotFoundError:
+        return None
+    except Exception:
+        return None
+

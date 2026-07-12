@@ -207,6 +207,171 @@ def _build_simulation_results_text(results):
 
 
 
+def _build_mission07_text(objective_data):
+    if not objective_data:
+        return ''
+
+    if objective_data.get('error') and objective_data.get('objective_result') in (None, 'None'):
+        return f"Mission 07 Objective Check\nError: {objective_data.get('error')}"
+
+    target_product = objective_data.get('target_product')
+    selected_objective = objective_data.get('selected_objective')
+    objective_result = objective_data.get('objective_result')
+
+    objective_status = (
+        f'The selected objective is targeting {target_product} production.'
+        if objective_data.get('objective_correct')
+        else f'The selected objective is not targeting {target_product} production yet.'
+    )
+    environment_status = (
+        'Environmental conditions unchanged.'
+        if not objective_data.get('environment_changed')
+        else 'Environmental conditions changed. This first objective mission should keep the environment unchanged.'
+    )
+    knockout_status = (
+        'No gene knockouts.'
+        if not objective_data.get('knocked_out_genes')
+        else 'Gene knockouts detected. This first objective mission should keep all genes active.'
+    )
+    final_status = (
+        'Objective test completed. Return to Dr. Nova and deliver the results.'
+        if objective_data.get('ready_to_deliver')
+        else 'Not ready yet. Keep testing objectives while leaving genes and environment unchanged.'
+    )
+
+    matched_objective = ''
+    if objective_data.get('objective_correct'):
+        matched_objective = f"\nMatched objective: {objective_data.get('target_objective')}"
+
+    return (
+        'Mission 07 Objective Check\n\n'
+        f"Target product: {target_product}\n"
+        f"Selected objective: {selected_objective}\n"
+        f"Objective flux: {objective_result}"
+        f"{matched_objective}\n\n"
+        f"{objective_status}\n"
+        f"{environment_status}\n"
+        f"{knockout_status}\n\n"
+        f"{final_status}"
+    )
+
+
+def _build_mission08_text(objective_data):
+    if not objective_data:
+        return ''
+
+    if objective_data.get('error') and objective_data.get('objective_result') in (None, 'None'):
+        return f"Mission 08 Constraint Check\nError: {objective_data.get('error')}"
+
+    objective_status = (
+        'The objective is targeting the requested product.'
+        if objective_data.get('objective_correct')
+        else 'The selected objective is not targeting the requested product yet.'
+    )
+    oxygen_status = (
+        'A fermentation-compatible oxygen constraint was detected.'
+        if objective_data.get('oxygen_lower_bound_closed')
+        else 'The environment is still too aerobic. Think about oxygen uptake.'
+    )
+    environment_status = (
+        'No unnecessary environmental changes.'
+        if not objective_data.get('unexpected_environment_changes')
+        else 'Too many environmental changes. Keep the constraint simple.'
+    )
+    knockout_status = (
+        'No gene knockouts.'
+        if not objective_data.get('knocked_out_genes')
+        else 'Gene knockouts detected. This mission does not need knockouts.'
+    )
+    final_status = (
+        'Constrained production setup found. Return to Dr. Nova and deliver the results.'
+        if objective_data.get('ready_to_deliver')
+        else 'Not ready yet. Use the objective and environment menus to keep testing.'
+    )
+
+    return (
+        'Mission 08 Constraint Check\n\n'
+        f"Target product: {objective_data.get('target_product')}\n"
+        f"Selected objective: {objective_data.get('selected_objective')}\n"
+        f"Objective flux: {objective_data.get('objective_result')}\n\n"
+        f"{objective_status}\n"
+        f"{oxygen_status}\n"
+        f"{environment_status}\n"
+        f"{knockout_status}\n\n"
+        f"{final_status}"
+    )
+
+
+def _build_mission09_text(design_data):
+    if not design_data:
+        return ''
+
+    if design_data.get('error') and design_data.get('objective_result') in (None, 'None'):
+        return f"Mission 09 Design Check\nError: {design_data.get('error')}"
+
+    objective_status = (
+        'Objective: product target found.'
+        if design_data.get('objective_correct')
+        else 'Objective: not targeting the requested product yet.'
+    )
+    oxygen_status = (
+        'Environment: fermentation-compatible oxygen constraint detected.'
+        if design_data.get('oxygen_lower_bound_closed')
+        else 'Environment: still too aerobic. Think about uptake of oxygen.'
+    )
+    environment_status = (
+        'Extra constraints: none.'
+        if not design_data.get('unexpected_environment_changes')
+        else 'Extra constraints: too many environmental changes. Keep only the key constraint.'
+    )
+
+    knocked_out_genes = design_data.get('knocked_out_genes') or []
+    if not knocked_out_genes:
+        knockout_status = 'Knockout: none selected yet. Test exactly one candidate gene.'
+    elif len(knocked_out_genes) > 1:
+        knockout_status = 'Knockout: too many genes disabled. Use exactly one candidate.'
+    elif design_data.get('target_gene_found'):
+        knockout_status = 'Knockout: single productive candidate found.'
+    else:
+        knockout_status = 'Knockout: single candidate tested, but production is not improved enough yet.'
+
+    production_change = float(design_data.get('production_change', 0.0))
+    production_prefix = '+' if production_change > 0 else ''
+    production_status = (
+        'Production: improvement target reached.'
+        if design_data.get('production_improved')
+        else f"Production: improvement is still below {float(design_data.get('minimum_production_change', 0.0)):.0f}."
+    )
+    growth_status = (
+        'Growth: viable.'
+        if design_data.get('growth_ok')
+        else f"Growth: too low. Keep it above {float(design_data.get('minimum_growth', 0.0)):.1f}."
+    )
+    final_status = (
+        'Integrated design ready. Return to Dr. Nova and deliver the results.'
+        if design_data.get('ready_to_deliver')
+        else 'Not ready yet. Keep iterating with objective, environment and one knockout.'
+    )
+
+    return (
+        'Mission 09 Design Check\n\n'
+        f"Target product: {design_data.get('target_product')}\n"
+        f"Selected objective: {design_data.get('selected_objective')}\n"
+        f"Objective flux: {design_data.get('objective_result')}\n\n"
+        f"Baseline production: {float(design_data.get('baseline_production', 0.0)):.3f}\n"
+        f"Current production: {float(design_data.get('current_production', 0.0)):.3f}\n"
+        f"Production change: {production_prefix}{production_change:.3f}\n"
+        f"Current growth: {float(design_data.get('current_growth', 0.0)):.3f}\n\n"
+        f"{objective_status}\n"
+        f"{oxygen_status}\n"
+        f"{environment_status}\n"
+        f"{knockout_status}\n"
+        f"{production_status}\n"
+        f"{growth_status}\n\n"
+        f"{final_status}"
+    )
+
+
 def _build_mission04_text(production_data):
     if not production_data:
         return ''
@@ -512,11 +677,12 @@ class Window:
         genes_03 = ['b1241','b3115','b3736','b2975','b1524','b2278','b2926','b2297','b0728','b3919']
         genes_04 = MISSION04_CANDIDATE_GENES
         genes_05 = MISSION05_CANDIDATE_GENES
+        genes_09 = MISSION09_CANDIDATE_GENES
 
         for i, gene_id in enumerate(GENES):
             gene_label = GENE_LABELS.get(gene_id, gene_id)
 
-            if gene_id in genes_03 or gene_id in genes_04 or gene_id in genes_05:
+            if gene_id in genes_03 or gene_id in genes_04 or gene_id in genes_05 or gene_id in genes_09:
                 gene_toggle_widgets[gene_id] = menu_genes.add.toggle_switch(
                     gene_label,
                     True,
@@ -751,6 +917,21 @@ class Window:
             else:
                 self.results = run_simul()
 
+            mission07_data = None
+            if '07' in self.player.missions_activated and '07' not in self.player.missions_completed:
+                mission07_data = run_mission07_objective_check(self.results)
+
+            mission08_data = None
+            if '08' in self.player.missions_activated and '08' not in self.player.missions_completed:
+                mission08_data = run_mission08_constraint_check(self.results)
+
+            mission09_data = None
+            if '09' in self.player.missions_activated and '09' not in self.player.missions_completed:
+                if sys.platform == 'emscripten':
+                    mission09_data = run_mission09_design_check_remote(BACKEND_URL, self.results)
+                else:
+                    mission09_data = run_mission09_design_check(self.results)
+
             mission04_data = None
             if '04' in self.player.missions_activated and '04' not in self.player.missions_completed:
                 if sys.platform == 'emscripten':
@@ -797,6 +978,39 @@ class Window:
                 button_id='simulation_summary'
             )
             menu_simul.add.vertical_margin(20)
+
+            if mission07_data is not None:
+                menu_simul.add.label(
+                    _build_mission07_text(mission07_data),
+                    wordwrap=True,
+                    padding=(20, 20, 20, 20),
+                    background_color='white',
+                    font_size=24,
+                    label_id='mission07_objective_check'
+                )
+                menu_simul.add.vertical_margin(20)
+
+            if mission08_data is not None:
+                menu_simul.add.label(
+                    _build_mission08_text(mission08_data),
+                    wordwrap=True,
+                    padding=(20, 20, 20, 20),
+                    background_color='white',
+                    font_size=24,
+                    label_id='mission08_constraint_check'
+                )
+                menu_simul.add.vertical_margin(20)
+
+            if mission09_data is not None:
+                menu_simul.add.label(
+                    _build_mission09_text(mission09_data),
+                    wordwrap=True,
+                    padding=(20, 20, 20, 20),
+                    background_color='white',
+                    font_size=24,
+                    label_id='mission09_design_check'
+                )
+                menu_simul.add.vertical_margin(20)
 
             if mission04_data is not None:
                 menu_simul.add.label(
