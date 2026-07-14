@@ -41,13 +41,15 @@ class Mission03:
     async def update(self):
 
         self.m03_step1 = [
-            f"Greetings {self.player.player_name}!, intrepid explorer of the microbial world! I'm Dr. Silva!",
-            "We've compiled a list of ten genes within E. coli, and we suspect that one of them is",
-            "essential for its survival. Can you find each one is the essential one to E. coli's?"
+            f"Greetings {self.player.player_name}! I'm Dr. Silva.",
+            "I have a small set of candidate genes from E. coli.",
+            "One of them seems critical for survival. Can you identify which one?"
         ]
         
-        self.m03_step2 = ["Did you already find the essential gene?",
-                          "Can you show me your results?"]
+        self.m03_step2 = [
+            "Have you tested the candidate knockouts?",
+            "Show me what the growth results revealed."
+        ]
 
         self.m03_step3 = [
             "Very good! You learned how a knockout can reveal an essential gene.",
@@ -200,53 +202,14 @@ class Mission03_info:
 
         menu_text.add.label(
             """
-            Welcome back, budding scientist! Your journey through the microbial world continues.
-            In this mission, you'll unravel the secrets of a crucial gene that's vital for E. coli's survival. Get ready for the Genetic Mystery - The Essential Gene challenge!
+            An essential gene is a gene that the organism needs to maintain a viable metabolic state.
+            If that gene is removed, the model may lose the ability to support normal growth.
 
-            Objective:
-            Your primary objective in this mission is to identify the essential gene that E. coli cannot live without.
-            Imagine you're solving a microbial puzzle where one missing piece makes all the difference.
+            Gene knockout simulations are used to test this idea computationally: instead of changing
+            the environment, the model is perturbed genetically and the growth response is observed.
 
-            List of possible genes that are essential:
-            b1241  b3115  b3736  b2975  b1524  b2278  b2926  b2297  b0728  b3919
-            """,
-            max_char=-1,
-            wordwrap=True,
-            align=pygame_menu.locals.ALIGN_LEFT,
-            margin=(0, 0)
-        )
-        menu_text.add.label(
-            """Tasks:""",
-            max_char=-1,
-            wordwrap=True,
-            align=pygame_menu.locals.ALIGN_LEFT,
-            margin=(100, 0),
-            background_color = 'gold',
-            font_color = 'black',
-            font_size = 30,
-            padding = (25,25,25,25)
-        )
-        menu_text.add.label(
-            """
-            Task 1 - The Mystery Genes:
-            You'll start with a list of 10 mystery genes, each associated with a specific cellular function. The genes will appear highlighted in yellow in the simulation menu.
-
-            Task 2 - Gene Knockout Simulations:
-            Your job is to simulate E. coli's growth without each of these genes, one by one. This process mimics what scientists do in the lab when they "knock out" a gene to observe the consequences.
-            
-            Task 3 - Observe and Compare:
-            As you simulate E. coli's growth without each gene, carefully observe the results. Does the absence of a particular gene affect growth? Do some genes appear more critical than others?
-            
-            Task 4 - Unravel the Mystery:
-            Analyze your observations and deductions. Which gene do you suspect is the essential one? Remember, the essential gene is the one that, when missing, significantly impairs E. coli's growth.
-            
-            Task 5 - Report Your Findings:
-            Compile your findings into a comprehensive report. Explain why you suspect a particular gene is essential and provide evidence from your simulations to support your conclusion.
-            
-            Hints:
-            - Ensure that you simulate with only one gene knocked-out at a time
-            - Identify the gene that stops growth (Biomass is 0 or negative)
-
+            Use the candidate list as the search space and compare the growth behaviour after each
+            genetic perturbation. The strongest loss of viability is the key evidence.
             """,
             max_char=-1,
             wordwrap=True,
@@ -258,20 +221,20 @@ class Mission03_info:
         menu_text.add.button('Back', pygame_menu.events.BACK, background_color=(70, 70, 70))
         menu_text.add.vertical_margin(20)
 
-        menu.add.label("Welcome back, budding scientist! Your journey through the microbial world continues."
+        menu.add.label("Mission 03 - Genetic Mystery"
             ,wordwrap=False,
             align=pygame_menu.locals.ALIGN_CENTER,
             font_size=34)
         
         menu.add.label(
             """
-            In this mission, you'll unravel the secrets of a crucial gene that's vital for E. coli's survival.
-            Get ready for the Genetic Mystery - The Essential Gene challenge!
+            Dr. Silva suspects that one candidate gene is essential for E. coli survival.
 
-            List of possible genes that are essential:
+            Candidate genes:
             b1241  b3115  b3736  b2975  b1524  b2278  b2926  b2297  b0728  b3919
 
-            In the simulation menu, they will appear highlighted!
+            Test the candidates through knockout simulations and compare the growth results.
+            The candidate genes will appear highlighted in the simulation menu.
 
             """,
             wordwrap=True,

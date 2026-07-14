@@ -1,37 +1,25 @@
 # Mission 03: Genetic Mystery - The Essential Gene
 
-Welcome back, budding scientist! Your journey through the microbial world continues with Dr. Silva.
+Dr. Silva has selected a small set of candidate genes from *E. coli*.
+One of them appears to be critical for survival.
 
-In this mission, you'll unravel the secrets of a crucial gene that's vital for E. coli's survival.
-
-Get ready for the Genetic Mystery - The Essential Gene challenge!
-
+Your goal is to use knockout simulations to identify which candidate gene has the strongest impact on growth.
 
 ## Dialogue with Dr. Silva
 
-**Dr. Silva:** "Greetings, intrepid explorer of the microbial world! I'm Dr. Silva! We've compiled a list of ten genes within E. coli, and we suspect that one of them is essential for its survival. Can you find which one is essential?"
-
+**Dr. Silva:** "Greetings! I have a small set of candidate genes from *E. coli*. One of them seems critical for survival. Can you identify which one?"
 
 *After activating the mission:*
 
-**Dr. Silva:** "Did you already find the essential gene? Can you show me your results?"
-
+**Dr. Silva:** "Have you tested the candidate knockouts? Show me what the growth results revealed."
 
 *After completing the mission:*
 
-**Dr. Silva:** "Thank you! Your research will unlock a hidden chapter in E. coli's genetic story. Your discoveries may have far-reaching implications in our understanding of microbial life."
+**Dr. Silva:** "Very good! You learned how a knockout can reveal an essential gene. But knockouts are not only used to test survival. They can also redirect metabolism toward useful products."
 
+## Mission Description
 
-## Mission Briefing
-
-
-### Objective:
-
-Your primary objective in this mission is to identify the essential gene that E. coli cannot live without.
-
-Imagine you're solving a microbial puzzle where one missing piece makes all the difference.
-
-List of possible genes that are essential:
+Candidate genes:
 - b1241
 - b3115
 - b3736
@@ -43,31 +31,12 @@ List of possible genes that are essential:
 - b0728
 - b3919
 
+Run simulations, compare growth behaviour, and deliver the gene that best explains the loss of viability.
 
-### Tasks:
+## Mission Briefing
 
-**Task 1 - The Mystery Genes:**
+An essential gene is a gene that the organism needs to maintain a viable metabolic state. If that gene is removed, the model may lose the ability to support normal growth.
 
-You'll start with a list of 10 mystery genes, each associated with a specific cellular function. These genes are like keys to E. coli's survival.
+Gene knockout simulations are used to test this idea computationally: instead of changing the environment, the model is perturbed genetically and the growth response is observed.
 
-**Task 2 - Gene Knockout Simulations:**
-
-Your job is to simulate E. coli's growth without each of these genes, one by one. This process mimics what scientists do in the lab when they knock out a gene to observe the consequences.
-            
-**Task 3 - Observe and Compare:**
-
-As you simulate E. coli's growth without each gene, carefully observe the results. Does the absence of a particular gene affect growth? Do some genes appear more critical than others?
-            
-**Task 4 - Unravel the Mystery:**
-
-Analyze your observations and deductions. Which gene do you suspect is the essential one? Remember, the essential gene is the one that, when missing, significantly impairs E. coli's growth.
-            
-**Task 5 - Report Your Findings:**
-
-Compile your findings into a comprehensive report. Explain why you suspect a particular gene is essential and provide evidence from your simulations to support your conclusion.
-
-
-### Hints:
-
-- Ensure that you simulate with only one gene at a time.
-- Identify the gene that stops growth.
+Use the candidate list as the search space and compare the growth behaviour after each genetic perturbation. The strongest loss of viability is the key evidence.

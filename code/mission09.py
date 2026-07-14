@@ -67,58 +67,19 @@ class Mission09_info:
             f"""
             Welcome to Mission 09: Integrated Strain Design.
 
-            You have already learned three separate ideas:
-            - the objective controls what FBA tries to optimise;
-            - environmental constraints change what is biologically possible;
-            - knockouts can redirect metabolism toward a product.
+            Mission 07 focused on objective choice.
+            Mission 08 showed that constraints can change what the model can do.
 
-            Now you must combine all three in one design.
+            Now you must combine objective choice, environment and one genetic intervention
+            into a single strain-design strategy.
 
             Target product: {MISSION09_TARGET_PRODUCT}
 
-            Design rules:
-            - choose the objective that targets the product;
-            - create the right fermentation-like environmental context;
-            - use exactly one gene knockout from the candidate list;
-            - keep growth viable, not zero.
+            In metabolic engineering, a useful knockout is not simply a gene that damages growth.
+            It should redirect flux toward the desired product while keeping the strain viable.
 
-            Candidate genes:
-            {'  '.join(MISSION09_CANDIDATE_GENES)}
-            """,
-            max_char=-1,
-            wordwrap=True,
-            align=pygame_menu.locals.ALIGN_LEFT,
-            margin=(0, 0),
-        )
-        menu_text.add.label(
-            """Success criteria:""",
-            max_char=-1,
-            wordwrap=True,
-            align=pygame_menu.locals.ALIGN_LEFT,
-            margin=(100, 0),
-            background_color='gold',
-            font_color='black',
-            font_size=30,
-            padding=(25, 25, 25, 25)
-        )
-        menu_text.add.label(
-            f"""
-            A good solution must satisfy all checks at once:
-
-            1 - The selected objective must target {MISSION09_TARGET_PRODUCT}.
-
-            2 - The environmental setup must match a fermentation context.
-            Do not change random nutrients just to force the result.
-
-            3 - Exactly one candidate gene must be knocked out.
-            More than one knockout will be rejected.
-
-            4 - Production must improve by at least {MISSION09_MIN_PRODUCTION_CHANGE:.0f} flux units
-            compared with the anaerobic no-knockout baseline.
-
-            5 - Growth must remain at least {MISSION09_MIN_GROWTH:.1f}.
-
-            Use New Results -> Mission 09 Design Check as your feedback loop.
+            Use the candidate genes as your search space.
+            Compare simulations carefully and let New Results guide your next test.
             """,
             max_char=-1,
             wordwrap=True,
@@ -142,6 +103,9 @@ class Mission09_info:
 
             Design an E. coli setup that targets {MISSION09_TARGET_PRODUCT} production,
             uses a fermentation-compatible environment, and includes exactly one useful knockout.
+
+            Candidate genes:
+            {'  '.join(MISSION09_CANDIDATE_GENES)}
 
             The solution must improve production without killing growth.
             You are not given the exact objective, environmental reaction, or gene.

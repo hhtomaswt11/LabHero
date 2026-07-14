@@ -1,42 +1,11 @@
 # Mission 02: Sweet as Glucose
 
-Welcome back, Microbial Explorer! After studying how E. coli reacts without oxygen, Dr. Martinez now asks you to investigate another environmental factor: carbon sources.
+After studying how *E. coli* responds to oxygen availability, the next environmental challenge is carbon source availability.
 
-The goal is to find a suitable substitute for glucose, E. coli's preferred carbon source.
+Glucose is usually a strong carbon source for *E. coli*. The goal of this mission is to compare possible alternatives and identify which one best supports growth.
 
-If we can identify a good substitute, it could have implications for applications such as biotechnology, bioprocess optimization and environmental science.
+Candidate carbon sources:
 
-
-## Dialogue with Dr. Martinez
-
-**Dr. Martinez:** "Thank you! You're pioneering our understanding of E. coli's resilience. But our work is not finished yet. I have one more environmental challenge for you: can we find a replacement for glucose as E. coli's energy source?"
-
-
-*After activating the mission:*
-
-**Dr. Martinez:** "Did you already choose the best substitute for glucose? If you have your results, show them to me."
-
-
-*After completing the mission:*
-
-**Dr. Martinez:** "Excellent work! You now understand how E. coli responds to oxygen and different carbon sources. Your discoveries will shape our research."
-
-
-## Mission Briefing
-
-Welcome back, Microbial Explorer! In this mission, we're delving into the world of microbial metabolism once more.
-
-Our goal is to find a suitable substitute for glucose, E. coli's preferred carbon source.
-
-If we can identify a good substitute, it could have significant implications for various applications, from biotechnology to environmental science.
-
-
-### Objective:
-
-Your mission is to simulate the growth of E. coli using different carbon sources and determine which one serves as the best substitute for glucose.
-
-We've provided you with a list of potential candidates:
-            
 - malate
 - lactate
 - glutamate
@@ -48,30 +17,40 @@ We've provided you with a list of potential candidates:
 - acetaldehyde
 - acetate
 
-
-### Tasks:
-
-**Task 1 - Remove Glucose:**
-
-Remove the flux from glucose to guarantee that E. coli only uses the alternative as the carbon source.
-
-**Task 2 - Test Alternatives:**
-
-Open the lower bound of each alternative, one at a time, to allow E. coli to intake that nutrient.
-
-**Task 3 - Observe Results:**
-
-Run the simulation for each alternative and see which one provides the best growth for E. coli.
-
-**Task 4 - Identify the Best Substitute:**
-
-Based on your observations, determine which carbon source serves as the best substitute for glucose in terms of supporting E. coli growth.
+Use simulations to compare the candidates. The best answer should be supported by the growth result, not by guessing.
 
 
-### Why It Matters:
+## Dialogue with the Scientist
 
-Understanding which carbon sources E. coli can thrive on is essential for various fields of research and industry. Finding a suitable substitute for glucose can have far-reaching implications, from optimizing bioprocesses to environmental remediation efforts.
+**Scientist:** "I'm studying how *E. coli* behaves when its usual carbon source is unavailable. I prepared a set of possible alternative nutrients for you to compare. Can you find which one supports growth best?"
 
-**Scientist's Notes:**
 
-Remember, microbial growth can be influenced by various factors, so it's essential to run multiple simulations and ensure the accuracy of your results. Good luck, Microbial Explorer, and may your discoveries be as sweet as fructose!
+*After activating the mission:*
+
+**Scientist:** "Have you compared the candidate carbon sources? Show me the evidence behind your choice."
+
+
+*After completing the mission:*
+
+**Scientist:** "Excellent work! You showed that nutrient availability can redirect microbial growth. Choosing the right carbon source matters in biotechnology and environmental applications."
+
+
+## Mission Briefing
+
+Carbon sources are nutrients that cells can use to obtain material and energy.
+
+Glucose usually supports strong *E. coli* growth, but metabolic models can help compare how the cell behaves when other carbon sources are available instead.
+
+In this mission, use the candidate list as your search space. Compare the growth response for each alternative under equivalent conditions and use the results to justify your choice.
+
+Do not look for a gene solution here. This is a nutrient-availability challenge.
+
+
+### Concepts to observe
+
+- Nutrient availability can change microbial growth.
+- Exchange reactions represent how compounds enter or leave the model.
+- A fair comparison tests one alternative at a time.
+- Biomass/growth helps you compare which condition better supports *E. coli*.
+
+The correct answer should come from repeated simulations and result interpretation, not from guessing.

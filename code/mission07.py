@@ -62,8 +62,8 @@ class Mission07:
 
         self.m07_step2 = [
             "Mission 07 is active. Go to the simulation computer.",
-            f"Find which Objective makes the model prioritize {MISSION07_TARGET_PRODUCT} production.",
-            "Keep genes and environmental conditions unchanged, then run simulations."
+            f"Redirect the model toward {MISSION07_TARGET_PRODUCT} production without changing the strain.",
+            "Keep the environment controlled and use the results to guide your conclusion."
         ]
 
         self.m07_step3 = [
@@ -73,9 +73,9 @@ class Mission07:
         ]
 
         self.m08_step1 = [
-            "Mission 08 is active. This time you need two decisions.",
-            f"Target {MISSION08_TARGET_PRODUCT} production and find the right environmental constraint.",
-            "Do not use gene knockouts yet. Focus on objective plus environment."
+            "Mission 08 is active. This time, the objective is only part of the answer.",
+            f"Make {MISSION08_TARGET_PRODUCT} production work under a biologically meaningful constraint.",
+            "Keep the strain unchanged and let the simulations guide your reasoning."
         ]
 
         self.m08_step2 = [
@@ -214,23 +214,15 @@ class Mission07_info:
 
         menu_text.add.label(
             f"""
-            Welcome to Mission 07: Objective Matters.
+            Mission 07 Briefing
 
-            In Flux Balance Analysis, the objective tells the model what it should optimize.
-            Until now, the default objective was usually biomass, because biomass tells us how well E. coli can grow.
-
-            In this mission, you must keep the cell unchanged and discover which objective makes the model prioritize a product instead of growth.
+            In Flux Balance Analysis, the objective function represents the goal that the model is trying to optimize.
+            A biomass objective asks a growth question. A product-oriented objective asks a production question.
 
             Target product: {MISSION07_TARGET_PRODUCT}
 
-            Rules:
-            - Change only the objective.
-            - Do not change genes.
-            - Do not change environmental conditions.
-
-            Scientific clue:
-            Products are usually inspected through exchange reactions.
-            Look for the exchange reaction that matches the requested product.
+            Keep this experiment controlled: do not use gene knockouts or environmental changes.
+            Your task is to compare simulation goals and decide when the model is prioritizing the requested product.
             """,
             max_char=-1,
             wordwrap=True,
@@ -238,7 +230,7 @@ class Mission07_info:
             margin=(0, 0),
         )
         menu_text.add.label(
-            """Tasks:""",
+            """Study focus:""",
             max_char=-1,
             wordwrap=True,
             align=pygame_menu.locals.ALIGN_LEFT,
@@ -249,17 +241,11 @@ class Mission07_info:
             padding=(25, 25, 25, 25)
         )
         menu_text.add.label(
-            f"""
-            Task 1 - Go to the simulation computer.
-
-            Task 2 - Test objectives until the model clearly targets {MISSION07_TARGET_PRODUCT} production.
-
-            Task 3 - Do not change genes or environmental conditions.
-            This mission is only about choosing the correct objective.
-
-            Task 4 - Run simulations and use Mission 07 Objective Check in New Results as feedback.
-
-            Task 5 - Return to Dr. Nova only when the check says the objective is ready.
+            """
+            - What biological question is the simulation answering?
+            - Is the model still optimizing growth, or has the goal changed?
+            - Did the strain and environment remain unchanged?
+            - Does the output support your conclusion?
             """,
             max_char=-1,
             wordwrap=True,
@@ -279,13 +265,12 @@ class Mission07_info:
 
         menu.add.label(
             f"""
-            The goal is to prove that the objective function changes what the model tries to optimize.
+            The goal is to prove that changing the simulation goal changes the result.
 
             Target product: {MISSION07_TARGET_PRODUCT}
 
-            Do not use knockouts or environmental changes.
-            Use only the simulation setup to make the model prioritize this product.
-            Run different tests, compare the results, and deliver your conclusion.
+            Keep the strain and environment unchanged.
+            Run controlled tests with different simulation goals, compare the results, and deliver your conclusion.
             """,
             wordwrap=True,
             align=pygame_menu.locals.ALIGN_CENTER,

@@ -1,24 +1,20 @@
-# Mission 05 — Knockout for Production under Anaerobic Conditions
+# Mission 05 — Anaerobic Production Knockout
 
 ## Objective
 
-Discover which gene knockout improves lactate production when *E. coli* is growing without oxygen.
+Discover which candidate gene knockout improves lactate production when *E. coli* is tested under a respiration-limited condition.
 
 ## Concept
 
-In Mission 04, you tested a gene knockout under default aerobic conditions.
+Mission 04 showed that a genetic change can redirect metabolic flux under normal conditions.
 
-In this mission, you must combine two variables:
+This mission adds a second layer: the environment. When respiration is limited, *E. coli* may rely more on fermentation and alternative pathways to keep metabolism balanced.
 
-1. an environmental change: close the lower bound of the O2 exchange reaction (`EX_o2_e`);
-2. a genetic change: knock out one candidate gene at a time.
-
-This shows that metabolic engineering often depends on both the cell's environment and its genotype.
+A good design should improve the target product without destroying growth.
 
 ## Target product
 
 - Product: lactate
-- Production reaction: `EX_lac__D_e`
 
 ## Candidate genes
 
@@ -29,21 +25,13 @@ This shows that metabolic engineering often depends on both the cell's environme
 - `b0728` (`sucC`)
 - `b1241` (`adhE`)
 
-## Expected answer
+## Briefing
 
-The expected answer is:
+Use the candidate genes as your search space and compare how each knockout changes the model under the mission condition.
 
-```text
-b1241
-```
+Focus on two things:
 
-The common gene name `adhE` is also accepted.
+1. whether lactate production improves;
+2. whether the model remains viable.
 
-## Tasks
-
-1. Go to the simulation computer.
-2. In Environmental Conditions, close the lower bound of `EX_o2_e`.
-3. In Genes, switch off one candidate gene at a time.
-4. Run the simulation.
-5. Check the Mission 05 Production Check in New Results.
-6. Return to Dr. Silva and report the correct gene.
+Use New Results to interpret each attempt, then return to Dr. Silva with the gene you identify.

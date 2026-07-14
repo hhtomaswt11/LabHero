@@ -67,53 +67,22 @@ class Mission10_info:
             f"""
             Welcome to Mission 10: Multi-Knockout Robust Design.
 
-            This is Dr. Nova's final challenge. Mission 09 showed that one knockout can improve a production design. Real strain design often requires a pair of genetic interventions, because blocking one pathway may simply push flux into another competing route.
+            This is Dr. Nova's final challenge. Mission 09 showed how one knockout can improve a design.
+            Now the problem becomes harder: two knockouts can interact,
+            redirect flux, or damage growth.
 
             Target product: {MISSION10_TARGET_PRODUCT}
 
-            Design rules:
-            - choose the objective that targets the product;
-            - create the correct fermentation-like environmental context;
-            - use exactly two knockouts from the candidate list;
-            - track enough production fluxes to prove that your product is not just a lucky growth result;
-            - keep growth viable.
-
             Candidate genes:
             {'  '.join(MISSION10_CANDIDATE_GENES)}
-            """,
-            max_char=-1,
-            wordwrap=True,
-            align=pygame_menu.locals.ALIGN_LEFT,
-            margin=(0, 0),
-        )
-        menu_text.add.label(
-            """Success criteria:""",
-            max_char=-1,
-            wordwrap=True,
-            align=pygame_menu.locals.ALIGN_LEFT,
-            margin=(100, 0),
-            background_color='gold',
-            font_color='black',
-            font_size=30,
-            padding=(25, 25, 25, 25)
-        )
-        menu_text.add.label(
-            f"""
-            A complete design must satisfy all checks at once:
 
-            1 - The selected objective must target {MISSION10_TARGET_PRODUCT}.
+            Robust strain design is not only about finding high production.
+            The model must also remain viable, and the result should be
+            supported by production-flux evidence.
 
-            2 - The environment must match fermentation. Avoid random extra nutrient changes.
-
-            3 - Exactly two candidate genes must be knocked out. One useful knockout is not enough anymore.
-
-            4 - Use the Production Flux menu to monitor the target product and a competing fermentation product. Evidence matters.
-
-            5 - Production must improve by at least {MISSION10_MIN_PRODUCTION_CHANGE:.0f} flux units over the anaerobic no-knockout baseline.
-
-            6 - Growth must remain at least {MISSION10_MIN_GROWTH:.1f}.
-
-            Use New Results -> Mission 10 Robust Design Check as your feedback loop.
+            Use simulations to compare knockout pairs, environmental constraints
+            and product fluxes. Avoid random extra changes and refine your
+            design using New Results.
             """,
             max_char=-1,
             wordwrap=True,
@@ -136,11 +105,14 @@ class Mission10_info:
             Final Dr. Nova challenge.
 
             Build a robust E. coli design for {MISSION10_TARGET_PRODUCT} production.
-            This time, the solution needs objective choice, fermentation-compatible environment,
+            Combine objective choice, environmental constraints,
             exactly two knockouts, and production-flux evidence.
 
-            You are not given the exact objective, environmental reaction, fluxes to track,
-            or knockout pair. Find them by testing.
+            Candidate genes:
+            {'  '.join(MISSION10_CANDIDATE_GENES)}
+
+            You are not given the exact objective, environmental reaction,
+            fluxes to track, or knockout pair. Find them by testing.
             """,
             wordwrap=True,
             align=pygame_menu.locals.ALIGN_CENTER,

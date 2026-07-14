@@ -44,13 +44,13 @@ class Mission04:
     async def update(self):
         self.m04_step1 = [
             f"Excellent progress, {self.player.player_name}! I'm Dr. Silva, and I have a new knockout challenge.",
-            "This time, we are not looking for a gene that kills E. coli.",
-            "We want to find a knockout that can redirect metabolism toward a useful product."
+            "Essential genes are only one side of knockout analysis.",
+            "Now look for a knockout that redirects metabolism toward a useful product."
         ]
 
         self.m04_step2 = [
-            "Did you already test the production knockout?",
-            "Remember: keep the environmental conditions unchanged and test one gene at a time."
+            "Have you compared the candidate knockouts?",
+            "Use a controlled setup and show me which one improves the target product."
         ]
 
         self.m04_step3 = [
@@ -152,14 +152,11 @@ class Mission04_info:
 
         menu_text.add.label(
             f"""
-            Welcome to Mission 04: Knockout for Production.
+            Knockouts do not always mean cell death.
 
-            In Mission 03, you learned that some genes are essential for E. coli's survival.
-            Now, you will learn another important idea: a knockout can also be used to redirect metabolism toward a useful product.
+            In metabolic engineering, disabling a gene can sometimes redirect flux away from a competing pathway and toward a product of interest.
 
             Target product: {MISSION04_PRODUCT_NAME}
-            Production reaction: {MISSION04_PRODUCTION_OBJECTIVE}
-            Target gene to discover: one of the candidate genes below
 
             Candidate genes:
             {candidate_text}
@@ -170,7 +167,7 @@ class Mission04_info:
             margin=(0, 0)
         )
         menu_text.add.label(
-            """Tasks:""",
+            """What to observe:""",
             max_char=-1,
             wordwrap=True,
             align=pygame_menu.locals.ALIGN_LEFT,
@@ -182,21 +179,11 @@ class Mission04_info:
         )
         menu_text.add.label(
             f"""
-            Task 1 - Keep the environment unchanged:
-            Do not change environmental conditions. This mission is about isolating the effect of one genetic knockout under aerobic/default conditions.
+            A useful production knockout should increase the target product while keeping the model viable.
 
-            Task 2 - Test candidate knockouts:
-            Go to the simulation computer and switch off one candidate gene at a time.
+            Compare candidate genes under the same default environment, so the effect you observe comes from the genetic change and not from a second variable.
 
-            Task 3 - Observe {MISSION04_PRODUCT_NAME} production:
-            After each simulation, check the Mission 04 Production Check in the New Results menu.
-            Compare the baseline {MISSION04_PRODUCT_NAME} flux with the current flux.
-
-            Task 4 - Report the production gene:
-            Return to Dr. Silva and report the gene whose knockout improves {MISSION04_PRODUCT_NAME} production.
-
-            Hint:
-            The correct answer is a gene id, like b0000. You can also use the common gene name if you know it.
+            Use the simulation results to decide which candidate redirects metabolism most effectively toward {MISSION04_PRODUCT_NAME}.
             """,
             max_char=-1,
             wordwrap=True,
@@ -217,13 +204,12 @@ class Mission04_info:
 
         menu.add.label(
             f"""
-            In this mission, you will discover how a gene knockout can increase the production of a useful metabolite.
+            Investigate whether disabling one gene can redirect E. coli metabolism toward a useful product.
 
             Target product: {MISSION04_PRODUCT_NAME}
-            Production reaction: {MISSION04_PRODUCTION_OBJECTIVE}
 
-            Important rule:
-            Keep environmental conditions unchanged. Test only gene knockouts.
+            Keep the comparison controlled: use the same default environment for every test.
+            Test the candidate genes and identify which knockout improves production.
 
             Candidate genes:
             {candidate_text}

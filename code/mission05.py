@@ -45,19 +45,19 @@ class Mission05:
     async def update(self):
         self.m05_step1 = [
             f"Excellent work, {self.player.player_name}! You redirected metabolism with a knockout.",
-            "Now we will combine a genetic change with an environmental change.",
-            "Can you improve lactate production when E. coli has no oxygen?"
+            "Now let's see whether the same idea still works when the environment changes.",
+            "What can E. coli produce when respiration is limited?"
         ]
 
         self.m05_step2 = [
-            "Did you combine both variables?",
-            "Close the O2 lower bound and test one candidate knockout at a time."
+            "Have you tested a combined strategy?",
+            "Let me see what you got."
         ]
 
         self.m05_step3 = [
             f"Outstanding work, {self.player.player_name}!",
-            "You combined environment and genetics to guide metabolism.",
-            "You are ready for harder metabolic engineering challenges."
+            "You showed that production depends on both genotype and environment.",
+            "This is the beginning of real strain design."
         ]
 
         self.input()
@@ -153,15 +153,12 @@ class Mission05_info:
 
         menu_text.add.label(
             f"""
-            Welcome to Mission 05: Knockout for Production under Anaerobic Conditions.
+            Welcome to Mission 05: Anaerobic Production Knockout.
 
-            In Mission 04, you studied one genetic change under normal aerobic conditions.
-            Now, you will combine two variables: oxygen availability and a gene knockout.
+            Mission 04 showed that a single knockout can redirect metabolism under normal conditions.
+            This time, the same idea must be tested in a different physiological context.
 
             Target product: {MISSION05_PRODUCT_NAME}
-            Production reaction: {MISSION05_PRODUCTION_OBJECTIVE}
-            Environmental change: close the lower bound of {MISSION05_OXYGEN_REACTION}
-            Target gene to discover: one of the candidate genes below
 
             Candidate genes:
             {candidate_text}
@@ -172,7 +169,7 @@ class Mission05_info:
             margin=(0, 0)
         )
         menu_text.add.label(
-            """Tasks:""",
+            """Briefing:""",
             max_char=-1,
             wordwrap=True,
             align=pygame_menu.locals.ALIGN_LEFT,
@@ -184,23 +181,13 @@ class Mission05_info:
         )
         menu_text.add.label(
             f"""
-            Task 1 - Create anaerobic conditions:
-            Go to Environmental Conditions and close the lower bound of {MISSION05_OXYGEN_REACTION}.
-            This prevents E. coli from taking in oxygen.
+            When respiration is limited, E. coli may rely more on fermentation to keep its metabolism balanced.
 
-            Task 2 - Test candidate knockouts:
-            Go to Genes and switch off one candidate gene at a time.
+            A useful knockout should improve the target product while still allowing the model to remain viable.
+            The best strategy is not always the most extreme one, so compare production and growth after each test.
 
-            Task 3 - Observe lactate production:
-            After each simulation, check the Mission 05 Production Check in New Results.
-            Compare the anaerobic baseline with the current lactate flux.
-
-            Task 4 - Report the production gene:
-            Return to Dr. Silva and report the gene whose knockout improves lactate production.
-
-            Hint:
-            This mission requires both changes: oxygen off and the correct knockout.
-            The correct answer is a gene id, like b0000.
+            Use the candidate genes as your search space and let New Results guide your interpretation.
+            Return to Dr. Silva with the gene you identify.
             """,
             max_char=-1,
             wordwrap=True,
@@ -224,10 +211,8 @@ class Mission05_info:
             This mission combines environment and genetics.
 
             Target product: {MISSION05_PRODUCT_NAME}
-            Production reaction: {MISSION05_PRODUCTION_OBJECTIVE}
 
-            Hint:
-            Fermentation becomes relevant when respiration is limited.
+            Find which candidate knockout improves production under a respiration-limited condition.
 
             Candidate genes:
             {candidate_text}

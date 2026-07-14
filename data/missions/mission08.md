@@ -4,22 +4,19 @@
 Advanced strain design: objective functions and environmental constraints.
 
 ## Learning goal
-The player learns that choosing an objective is only part of a constraint-based simulation. The model is also limited by the environmental conditions. The player must discover a coherent setup through testing instead of being given the exact answer immediately.
+The player learns that an objective function does not act alone. In constraint-based modelling, the predicted behaviour also depends on the environmental limits imposed on the model.
 
 ## Scenario
-Dr. Nova asks the player to configure *E. coli* to produce lactate in a fermentation-like context.
+Dr. Nova asks the player to configure *E. coli* so lactate becomes the target product in a biologically meaningful constraint context.
 
-## Rules shown to the player
+## Player-facing rules
 - Target product: lactate.
-- Use the Objective menu to target the product.
-- Use Environmental Conditions to create the right biological context.
+- Keep the strain unchanged.
+- Use simulations to explore how objective choice and environmental constraints interact.
 - Do not use gene knockouts in this mission.
-- Run simulations and use the Mission 08 Constraint Check to reason about the setup.
 
-## Intended solution for validation
-- Objective: `EX_lac__D_e`
-- Environmental condition: close the lower bound of oxygen uptake (`EX_o2_e`)
-- Gene knockouts: none
+## Briefing focus
+This briefing should support the biological reasoning behind the mission without giving the exact configuration. It connects lactate with fermentative metabolism and encourages the player to compare simulation results under different environmental setups.
 
 ## Pedagogical explanation
-Mission 07 introduced the idea that the objective determines what FBA optimizes. Mission 08 adds a second layer: constraints matter too. The player must connect lactate production with fermentation and infer that oxygen availability is the key environmental variable to test.
+Mission 07 introduced the idea that the objective determines what FBA tries to optimize. Mission 08 adds a second layer: the feasible behaviour of the model also depends on constraints. The player should infer, through testing, which objective and environmental condition make sense for lactate production.

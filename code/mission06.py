@@ -151,58 +151,21 @@ class Mission06_info:
         )
 
         menu_text.add.label(
-            """
-            Welcome to the Growth vs Production Challenge.
-
-            A rival scientist has created an E. coli strain that produces ethanol while still growing.
-            To beat the rival strain, you must configure our E. coli using what you learned before:
-            environmental conditions and gene knockouts.
-
-            Target product: ethanol
-            Production reaction: EX_etoh_e
-            Growth objective: BIOMASS_Ecoli_core_w_GAM
-
-            Your score is calculated automatically after each simulation:
-            score = growth x ethanol production flux
-            """,
-            max_char=-1,
-            wordwrap=True,
-            align=pygame_menu.locals.ALIGN_LEFT,
-            margin=(0, 0)
-        )
-        menu_text.add.label(
-            """Tasks:""",
-            max_char=-1,
-            wordwrap=True,
-            align=pygame_menu.locals.ALIGN_LEFT,
-            margin=(100, 0),
-            background_color='gold',
-            font_color='black',
-            font_size=30,
-            padding=(25, 25, 25, 25)
-        )
-        menu_text.add.label(
             f"""
-            Task 1 - Configure E. coli:
-            Go to the simulation computer and change environmental conditions and/or gene knockouts.
+            Growth and production often compete for the same metabolic resources.
 
-            Task 2 - Run the simulation:
-            The normal simulation result will still appear, but Mission 06 also calculates a challenge score.
+            In this challenge, the winning strain is not simply the one that grows fastest,
+            and it is not simply the one that produces the most ethanol.
 
-            Task 3 - Balance growth and production:
-            A high growth value with no ethanol production is not enough.
-            High ethanol production with no growth is also not enough.
-            You need a good balance between both.
+            A strong metabolic design must keep E. coli viable while redirecting part of its flux
+            toward the target product. Environmental conditions and gene knockouts can both change
+            this balance, but adding more changes does not always improve the final result.
 
-            Task 4 - Beat the rival strain:
+            The challenge score combines growth and ethanol production.
             Villain score: {VILLAIN_SCORE:.3f}
-            After you get a higher score, return to Dr. Carter and deliver the challenge results.
 
-            Note:
-            The challenge ignores the objective selected in the normal simulation menu.
-            It always runs FBA with biomass as the objective and then reads ethanol production from that same solution:
-            - growth objective = {CHALLENGE_GROWTH_OBJECTIVE}
-            - production flux = {CHALLENGE_PRODUCTION_OBJECTIVE}
+            Compare different designs, watch both values carefully, and deliver the setup only when
+            your strain clearly beats the rival.
             """,
             max_char=-1,
             wordwrap=True,

@@ -62,49 +62,19 @@ class Mission08_info:
             f"""
             Welcome to Mission 08: Objective Under Constraints.
 
-            Mission 07 showed that changing the objective changes what the model tries to optimise.
-            Now you must discover how a constraint changes that same objective.
+            Mission 07 showed that the objective function changes what the model tries to optimise.
+            This mission adds a second idea: constraints define what the model is allowed to do.
 
-            Target product: {MISSION08_TARGET_PRODUCT}
+            Target product: lactate
 
-            Rules:
-            - Use the Objective menu to make the model target the product.
-            - Use Environmental Conditions to create a biologically meaningful constraint.
-            - Do not use gene knockouts in this mission.
+            In constraint-based modelling, environmental limits can change the possible flux distribution.
+            Nutrient availability, oxygen availability and reaction limits all shape the result.
 
-            Biological clue:
-            Lactate is associated with fermentation. Think about what E. coli must lose access to
-            before fermentation becomes the relevant context.
-            """,
-            max_char=-1,
-            wordwrap=True,
-            align=pygame_menu.locals.ALIGN_LEFT,
-            margin=(0, 0),
-        )
-        menu_text.add.label(
-            """Tasks:""",
-            max_char=-1,
-            wordwrap=True,
-            align=pygame_menu.locals.ALIGN_LEFT,
-            margin=(100, 0),
-            background_color='gold',
-            font_color='black',
-            font_size=30,
-            padding=(25, 25, 25, 25)
-        )
-        menu_text.add.label(
-            f"""
-            Task 1 - Go to the simulation computer.
+            Lactate is connected with fermentative metabolism.
+            Think about how cells adapt when respiration becomes limited, then compare your simulations.
 
-            Task 2 - Test objectives until the model is targeting {MISSION08_TARGET_PRODUCT}.
-
-            Task 3 - Test environmental constraints until the result fits a fermentation context.
-
-            Task 4 - Keep all genes active. This mission is not about knockouts.
-
-            Task 5 - Run simulations and use Mission 08 Constraint Check in New Results.
-
-            Task 6 - Return to Dr. Nova only when the check says the setup is ready.
+            Do not solve this as a genetic problem.
+            Keep the strain unchanged and focus on objective choice, environmental constraints and product formation.
             """,
             max_char=-1,
             wordwrap=True,
@@ -126,11 +96,11 @@ class Mission08_info:
             f"""
             A production objective is not enough by itself.
 
-            Configure E. coli to target {MISSION08_TARGET_PRODUCT} production under a constraint
-            that makes biological sense for fermentation.
+            Configure E. coli so {MISSION08_TARGET_PRODUCT} becomes the target product under a
+            biologically meaningful constraint.
 
-            You must discover the correct objective and environmental change through simulation.
-            Do not use gene knockouts.
+            Keep the strain unchanged. Explore how objective choice and environment interact,
+            then deliver your result when the constrained setup is ready.
             """,
             wordwrap=True,
             align=pygame_menu.locals.ALIGN_CENTER,

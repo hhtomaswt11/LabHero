@@ -42,18 +42,18 @@ class Mission02:
     async def update(self):
 
         self.m02_step1 = [
-            "I'm Dr. Carter! I'm on a quest to find a replacement for glucose as E. coli's energy source.",
-            "I've got a list of potential candidates like malate, lactate, and fructose.",
-            "Can you see which one works best?"
+            "I'm Dr. Carter! I'm studying how E. coli behaves when its usual carbon source is unavailable.",
+            "I prepared a set of possible alternative nutrients for you to compare.",
+            "Can you find which one supports growth best?"
         ]
         
-        self.m02_step2 = ["Did you already choose the best substitute for glucose?",
-                          "Wow ... can you show me your results?"]
+        self.m02_step2 = ["Have you compared the candidate carbon sources?",
+                          "Show me the evidence behind your choice."]
 
-        self.m02_step3 = [f"Thank you {self.player.player_name}!",
+        self.m02_step3 = [f"Excellent work, {self.player.player_name}!",
                           " ",
-                          "Finding the right substitute can help in all sorts of science stuff, from making better",
-                          "biofuels to cleaning up the environment."
+                          "You showed that nutrient availability can redirect microbial growth.",
+                          "Choosing the right carbon source matters in biotechnology and environmental applications."
                           ]
 
         self.input()
@@ -158,20 +158,13 @@ class Mission02_info:
 
         menu_text.add.label(
             """
-            Welcome back, Microbial Explorer! In this mission, we're delving into the world of microbial metabolism once more.
-            Our goal is to find a suitable substitute for glucose, E. coli's preferred carbon source.
-            If we can identify a good substitute, it could have significant implications for various applications, from biotechnology to environmental science.
+            Carbon sources are nutrients that cells can use to obtain material and energy.
 
-            Objective:
-            Your mission is to simulate the growth of E. coli using different carbon sources and determine which one serves as the best substitute for glucose.
-            We've provided you with a list of potential candidates:
-            
-            - malate                           - lactate
-            - glutamate                        - glutamine
-            - fumarate                         - fructose
-            - ethanol                          - 2-oxoglutarate
-            - acetaldehyde                     - acetate
+            Glucose usually supports strong E. coli growth, but metabolic models can help compare how the cell behaves when other carbon sources are available instead.
 
+            In this mission, use the candidate list as your search space. Compare the growth response for each alternative under equivalent conditions and use the results to justify your choice.
+
+            Do not look for a gene solution here. This is a nutrient-availability challenge.
             """,
             max_char=-1,
             wordwrap=True,
@@ -179,7 +172,7 @@ class Mission02_info:
             margin=(0, 0)
         )
         menu_text.add.label(
-            """Tasks:""",
+            """Concepts to observe:""",
             max_char=-1,
             wordwrap=True,
             align=pygame_menu.locals.ALIGN_LEFT,
@@ -191,23 +184,15 @@ class Mission02_info:
         )
         menu_text.add.label(
             """
-            Task 1 - Remove Glucose:
-            Remove the flux from glucose to garantee that e. coli only uses the alternative as the carbon source.
+            - Nutrient availability can change microbial growth.
 
-            Task 2 - Test alternatives:
-            Open the lower bound of each alternative (one at a time) to allow e. coli to intake that nutrient.
+            - Exchange reactions represent how compounds enter or leave the model.
 
-            Task 3 - See the growth:
-            Run the simulation for each alternative and see which provides the best growth for e. coli.
+            - A fair comparison tests one alternative at a time.
 
-            Task 3 - Identify the Best Substitute:
-            Based on your observations, determine which carbon source serves as the best substitute for glucose in terms of supporting E. coli growth. You can compare the biomass yield of the chosen substitute to that of glucose for reference.
+            - Biomass/growth helps you compare which condition better supports E. coli.
 
-            Why It Matters:
-            Understanding which carbon sources E. coli can thrive on is essential for various fields of research and industry. Finding a suitable substitute for glucose can have far-reaching implications, from optimizing bioprocesses to environmental remediation efforts. Your findings could help shape the future of microbiology and biotechnology.
-
-            Scientist's Notes:
-            Remember, microbial growth can be influenced by various factors, so it's essential to run multiple simulations and ensure the accuracy of your results. Good luck, Microbial Explorer, and may your discoveries be as sweet as fructose!
+            The correct answer should come from repeated simulations and result interpretation, not from guessing.
             """,
             max_char=-1,
             wordwrap=True,
@@ -220,22 +205,24 @@ class Mission02_info:
         menu_text.add.vertical_margin(20)
 
         menu.add.vertical_margin(20)  
-        menu.add.label("""Welcome back, Microbial Explorer! Let's find a suitable substitute for glucose!"""
+        menu.add.label("""Mission 02: Find a suitable substitute for glucose."""
             ,wordwrap=False,
             align=pygame_menu.locals.ALIGN_CENTER,
             font_size=34)
 
         menu.add.label(
             """
-            If we can identify a good substitute, it could have significant implications for various applications, from biotechnology to environmental science.
+            E. coli normally grows well with glucose. Your challenge is to compare possible alternative carbon sources and identify which one best supports growth.
 
-            We've provided you with a list of potential candidates:
+            Candidate carbon sources:
 
             - malate                             - lactate
             - glutamate                        - glutamine
             - fumarate                         - fructose
             - ethanol                            - 2-oxoglutarate
             - acetaldehyde                    - acetate
+
+            Use simulations to compare the candidates. The best answer should be supported by the growth result.
             """,
             wordwrap=True,
             align=pygame_menu.locals.ALIGN_CENTER,
