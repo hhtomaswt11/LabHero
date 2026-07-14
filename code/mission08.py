@@ -129,7 +129,7 @@ class Mission08_info:
             Configure E. coli to target {MISSION08_TARGET_PRODUCT} production under a constraint
             that makes biological sense for fermentation.
 
-            You must discover the exact objective and environmental change through simulation.
+            You must discover the correct objective and environmental change through simulation.
             Do not use gene knockouts.
             """,
             wordwrap=True,

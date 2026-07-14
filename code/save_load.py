@@ -230,3 +230,22 @@ def load_mission09_design_check():
     except Exception:
         return None
 
+
+def save_mission10_robust_design_check(data):
+    if _IS_WEB:
+        _MEMSTORE['mission10_robust_design_check'] = data
+        return
+    with open(get_save_path('mission10_robust_design_check.txt'), 'w') as design_file:
+        json.dump(data, design_file)
+
+
+def load_mission10_robust_design_check():
+    if _IS_WEB:
+        return _MEMSTORE.get('mission10_robust_design_check')
+    try:
+        with open(get_save_path('mission10_robust_design_check.txt')) as design_file:
+            return json.load(design_file)
+    except FileNotFoundError:
+        return None
+    except Exception:
+        return None

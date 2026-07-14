@@ -48,6 +48,7 @@ class Mission06:
         ]
 
         self.m06_step3 = [
+            "As you have seen, more changes do not always mean better results.",
             "You optimized the strain... but did you optimize your trust?",
             "Sometimes the villain is closer than you think.",
             "Like hidden pathways in metabolism,",

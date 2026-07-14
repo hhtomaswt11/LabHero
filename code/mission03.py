@@ -68,8 +68,8 @@ class Mission03:
         ]
 
         self.m03_step6 = [
-            "Did you already combine both variables?",
-            "Close the O2 lower bound and test one candidate knockout at a time."
+            "Did you manage to combine both variables?",
+            "Let me see what you got."
         ]
 
         self.m03_step7 = [

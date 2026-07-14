@@ -271,7 +271,7 @@ def _build_mission08_text(objective_data):
     oxygen_status = (
         'A fermentation-compatible oxygen constraint was detected.'
         if objective_data.get('oxygen_lower_bound_closed')
-        else 'The environment is still too aerobic. Think about oxygen uptake.'
+        else 'The environment is still aerobic. Think about oxygen uptake.'
     )
     environment_status = (
         'No unnecessary environmental changes.'
@@ -317,7 +317,7 @@ def _build_mission09_text(design_data):
     oxygen_status = (
         'Environment: fermentation-compatible oxygen constraint detected.'
         if design_data.get('oxygen_lower_bound_closed')
-        else 'Environment: still too aerobic. Think about uptake of oxygen.'
+        else 'Environment: still aerobic. Think about uptake of oxygen.'
     )
     environment_status = (
         'Extra constraints: none.'
@@ -365,6 +365,90 @@ def _build_mission09_text(design_data):
         f"{objective_status}\n"
         f"{oxygen_status}\n"
         f"{environment_status}\n"
+        f"{knockout_status}\n"
+        f"{production_status}\n"
+        f"{growth_status}\n\n"
+        f"{final_status}"
+    )
+
+
+
+def _build_mission10_text(design_data):
+    if not design_data:
+        return ''
+
+    if design_data.get('error') and design_data.get('objective_result') in (None, 'None'):
+        return f"Mission 10 Robust Design Check\nError: {design_data.get('error')}"
+
+    objective_status = (
+        'Objective: product target found.'
+        if design_data.get('objective_correct')
+        else 'Objective: not targeting the requested product yet.'
+    )
+    oxygen_status = (
+        'Environment: fermentation-compatible oxygen constraint detected.'
+        if design_data.get('oxygen_lower_bound_closed')
+        else 'Environment: still aerobic. Think about oxygen uptake.'
+    )
+    environment_status = (
+        'Extra constraints: none.'
+        if not design_data.get('unexpected_environment_changes')
+        else 'Extra constraints: too many environmental changes. Keep only the key constraint.'
+    )
+
+    knocked_out_genes = design_data.get('knocked_out_genes') or []
+    if not knocked_out_genes:
+        knockout_status = 'Knockout pair: none selected yet. Test two candidate genes.'
+    elif not design_data.get('exactly_two_knockouts'):
+        knockout_status = f"Knockout pair: {len(knocked_out_genes)} selected. Use exactly two candidates."
+    elif design_data.get('target_pair_found'):
+        knockout_status = 'Knockout pair: robust two-gene design found.'
+    elif not design_data.get('only_candidate_knockouts'):
+        knockout_status = 'Knockout pair: use only genes from the candidate list.'
+    else:
+        knockout_status = 'Knockout pair: two candidates tested, but this pair is not robust enough.'
+
+    selected_fluxes = design_data.get('selected_fluxes') or []
+    required_fluxes = design_data.get('required_tracked_fluxes') or []
+    tracking_status = (
+        'Evidence: target and competing product fluxes are being tracked.'
+        if design_data.get('tracking_ready')
+        else 'Evidence: incomplete. Use Production Flux to track the target and a competing fermentation product.'
+    )
+
+    production_change = float(design_data.get('production_change', 0.0))
+    production_prefix = '+' if production_change > 0 else ''
+    production_status = (
+        'Production: improvement target reached.'
+        if design_data.get('production_improved')
+        else f"Production: improvement is still below {float(design_data.get('minimum_production_change', 0.0)):.0f}."
+    )
+    growth_status = (
+        'Growth: viable.'
+        if design_data.get('growth_ok')
+        else f"Growth: too low. Keep it above {float(design_data.get('minimum_growth', 0.0)):.1f}."
+    )
+    final_status = (
+        'Robust design ready. Return to Dr. Nova and deliver the results.'
+        if design_data.get('ready_to_deliver')
+        else 'Not ready yet. Keep iterating with objective, environment, tracking and the knockout pair.'
+    )
+
+    return (
+        'Mission 10 Robust Design Check\n\n'
+        f"Target product: {design_data.get('target_product')}\n"
+        f"Selected objective: {design_data.get('selected_objective')}\n"
+        f"Objective flux: {design_data.get('objective_result')}\n\n"
+        f"Baseline production: {float(design_data.get('baseline_production', 0.0)):.3f}\n"
+        f"Current production: {float(design_data.get('current_production', 0.0)):.3f}\n"
+        f"Production change: {production_prefix}{production_change:.3f}\n"
+        f"Current growth: {float(design_data.get('current_growth', 0.0)):.3f}\n\n"
+        f"Tracked fluxes: {', '.join(selected_fluxes) if selected_fluxes else 'none'}\n"
+        f"Required evidence count: {len(required_fluxes)} product fluxes\n\n"
+        f"{objective_status}\n"
+        f"{oxygen_status}\n"
+        f"{environment_status}\n"
+        f"{tracking_status}\n"
         f"{knockout_status}\n"
         f"{production_status}\n"
         f"{growth_status}\n\n"
@@ -678,11 +762,12 @@ class Window:
         genes_04 = MISSION04_CANDIDATE_GENES
         genes_05 = MISSION05_CANDIDATE_GENES
         genes_09 = MISSION09_CANDIDATE_GENES
+        genes_10 = MISSION10_CANDIDATE_GENES
 
         for i, gene_id in enumerate(GENES):
             gene_label = GENE_LABELS.get(gene_id, gene_id)
 
-            if gene_id in genes_03 or gene_id in genes_04 or gene_id in genes_05 or gene_id in genes_09:
+            if gene_id in genes_03 or gene_id in genes_04 or gene_id in genes_05 or gene_id in genes_09 or gene_id in genes_10:
                 gene_toggle_widgets[gene_id] = menu_genes.add.toggle_switch(
                     gene_label,
                     True,
@@ -932,6 +1017,13 @@ class Window:
                 else:
                     mission09_data = run_mission09_design_check(self.results)
 
+            mission10_data = None
+            if '10' in self.player.missions_activated and '10' not in self.player.missions_completed:
+                if sys.platform == 'emscripten':
+                    mission10_data = run_mission10_robust_design_check_remote(BACKEND_URL, self.results)
+                else:
+                    mission10_data = run_mission10_robust_design_check(self.results)
+
             mission04_data = None
             if '04' in self.player.missions_activated and '04' not in self.player.missions_completed:
                 if sys.platform == 'emscripten':
@@ -1009,6 +1101,17 @@ class Window:
                     background_color='white',
                     font_size=24,
                     label_id='mission09_design_check'
+                )
+                menu_simul.add.vertical_margin(20)
+
+            if mission10_data is not None:
+                menu_simul.add.label(
+                    _build_mission10_text(mission10_data),
+                    wordwrap=True,
+                    padding=(20, 20, 20, 20),
+                    background_color='white',
+                    font_size=24,
+                    label_id='mission10_robust_design_check'
                 )
                 menu_simul.add.vertical_margin(20)
 

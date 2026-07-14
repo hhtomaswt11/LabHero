@@ -7,7 +7,7 @@ Advanced strain design: combining objective functions, environmental constraints
 The player learns that a real strain-design problem usually requires more than one modelling decision. A good design must target a product, use biologically coherent constraints, and redirect metabolism genetically without destroying growth.
 
 ## Scenario
-Dr. Nova gives the player a final design challenge: configure *E. coli* to improve lactate production while keeping the strain viable.
+Dr. Nova gives the player an integrated design challenge: configure *E. coli* to improve lactate production while keeping the strain viable.
 
 ## Rules shown to the player
 - Target product: lactate.
@@ -36,4 +36,4 @@ Dr. Nova gives the player a final design challenge: configure *E. coli* to impro
 - Production improvement threshold: at least 100.0 flux units over the anaerobic no-knockout baseline
 
 ## Pedagogical explanation
-Mission 07 introduced objective selection. Mission 08 added environmental constraints. Mission 09 combines objective, environment, and genetic intervention in one integrated challenge. The exact setup is not revealed in the in-game prompt: the player must iterate through simulations, interpret the feedback, and identify the configuration that improves production without killing growth.
+Mission 07 introduced objective selection. Mission 08 added environmental constraints. Mission 09 combines objective, environment, and one genetic intervention in an integrated challenge before the final double-knockout task. The exact setup is not revealed in the in-game prompt: the player must iterate through simulations, interpret the feedback, and identify the configuration that improves production without killing growth.

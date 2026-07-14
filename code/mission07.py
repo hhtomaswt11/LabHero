@@ -10,6 +10,7 @@ from button import Button
 from async_menu import run_menu
 from mission08 import Mission08_info
 from mission09 import Mission09_info
+from mission10 import Mission10_info
 from utils import *
 from simulation import (
     MISSION07_TARGET_OBJECTIVE,
@@ -17,6 +18,7 @@ from simulation import (
     MISSION07_DEFAULT_OBJECTIVE,
     MISSION08_TARGET_PRODUCT,
     MISSION09_TARGET_PRODUCT,
+    MISSION10_TARGET_PRODUCT,
 )
 
 
@@ -79,24 +81,40 @@ class Mission07:
         self.m08_step2 = [
             f"Excellent work, {self.player.player_name}.",
             "You now understand that objectives and constraints must work together.",
-            "For the final test, combine objective, environment and one knockout."
+            "Now combine objective, environment and one knockout in a single design."
         ]
 
         self.m09_step1 = [
-            "Mission 09 is active. This is the final Dr. Nova design challenge.",
+            "Mission 09 is active. This integrated design needs three decisions.",
             f"Target {MISSION09_TARGET_PRODUCT} using objective, environment and exactly one knockout.",
             "Use New Results as feedback until the integrated design is ready."
         ]
 
         self.m09_step2 = [
             f"Outstanding, {self.player.player_name}.",
-            "You combined objective choice, environmental constraints and genetic design.",
-            "The Advanced Strain Design Lab is complete for now."
+            "You combined objective choice, environmental constraints and a useful knockout.",
+            "One final Nova challenge remains: robust design with a knockout pair."
+        ]
+
+        self.m10_step1 = [
+            "Mission 10 is active. This is my hardest challenge yet.",
+            f"Target {MISSION10_TARGET_PRODUCT} using objective choice, environment and exactly two knockouts.",
+            "Use production-flux evidence and New Results until the robust design is ready."
+        ]
+
+        self.m10_step2 = [
+            f"Excellent work, {self.player.player_name}.",
+            "You completed objective choice, constraints, single knockout and double knockout design.",
+            "The Advanced Strain Design Lab is complete."
         ]
 
         self.input()
-        if '09' in self.missions_completed:
-            self.menu_message(self.m09_step2, buttons=False)
+        if '10' in self.missions_completed:
+            self.menu_message(self.m10_step2, buttons=False)
+        elif '09' in self.missions_completed and '10' in self.missions_activated:
+            self.menu_message(self.m10_step1, target_mission='10')
+        elif '09' in self.missions_completed:
+            self.menu_message(self.m09_step2, target_mission='10')
         elif '08' in self.missions_completed and '09' in self.missions_activated:
             self.menu_message(self.m09_step1, target_mission='09')
         elif '08' in self.missions_completed:
@@ -135,7 +153,10 @@ class Mission07:
 
         if buttons:
             def click_yes():
-                if target_mission == '09':
+                if target_mission == '10':
+                    mission10_menu = Mission10_info(self.toggle_menu, self.player)
+                    self.pending = mission10_menu.update
+                elif target_mission == '09':
                     mission09_menu = Mission09_info(self.toggle_menu, self.player)
                     self.pending = mission09_menu.update
                 elif target_mission == '08':
@@ -258,13 +279,13 @@ class Mission07_info:
 
         menu.add.label(
             f"""
-            The goal is to prove that the objective function changes the simulation goal.
+            The goal is to prove that the objective function changes what the model tries to optimize.
 
             Target product: {MISSION07_TARGET_PRODUCT}
 
-            Keep the model unchanged.
-            Change only the Objective and discover which option targets this product.
-            Then run simulations and deliver the result.
+            Do not use knockouts or environmental changes.
+            Use only the simulation setup to make the model prioritize this product.
+            Run different tests, compare the results, and deliver your conclusion.
             """,
             wordwrap=True,
             align=pygame_menu.locals.ALIGN_CENTER,

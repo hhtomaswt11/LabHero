@@ -43,6 +43,17 @@ MISSION09_MIN_GROWTH = 8.0
 MISSION09_MIN_PRODUCTION_CHANGE = 100.0
 MISSION09_CANDIDATE_GENES = ['b0903', 'b2297', 'b0723', 'b3115', 'b0728', 'b1241']
 
+MISSION10_GROWTH_OBJECTIVE = 'BIOMASS_Ecoli_core_w_GAM'
+MISSION10_TARGET_PRODUCT = 'lactate'
+MISSION10_TARGET_OBJECTIVE = 'EX_lac__D_e'
+MISSION10_OXYGEN_REACTION = 'EX_o2_e'
+MISSION10_TARGET_GENES = ['b1241', 'b2297']
+MISSION10_TARGET_GENE_NAMES = {'b1241': 'adhE', 'b2297': 'pta'}
+MISSION10_MIN_GROWTH = 5.0
+MISSION10_MIN_PRODUCTION_CHANGE = 50.0
+MISSION10_CANDIDATE_GENES = ['b0903', 'b2297', 'b0723', 'b3115', 'b0728', 'b1241']
+MISSION10_REQUIRED_TRACKED_FLUXES = ['EX_lac__D_e', 'EX_etoh_e']
+
 VILLAIN_SCORE = 14500.0
 
 
@@ -215,6 +226,46 @@ def _mission09_environment_status(reactions):
 
     return oxygen_lower_bound_closed, unexpected_changes
 
+
+
+
+def _mission10_environment_status(reactions):
+    """Return whether Mission 10 changed only the oxygen lower bound."""
+    reaction_values = list(reactions.values())
+    oxygen_lower_bound_closed = False
+    unexpected_changes = []
+
+    try:
+        oxygen_index = list(REACTIONS.index).index(MISSION10_OXYGEN_REACTION)
+    except ValueError:
+        oxygen_index = None
+
+    for i in range(len(REACTIONS.index)):
+        lb_index = i * 2
+        ub_index = lb_index + 1
+
+        if ub_index >= len(reaction_values):
+            break
+
+        lower_bound_open = bool(reaction_values[lb_index])
+        upper_bound_open = bool(reaction_values[ub_index])
+
+        default_lower_bound_open = REACTIONS.lb.iloc[i] != 0
+        default_upper_bound_open = REACTIONS.ub.iloc[i] != 0
+
+        reaction_id = REACTIONS.index[i]
+
+        if i == oxygen_index:
+            oxygen_lower_bound_closed = not lower_bound_open
+            if upper_bound_open != default_upper_bound_open:
+                unexpected_changes.append(f'{reaction_id} upper bound')
+        else:
+            if lower_bound_open != default_lower_bound_open:
+                unexpected_changes.append(f'{reaction_id} lower bound')
+            if upper_bound_open != default_upper_bound_open:
+                unexpected_changes.append(f'{reaction_id} upper bound')
+
+    return oxygen_lower_bound_closed, unexpected_changes
 
 
 def _environment_has_changes(reactions):
@@ -722,6 +773,131 @@ def run_mission09_design_check(simulation_results=None):
 
 
 
+
+def _build_mission10_data(
+    selected_objective,
+    objective_result,
+    genes,
+    reactions,
+    baseline_growth,
+    baseline_flux,
+    current_growth,
+    current_flux,
+    flux_error=None,
+    objective_error=None,
+):
+    knocked_out_genes = _knocked_out_genes(genes)
+    selected_fluxes = _read_selected_production_fluxes()
+
+    objective_correct = selected_objective == MISSION10_TARGET_OBJECTIVE
+    objective_value = _as_float_or_none(objective_result)
+    result_valid = objective_value is not None and objective_value > 0
+    oxygen_lower_bound_closed, unexpected_environment_changes = _mission10_environment_status(reactions)
+
+    baseline_value = _numeric_result(baseline_flux)
+    current_value = _numeric_result(current_flux)
+    growth_value = _numeric_result(current_growth)
+    production_change = round(current_value - baseline_value, 3)
+
+    exactly_two_knockouts = len(knocked_out_genes) == 2
+    only_candidate_knockouts = all(gene_id in MISSION10_CANDIDATE_GENES for gene_id in knocked_out_genes)
+    target_pair_found = set(knocked_out_genes) == set(MISSION10_TARGET_GENES)
+    tracking_ready = all(reaction_id in selected_fluxes for reaction_id in MISSION10_REQUIRED_TRACKED_FLUXES)
+    growth_ok = growth_value >= MISSION10_MIN_GROWTH
+    production_improved = production_change >= MISSION10_MIN_PRODUCTION_CHANGE
+
+    mission10_data = {
+        'target_product': MISSION10_TARGET_PRODUCT,
+        'target_objective': MISSION10_TARGET_OBJECTIVE,
+        'selected_objective': selected_objective,
+        'objective_result': round(objective_value, 3) if objective_value is not None else str(objective_result),
+        'objective_correct': objective_correct,
+        'oxygen_reaction': MISSION10_OXYGEN_REACTION,
+        'oxygen_lower_bound_closed': oxygen_lower_bound_closed,
+        'unexpected_environment_changes': unexpected_environment_changes,
+        'knocked_out_genes': knocked_out_genes,
+        'exactly_two_knockouts': exactly_two_knockouts,
+        'only_candidate_knockouts': only_candidate_knockouts,
+        'target_pair_found': target_pair_found,
+        'target_genes': MISSION10_TARGET_GENES,
+        'target_gene_names': MISSION10_TARGET_GENE_NAMES,
+        'candidate_genes': MISSION10_CANDIDATE_GENES,
+        'selected_fluxes': selected_fluxes,
+        'required_tracked_fluxes': MISSION10_REQUIRED_TRACKED_FLUXES,
+        'tracking_ready': tracking_ready,
+        'growth_objective': MISSION10_GROWTH_OBJECTIVE,
+        'minimum_growth': MISSION10_MIN_GROWTH,
+        'minimum_production_change': MISSION10_MIN_PRODUCTION_CHANGE,
+        'baseline_growth': round(_numeric_result(baseline_growth), 3),
+        'baseline_production': round(baseline_value, 3),
+        'current_growth': round(growth_value, 3),
+        'current_production': round(current_value, 3),
+        'production_change': production_change,
+        'growth_ok': growth_ok,
+        'production_improved': production_improved,
+        'result_valid': result_valid,
+        'ready_to_deliver': (
+            objective_correct
+            and oxygen_lower_bound_closed
+            and not unexpected_environment_changes
+            and exactly_two_knockouts
+            and only_candidate_knockouts
+            and target_pair_found
+            and tracking_ready
+            and growth_ok
+            and production_improved
+            and result_valid
+        ),
+    }
+    error = objective_error or flux_error
+    if error:
+        mission10_data['error'] = error
+    save_mission10_robust_design_check(mission10_data)
+    return mission10_data
+
+
+def run_mission10_robust_design_check(simulation_results=None):
+    _method_name, selected_objective, genes, reactions = _read_simulation_file()
+
+    objective_result = None
+    objective_error = None
+    try:
+        if simulation_results and simulation_results[0] == selected_objective:
+            objective_result = simulation_results[1]
+    except Exception:
+        objective_result = None
+
+    if objective_result is None:
+        objective_error = 'Run the simulation before delivering Mission 10.'
+
+    baseline_growth, baseline_flux, baseline_error = _simulate_flux_in_biomass_solution(
+        _build_active_genes_data(),
+        _build_anaerobic_reactions_data(),
+        MISSION10_TARGET_OBJECTIVE,
+        MISSION10_GROWTH_OBJECTIVE,
+    )
+
+    current_growth, current_flux, current_error = _simulate_flux_in_biomass_solution(
+        genes,
+        reactions,
+        MISSION10_TARGET_OBJECTIVE,
+        MISSION10_GROWTH_OBJECTIVE,
+    )
+
+    return _build_mission10_data(
+        selected_objective,
+        objective_result,
+        genes,
+        reactions,
+        baseline_growth,
+        baseline_flux,
+        current_growth,
+        current_flux,
+        flux_error=baseline_error or current_error,
+        objective_error=objective_error,
+    )
+
+
 def _build_mission04_data(baseline_growth, baseline_flux, current_growth, current_flux, environment_changed, error=None):
     baseline_value = _numeric_result(baseline_flux)
     current_value = _numeric_result(current_flux)
@@ -1180,3 +1356,66 @@ def run_challenge_score_remote(backend_url):
 
 if __name__ == '__main__':
      print(run_simul())
+
+
+def run_mission10_robust_design_check_remote(backend_url, simulation_results=None):
+    payload = _build_request_payload()
+    _method_name, selected_objective, genes, reactions = _read_simulation_file()
+
+    objective_result = None
+    objective_error = None
+    try:
+        if simulation_results and simulation_results[0] == selected_objective:
+            objective_result = simulation_results[1]
+    except Exception:
+        objective_result = None
+
+    if objective_result is None:
+        objective_error = 'Run the simulation before delivering Mission 10.'
+
+    baseline_payload = copy.deepcopy(payload)
+    baseline_payload['objective'] = MISSION10_GROWTH_OBJECTIVE
+    baseline_payload['gene_knockouts'] = []
+    baseline_payload['env_conditions'] = _build_anaerobic_env_conditions_payload()
+
+    current_payload = copy.deepcopy(payload)
+    current_payload['objective'] = MISSION10_GROWTH_OBJECTIVE
+
+    try:
+        baseline_response = _simulate_remote_flux_solution(backend_url, baseline_payload, MISSION10_GROWTH_OBJECTIVE)
+        current_response = _simulate_remote_flux_solution(backend_url, current_payload, MISSION10_GROWTH_OBJECTIVE)
+    except Exception as e:
+        return _build_mission10_data(
+            selected_objective,
+            objective_result,
+            genes,
+            reactions,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            flux_error=str(e),
+            objective_error=objective_error,
+        )
+
+    baseline_growth, baseline_flux, baseline_error = _extract_remote_growth_and_flux(
+        baseline_response,
+        MISSION10_TARGET_OBJECTIVE,
+    )
+    current_growth, current_flux, current_error = _extract_remote_growth_and_flux(
+        current_response,
+        MISSION10_TARGET_OBJECTIVE,
+    )
+
+    return _build_mission10_data(
+        selected_objective,
+        objective_result,
+        genes,
+        reactions,
+        baseline_growth,
+        baseline_flux,
+        current_growth,
+        current_flux,
+        flux_error=baseline_error or current_error,
+        objective_error=objective_error,
+    )

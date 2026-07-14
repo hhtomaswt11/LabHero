@@ -226,8 +226,8 @@ class Mission05_info:
             Target product: {MISSION05_PRODUCT_NAME}
             Production reaction: {MISSION05_PRODUCTION_OBJECTIVE}
 
-            Important rule:
-            First close the O2 lower bound. Then test one candidate gene knockout.
+            Hint:
+            Fermentation becomes relevant when respiration is limited.
 
             Candidate genes:
             {candidate_text}
