@@ -456,6 +456,101 @@ def _build_mission10_text(design_data):
     )
 
 
+
+def _build_mission11_text(fingerprint_data):
+    if not fingerprint_data:
+        return ''
+
+    if fingerprint_data.get('error') and fingerprint_data.get('objective_result') in (None, 'None'):
+        return f"Mission 11 Flux Fingerprint Check\nError: {fingerprint_data.get('error')}"
+
+    method_status = (
+        'Method: standard FBA baseline.'
+        if fingerprint_data.get('method_correct')
+        else 'Method: use FBA for this first diagnostic baseline.'
+    )
+    objective_status = (
+        'Objective: biomass objective kept as the growth baseline.'
+        if fingerprint_data.get('objective_correct')
+        else 'Objective: keep the biomass objective for this diagnostic profile.'
+    )
+    oxygen_status = (
+        'Environment: respiration-limited constraint detected.'
+        if fingerprint_data.get('oxygen_lower_bound_closed')
+        else 'Environment: respiration is not limited yet. Think about oxygen availability.'
+    )
+    environment_status = (
+        'Extra constraints: none.'
+        if not fingerprint_data.get('unexpected_environment_changes')
+        else 'Extra constraints: too many environmental changes. Keep only the key constraint.'
+    )
+    knockout_status = (
+        'Gene knockouts: none.'
+        if not fingerprint_data.get('knocked_out_genes')
+        else 'Gene knockouts detected. This diagnostic mission should keep the strain unchanged.'
+    )
+
+    selected_fluxes = fingerprint_data.get('selected_fluxes') or []
+    missing_fluxes = fingerprint_data.get('missing_fluxes') or []
+    positive_fluxes = fingerprint_data.get('positive_fluxes') or []
+    flux_values = fingerprint_data.get('tracked_flux_values') or {}
+
+    tracking_status = (
+        'Production Flux: full fingerprint panel selected.'
+        if fingerprint_data.get('tracking_ready')
+        else 'Production Flux: incomplete panel. Select all requested fingerprint products.'
+    )
+    positive_status = (
+        'Fingerprint: informative secretion profile detected.'
+        if fingerprint_data.get('positive_products_ready')
+        else f"Fingerprint: fewer than {fingerprint_data.get('minimum_positive_products')} products show secretion."
+    )
+    growth_status = (
+        'Growth: viable.'
+        if fingerprint_data.get('growth_ok')
+        else f"Growth: too low. Keep it above {float(fingerprint_data.get('minimum_growth', 0.0)):.1f}."
+    )
+    final_status = (
+        'Flux fingerprint ready. Return to Dr. Almeida and deliver the results.'
+        if fingerprint_data.get('ready_to_deliver')
+        else 'Not ready yet. Keep refining the setup and production-flux evidence.'
+    )
+
+    flux_lines = []
+    for reaction_id in selected_fluxes:
+        value = flux_values.get(reaction_id)
+        if value is None:
+            flux_lines.append(f'- {reaction_id}: not measured')
+        else:
+            flux_lines.append(f'- {reaction_id}: {float(value):.3f}')
+    flux_text = '\n'.join(flux_lines) if flux_lines else 'none'
+
+    missing_text = ', '.join(missing_fluxes) if missing_fluxes else 'none'
+    positive_text = ', '.join(positive_fluxes) if positive_fluxes else 'none'
+    dominant_product = fingerprint_data.get('dominant_product') or 'not available'
+
+    return (
+        'Mission 11 Flux Fingerprint Check\n\n'
+        f"Context: {fingerprint_data.get('target_context')}\n"
+        f"Method: {fingerprint_data.get('method')}\n"
+        f"Selected objective: {fingerprint_data.get('selected_objective')}\n"
+        f"Growth/objective flux: {fingerprint_data.get('objective_result')}\n\n"
+        f"Tracked fluxes:\n{flux_text}\n\n"
+        f"Missing fingerprint fluxes: {missing_text}\n"
+        f"Products with positive secretion: {positive_text}\n"
+        f"Dominant tracked product: {dominant_product}\n\n"
+        f"{method_status}\n"
+        f"{objective_status}\n"
+        f"{oxygen_status}\n"
+        f"{environment_status}\n"
+        f"{knockout_status}\n"
+        f"{tracking_status}\n"
+        f"{positive_status}\n"
+        f"{growth_status}\n\n"
+        f"{final_status}"
+    )
+
+
 def _build_mission04_text(production_data):
     if not production_data:
         return ''
@@ -1024,6 +1119,10 @@ class Window:
                 else:
                     mission10_data = run_mission10_robust_design_check(self.results)
 
+            mission11_data = None
+            if '11' in self.player.missions_activated and '11' not in self.player.missions_completed:
+                mission11_data = run_mission11_flux_fingerprint_check(self.results)
+
             mission04_data = None
             if '04' in self.player.missions_activated and '04' not in self.player.missions_completed:
                 if sys.platform == 'emscripten':
@@ -1112,6 +1211,17 @@ class Window:
                     background_color='white',
                     font_size=24,
                     label_id='mission10_robust_design_check'
+                )
+                menu_simul.add.vertical_margin(20)
+
+            if mission11_data is not None:
+                menu_simul.add.label(
+                    _build_mission11_text(mission11_data),
+                    wordwrap=True,
+                    padding=(20, 20, 20, 20),
+                    background_color='white',
+                    font_size=24,
+                    label_id='mission11_flux_fingerprint_check'
                 )
                 menu_simul.add.vertical_margin(20)
 

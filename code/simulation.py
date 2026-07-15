@@ -54,6 +54,13 @@ MISSION10_MIN_PRODUCTION_CHANGE = 50.0
 MISSION10_CANDIDATE_GENES = ['b0903', 'b2297', 'b0723', 'b3115', 'b0728', 'b1241']
 MISSION10_REQUIRED_TRACKED_FLUXES = ['EX_lac__D_e', 'EX_etoh_e']
 
+MISSION11_GROWTH_OBJECTIVE = 'BIOMASS_Ecoli_core_w_GAM'
+MISSION11_TARGET_CONTEXT = 'respiration-limited growth'
+MISSION11_OXYGEN_REACTION = 'EX_o2_e'
+MISSION11_REQUIRED_TRACKED_FLUXES = ['EX_ac_e', 'EX_for_e', 'EX_etoh_e', 'EX_lac__D_e', 'EX_succ_e']
+MISSION11_MIN_GROWTH = 5.0
+MISSION11_MIN_POSITIVE_PRODUCTS = 2
+
 VILLAIN_SCORE = 14500.0
 
 
@@ -237,6 +244,45 @@ def _mission10_environment_status(reactions):
 
     try:
         oxygen_index = list(REACTIONS.index).index(MISSION10_OXYGEN_REACTION)
+    except ValueError:
+        oxygen_index = None
+
+    for i in range(len(REACTIONS.index)):
+        lb_index = i * 2
+        ub_index = lb_index + 1
+
+        if ub_index >= len(reaction_values):
+            break
+
+        lower_bound_open = bool(reaction_values[lb_index])
+        upper_bound_open = bool(reaction_values[ub_index])
+
+        default_lower_bound_open = REACTIONS.lb.iloc[i] != 0
+        default_upper_bound_open = REACTIONS.ub.iloc[i] != 0
+
+        reaction_id = REACTIONS.index[i]
+
+        if i == oxygen_index:
+            oxygen_lower_bound_closed = not lower_bound_open
+            if upper_bound_open != default_upper_bound_open:
+                unexpected_changes.append(f'{reaction_id} upper bound')
+        else:
+            if lower_bound_open != default_lower_bound_open:
+                unexpected_changes.append(f'{reaction_id} lower bound')
+            if upper_bound_open != default_upper_bound_open:
+                unexpected_changes.append(f'{reaction_id} upper bound')
+
+    return oxygen_lower_bound_closed, unexpected_changes
+
+
+def _mission11_environment_status(reactions):
+    """Return whether Mission 11 changed only the oxygen lower bound."""
+    reaction_values = list(reactions.values())
+    oxygen_lower_bound_closed = False
+    unexpected_changes = []
+
+    try:
+        oxygen_index = list(REACTIONS.index).index(MISSION11_OXYGEN_REACTION)
     except ValueError:
         oxygen_index = None
 
@@ -864,6 +910,125 @@ def _build_mission10_data(
         mission10_data['error'] = error
     save_mission10_robust_design_check(mission10_data)
     return mission10_data
+
+
+
+def _production_flux_value_map(production_fluxes):
+    values = {}
+    if not isinstance(production_fluxes, dict):
+        return values
+
+    for item in production_fluxes.get('items') or []:
+        reaction_id = item.get('reaction_id')
+        if not reaction_id:
+            continue
+        try:
+            values[reaction_id] = float(item.get('production_flux', 0.0))
+        except Exception:
+            values[reaction_id] = 0.0
+    return values
+
+
+def _build_mission11_data(method_name, selected_objective, objective_result, genes, reactions, production_fluxes=None, objective_error=None):
+    knocked_out_genes = _knocked_out_genes(genes)
+    selected_fluxes = _read_selected_production_fluxes()
+    flux_values = _production_flux_value_map(production_fluxes)
+
+    method_correct = method_name == 'FBA'
+    objective_correct = selected_objective == MISSION11_GROWTH_OBJECTIVE
+    objective_value = _as_float_or_none(objective_result)
+    result_valid = objective_value is not None and objective_value > 0
+    oxygen_lower_bound_closed, unexpected_environment_changes = _mission11_environment_status(reactions)
+
+    missing_fluxes = [
+        reaction_id
+        for reaction_id in MISSION11_REQUIRED_TRACKED_FLUXES
+        if reaction_id not in selected_fluxes
+    ]
+    tracking_ready = not missing_fluxes
+
+    positive_fluxes = [
+        reaction_id
+        for reaction_id in MISSION11_REQUIRED_TRACKED_FLUXES
+        if flux_values.get(reaction_id, 0.0) > 0.001
+    ]
+    positive_products_ready = len(positive_fluxes) >= MISSION11_MIN_POSITIVE_PRODUCTS
+
+    dominant_product = None
+    if flux_values:
+        dominant_product = max(flux_values, key=lambda reaction_id: flux_values.get(reaction_id, 0.0))
+
+    growth_ok = _numeric_result(objective_value) >= MISSION11_MIN_GROWTH
+
+    mission11_data = {
+        'mission_id': '11',
+        'check_version': 1,
+        'target_context': MISSION11_TARGET_CONTEXT,
+        'method': method_name,
+        'method_correct': method_correct,
+        'growth_objective': MISSION11_GROWTH_OBJECTIVE,
+        'selected_objective': selected_objective,
+        'objective_correct': objective_correct,
+        'objective_result': round(objective_value, 3) if objective_value is not None else str(objective_result),
+        'oxygen_reaction': MISSION11_OXYGEN_REACTION,
+        'oxygen_lower_bound_closed': oxygen_lower_bound_closed,
+        'unexpected_environment_changes': unexpected_environment_changes,
+        'knocked_out_genes': knocked_out_genes,
+        'required_tracked_fluxes': MISSION11_REQUIRED_TRACKED_FLUXES,
+        'selected_fluxes': selected_fluxes,
+        'missing_fluxes': missing_fluxes,
+        'tracking_ready': tracking_ready,
+        'tracked_flux_values': {reaction_id: round(value, 3) for reaction_id, value in flux_values.items()},
+        'positive_fluxes': positive_fluxes,
+        'minimum_positive_products': MISSION11_MIN_POSITIVE_PRODUCTS,
+        'positive_products_ready': positive_products_ready,
+        'dominant_product': dominant_product,
+        'minimum_growth': MISSION11_MIN_GROWTH,
+        'growth_ok': growth_ok,
+        'result_valid': result_valid,
+        'ready_to_deliver': (
+            method_correct
+            and objective_correct
+            and oxygen_lower_bound_closed
+            and not unexpected_environment_changes
+            and not knocked_out_genes
+            and tracking_ready
+            and positive_products_ready
+            and growth_ok
+            and result_valid
+        ),
+    }
+    if objective_error:
+        mission11_data['error'] = objective_error
+    save_mission11_flux_fingerprint_check(mission11_data)
+    return mission11_data
+
+
+def run_mission11_flux_fingerprint_check(simulation_results=None):
+    method_name, selected_objective, genes, reactions = _read_simulation_file()
+
+    objective_result = None
+    production_fluxes = None
+    objective_error = None
+    try:
+        if simulation_results and simulation_results[0] == selected_objective:
+            objective_result = simulation_results[1]
+            production_fluxes = simulation_results[2] if len(simulation_results) > 2 else None
+    except Exception:
+        objective_result = None
+
+    if objective_result is None:
+        objective_error = 'Run the simulation before delivering Mission 11.'
+
+    return _build_mission11_data(
+        method_name,
+        selected_objective,
+        objective_result,
+        genes,
+        reactions,
+        production_fluxes=production_fluxes,
+        objective_error=objective_error,
+    )
 
 
 def run_mission10_robust_design_check(simulation_results=None):

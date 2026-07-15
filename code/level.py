@@ -15,6 +15,7 @@ from mission02 import Mission02
 from mission03 import Mission03
 from mission06 import Mission06
 from mission07 import Mission07
+from mission11 import Mission11
 from dialogues import Dialogues
 from save_load import save_file
 from functions import *
@@ -51,6 +52,8 @@ class Level:
 		self.talk_3 = Mission06(self.toggle_talk_3, self.player)
 		self.talk_7_active = False
 		self.talk_7 = Mission07(self.toggle_talk_7, self.player)
+		self.talk_11_active = False
+		self.talk_11 = Mission11(self.toggle_talk_11, self.player)
 		self.menu = Menu(self.player, self.toggle_shop)
 		self.window = Window(self.desk_menu, self.player)
 		self.books = Books(self.read_books)
@@ -132,6 +135,7 @@ class Level:
 					talk_2 = self.toggle_talk_2,
 					talk_3 = self.toggle_talk_3,
 					talk_7 = self.toggle_talk_7,
+					talk_11 = self.toggle_talk_11,
 					dialogues = self.toggle_dialogue
 					# music = self.music_bg
 					)
@@ -146,6 +150,9 @@ class Level:
 				Interaction((obj.x, obj.y), (obj.width, obj.height), self.interaction_sprites, obj.name)
 
 			if obj.name == 'Mission07':
+				Interaction((obj.x, obj.y), (obj.width, obj.height), self.interaction_sprites, obj.name)
+
+			if obj.name == 'Mission11':
 				Interaction((obj.x, obj.y), (obj.width, obj.height), self.interaction_sprites, obj.name)
 			
 			if obj.name == 'Desk':
@@ -199,6 +206,9 @@ class Level:
 
 	def toggle_talk_7(self):
 		self.talk_7_active = not self.talk_7_active
+
+	def toggle_talk_11(self):
+		self.talk_11_active = not self.talk_11_active
 
 	def toggle_dialogue(self):
 		self.dialogues_active = not self.dialogues_active
@@ -264,6 +274,9 @@ class Level:
 
 		elif self.talk_7_active:
 			await self.talk_7.update()
+
+		elif self.talk_11_active:
+			await self.talk_11.update()
 
 		elif self.desk_active:
 			await self.window.update()
