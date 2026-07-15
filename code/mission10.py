@@ -134,6 +134,7 @@ class Mission10_info:
         await run_menu(menu, self.display_surface)
 
     def activate_mission10(self):
+        clear_mission10_robust_design_check()
         self.mission10 = True
         if '10' not in self.missions_activated:
             self.missions_activated.insert(0, '10')
@@ -143,7 +144,9 @@ class Mission10_info:
     def deliver_results(self):
         design_data = load_mission10_robust_design_check()
 
-        if not design_data:
+        if (not design_data
+                or design_data.get('mission_id') != '10'
+                or design_data.get('check_version') != 2):
             self.failed.play()
             animation_text_save('Run a Mission 10 simulation first!', time=2500)
             return

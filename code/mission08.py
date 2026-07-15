@@ -122,6 +122,7 @@ class Mission08_info:
         await run_menu(menu, self.display_surface)
 
     def activate_mission08(self):
+        clear_mission08_constraint_check()
         self.mission08 = True
         if '08' not in self.missions_activated:
             self.missions_activated.insert(0, '08')
@@ -131,7 +132,9 @@ class Mission08_info:
     def deliver_results(self):
         objective_data = load_mission08_constraint_check()
 
-        if not objective_data:
+        if (not objective_data
+                or objective_data.get('mission_id') != '08'
+                or objective_data.get('check_version') != 2):
             self.failed.play()
             animation_text_save('Run a Mission 08 simulation first!', time=2500)
             return

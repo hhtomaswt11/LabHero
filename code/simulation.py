@@ -517,6 +517,8 @@ def _build_challenge_data(growth, production_flux, error=None):
     score = round(growth_value * production_value, 3)
 
     challenge_data = {
+        'mission_id': '06',
+        'check_version': 2,
         'growth_objective': CHALLENGE_GROWTH_OBJECTIVE,
         'production_objective': CHALLENGE_PRODUCTION_OBJECTIVE,
         'growth': round(growth_value, 3),
@@ -557,6 +559,8 @@ def _build_mission07_data(selected_objective, objective_result, genes, reactions
     result_valid = objective_value is not None and objective_value > 0
 
     mission07_data = {
+        'mission_id': '07',
+        'check_version': 2,
         'default_objective': MISSION07_DEFAULT_OBJECTIVE,
         'target_product': MISSION07_TARGET_PRODUCT,
         'target_objective': MISSION07_TARGET_OBJECTIVE,
@@ -610,6 +614,8 @@ def _build_mission08_data(selected_objective, objective_result, genes, reactions
     oxygen_lower_bound_closed, unexpected_environment_changes = _mission08_environment_status(reactions)
 
     mission08_data = {
+        'mission_id': '08',
+        'check_version': 2,
         'default_objective': MISSION08_DEFAULT_OBJECTIVE,
         'target_product': MISSION08_TARGET_PRODUCT,
         'target_objective': MISSION08_TARGET_OBJECTIVE,
@@ -688,6 +694,8 @@ def _build_mission09_data(
     production_improved = production_change >= MISSION09_MIN_PRODUCTION_CHANGE
 
     mission09_data = {
+        'mission_id': '09',
+        'check_version': 2,
         'target_product': MISSION09_TARGET_PRODUCT,
         'target_objective': MISSION09_TARGET_OBJECTIVE,
         'selected_objective': selected_objective,
@@ -807,6 +815,8 @@ def _build_mission10_data(
     production_improved = production_change >= MISSION10_MIN_PRODUCTION_CHANGE
 
     mission10_data = {
+        'mission_id': '10',
+        'check_version': 2,
         'target_product': MISSION10_TARGET_PRODUCT,
         'target_objective': MISSION10_TARGET_OBJECTIVE,
         'selected_objective': selected_objective,

@@ -29,8 +29,9 @@ class Menu:
         self.timer = Timer(200)
 
         #music volume
-
-        self.volume = 0.5
+        # DEFAULT 
+        # self.volume = 0.5
+        self.volume = 0
         self.music_val = 0
 
 

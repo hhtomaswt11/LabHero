@@ -66,10 +66,16 @@ class Player(pygame.sprite.Sprite):
 
         	
         # music/audio
+        # DEFAULT
+        # self.music_bg = pygame.mixer.Sound(MUSIC_NAME)
+        # self.music_bg.set_volume(0.07)
+        # # self.music_bg.set_volume(0)
+        # self.music_bg.play(loops = -1)
 
+
+        # TURN OFF AUDIO
         self.music_bg = pygame.mixer.Sound(MUSIC_NAME)
-        self.music_bg.set_volume(0.07)
-        # self.music_bg.set_volume(0)
+        self.music_bg.set_volume(0)
         self.music_bg.play(loops = -1)
 
         coffee_path = get_resource_path('audio/coffee.ogg')

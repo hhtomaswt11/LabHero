@@ -131,6 +131,7 @@ class Mission09_info:
         await run_menu(menu, self.display_surface)
 
     def activate_mission09(self):
+        clear_mission09_design_check()
         self.mission09 = True
         if '09' not in self.missions_activated:
             self.missions_activated.insert(0, '09')
@@ -140,7 +141,9 @@ class Mission09_info:
     def deliver_results(self):
         design_data = load_mission09_design_check()
 
-        if not design_data:
+        if (not design_data
+                or design_data.get('mission_id') != '09'
+                or design_data.get('check_version') != 2):
             self.failed.play()
             animation_text_save('Run a Mission 09 simulation first!', time=2500)
             return

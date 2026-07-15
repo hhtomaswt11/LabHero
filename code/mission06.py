@@ -218,15 +218,19 @@ class Mission06_info:
         self.toggle_talk = not self.toggle_talk
 
     def activate_mission06(self):
+        clear_challenge_score()
         self.mission06 = True
         if '06' not in self.missions_activated:
             self.missions_activated.insert(0, '06')
         animation_text_save('Mission 06 Activated')
+        save_file(self.player.get_save_data())
 
     def deliver_results(self):
         challenge_data = load_challenge_score()
 
-        if not challenge_data:
+        if (not challenge_data
+                or challenge_data.get('mission_id') != '06'
+                or challenge_data.get('check_version') != 2):
             self.failed.play()
             animation_text_save('Run a Mission 06 challenge simulation first!', time=2500)
             return

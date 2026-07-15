@@ -293,6 +293,7 @@ class Mission07_info:
         await run_menu(menu, self.display_surface)
 
     def activate_mission07(self):
+        clear_mission07_objective_check()
         self.mission07 = True
         if '07' not in self.missions_activated:
             self.missions_activated.insert(0, '07')
@@ -302,7 +303,9 @@ class Mission07_info:
     def deliver_results(self):
         objective_data = load_mission07_objective_check()
 
-        if not objective_data:
+        if (not objective_data
+                or objective_data.get('mission_id') != '07'
+                or objective_data.get('check_version') != 2):
             self.failed.play()
             animation_text_save('Run a Mission 07 simulation first!', time=2500)
             return

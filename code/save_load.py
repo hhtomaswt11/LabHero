@@ -18,6 +18,26 @@ def _default_player_state():
     return copy.deepcopy(DEFAULT_PLAYER_STATE)
 
 
+
+
+
+def _delete_save_artifact(mem_key, filename):
+    """Remove a mission-specific simulation/check artifact.
+
+    Mission delivery checks are stored separately from the main player save.
+    When a mission is activated, its old check file must be cleared so the
+    player cannot deliver stale results from an earlier attempt/session.
+    """
+    if _IS_WEB:
+        _MEMSTORE.pop(mem_key, None)
+        return
+    try:
+        os.remove(get_save_path(filename))
+    except FileNotFoundError:
+        pass
+    except Exception:
+        pass
+
 def _read_existing_player_state():
     """Return the player_state from the current save, when available.
 
@@ -249,3 +269,24 @@ def load_mission10_robust_design_check():
         return None
     except Exception:
         return None
+
+
+def clear_challenge_score():
+    _delete_save_artifact('challenge_score', 'challenge_score.txt')
+
+
+def clear_mission07_objective_check():
+    _delete_save_artifact('mission07_objective_check', 'mission07_objective_check.txt')
+
+
+def clear_mission08_constraint_check():
+    _delete_save_artifact('mission08_constraint_check', 'mission08_constraint_check.txt')
+
+
+def clear_mission09_design_check():
+    _delete_save_artifact('mission09_design_check', 'mission09_design_check.txt')
+
+
+def clear_mission10_robust_design_check():
+    _delete_save_artifact('mission10_robust_design_check', 'mission10_robust_design_check.txt')
+
