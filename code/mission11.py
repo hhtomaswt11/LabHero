@@ -14,7 +14,9 @@ from simulation import (
     MISSION11_TARGET_CONTEXT,
     MISSION11_GROWTH_OBJECTIVE,
     MISSION11_MIN_POSITIVE_PRODUCTS,
+    MISSION12_TARGET_PRODUCT,
 )
+from mission12 import Mission12_info
 
 
 class Mission11:
@@ -64,12 +66,28 @@ class Mission11:
         self.m11_step3 = [
             "Excellent diagnostic work.",
             "A single objective value never tells the full metabolic story.",
-            "Flux evidence reveals which products are actually being secreted."
+            "Now let's use flux evidence to compare a target product with byproducts."
+        ]
+
+        self.m12_step1 = [
+            "Mission 12 is active. This time, focus on competing byproducts.",
+            f"Prioritize {MISSION12_TARGET_PRODUCT}, but do not ignore what else the model secretes.",
+            "Use Production Flux evidence to compare the target with alternative products."
+        ]
+
+        self.m12_step2 = [
+            f"Excellent work, {self.player.player_name}.",
+            "You used flux evidence to separate a target product from competing byproducts.",
+            "That is the beginning of real pathway diagnosis."
         ]
 
         self.input()
-        if '11' in self.missions_completed:
-            self.menu_message(self.m11_step3, buttons=False)
+        if '12' in self.missions_completed:
+            self.menu_message(self.m12_step2, buttons=False)
+        elif '11' in self.missions_completed and '12' in self.missions_activated:
+            self.menu_message(self.m12_step1, target_mission='12')
+        elif '11' in self.missions_completed:
+            self.menu_message(self.m11_step3, target_mission='12')
         elif '11' in self.missions_activated:
             self.menu_message(self.m11_step2)
         else:
@@ -80,7 +98,7 @@ class Mission11:
             self.pending = None
             await coro_factory()
 
-    def menu_message(self, message, buttons=True):
+    def menu_message(self, message, buttons=True, target_mission='11'):
         pygame.draw.rect(self.screen, (255, 215, 0), [0, 500, 1280, 220], width=5)
         pygame.draw.rect(self.screen, (186, 214, 177), [5, 505, 1270, 210])
 
@@ -100,7 +118,11 @@ class Mission11:
 
         if buttons:
             def click_yes():
-                self.pending = self.menu.update
+                if target_mission == '12':
+                    mission12_menu = Mission12_info(self.toggle_menu, self.player)
+                    self.pending = mission12_menu.update
+                else:
+                    self.pending = self.menu.update
 
             botao_teste = Button(200, 650, 150, 50, self.screen, 'Yes', click_yes)
             botao_teste_2 = Button(370, 650, 220, 50, self.screen, 'Not now', self.toggle_menu)

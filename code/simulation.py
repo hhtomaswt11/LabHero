@@ -61,6 +61,15 @@ MISSION11_REQUIRED_TRACKED_FLUXES = ['EX_ac_e', 'EX_for_e', 'EX_etoh_e', 'EX_lac
 MISSION11_MIN_GROWTH = 5.0
 MISSION11_MIN_POSITIVE_PRODUCTS = 2
 
+MISSION12_METHOD = 'FBA'
+MISSION12_TARGET_PRODUCT = 'succinate'
+MISSION12_TARGET_OBJECTIVE = 'EX_succ_e'
+MISSION12_OXYGEN_REACTION = 'EX_o2_e'
+MISSION12_REQUIRED_TRACKED_FLUXES = ['EX_succ_e']
+MISSION12_COMPETING_FLUXES = ['EX_ac_e', 'EX_for_e', 'EX_etoh_e', 'EX_lac__D_e']
+MISSION12_MIN_COMPETING_FLUXES = 2
+MISSION12_MIN_TARGET_FLUX = 1.0
+
 VILLAIN_SCORE = 14500.0
 
 
@@ -283,6 +292,45 @@ def _mission11_environment_status(reactions):
 
     try:
         oxygen_index = list(REACTIONS.index).index(MISSION11_OXYGEN_REACTION)
+    except ValueError:
+        oxygen_index = None
+
+    for i in range(len(REACTIONS.index)):
+        lb_index = i * 2
+        ub_index = lb_index + 1
+
+        if ub_index >= len(reaction_values):
+            break
+
+        lower_bound_open = bool(reaction_values[lb_index])
+        upper_bound_open = bool(reaction_values[ub_index])
+
+        default_lower_bound_open = REACTIONS.lb.iloc[i] != 0
+        default_upper_bound_open = REACTIONS.ub.iloc[i] != 0
+
+        reaction_id = REACTIONS.index[i]
+
+        if i == oxygen_index:
+            oxygen_lower_bound_closed = not lower_bound_open
+            if upper_bound_open != default_upper_bound_open:
+                unexpected_changes.append(f'{reaction_id} upper bound')
+        else:
+            if lower_bound_open != default_lower_bound_open:
+                unexpected_changes.append(f'{reaction_id} lower bound')
+            if upper_bound_open != default_upper_bound_open:
+                unexpected_changes.append(f'{reaction_id} upper bound')
+
+    return oxygen_lower_bound_closed, unexpected_changes
+
+
+def _mission12_environment_status(reactions):
+    """Return whether Mission 12 changed only the oxygen lower bound."""
+    reaction_values = list(reactions.values())
+    oxygen_lower_bound_closed = False
+    unexpected_changes = []
+
+    try:
+        oxygen_index = list(REACTIONS.index).index(MISSION12_OXYGEN_REACTION)
     except ValueError:
         oxygen_index = None
 
@@ -1021,6 +1069,106 @@ def run_mission11_flux_fingerprint_check(simulation_results=None):
         objective_error = 'Run the simulation before delivering Mission 11.'
 
     return _build_mission11_data(
+        method_name,
+        selected_objective,
+        objective_result,
+        genes,
+        reactions,
+        production_fluxes=production_fluxes,
+        objective_error=objective_error,
+    )
+
+
+def _build_mission12_data(method_name, selected_objective, objective_result, genes, reactions, production_fluxes=None, objective_error=None):
+    knocked_out_genes = _knocked_out_genes(genes)
+    selected_fluxes = _read_selected_production_fluxes()
+    flux_values = _production_flux_value_map(production_fluxes)
+
+    method_correct = method_name == MISSION12_METHOD
+    objective_correct = selected_objective == MISSION12_TARGET_OBJECTIVE
+    objective_value = _as_float_or_none(objective_result)
+    result_valid = objective_value is not None and objective_value > 0
+    oxygen_lower_bound_closed, unexpected_environment_changes = _mission12_environment_status(reactions)
+
+    target_flux_tracked = MISSION12_TARGET_OBJECTIVE in selected_fluxes
+    target_flux = flux_values.get(MISSION12_TARGET_OBJECTIVE, 0.0)
+    target_flux_positive = target_flux >= MISSION12_MIN_TARGET_FLUX
+
+    selected_competing_fluxes = [
+        reaction_id
+        for reaction_id in MISSION12_COMPETING_FLUXES
+        if reaction_id in selected_fluxes
+    ]
+    competing_fluxes_ready = len(selected_competing_fluxes) >= MISSION12_MIN_COMPETING_FLUXES
+
+    missing_required_fluxes = [
+        reaction_id
+        for reaction_id in MISSION12_REQUIRED_TRACKED_FLUXES
+        if reaction_id not in selected_fluxes
+    ]
+
+    mission12_data = {
+        'mission_id': '12',
+        'check_version': 1,
+        'target_product': MISSION12_TARGET_PRODUCT,
+        'target_objective': MISSION12_TARGET_OBJECTIVE,
+        'method': method_name,
+        'method_correct': method_correct,
+        'selected_objective': selected_objective,
+        'objective_correct': objective_correct,
+        'objective_result': round(objective_value, 3) if objective_value is not None else str(objective_result),
+        'oxygen_reaction': MISSION12_OXYGEN_REACTION,
+        'oxygen_lower_bound_closed': oxygen_lower_bound_closed,
+        'unexpected_environment_changes': unexpected_environment_changes,
+        'knocked_out_genes': knocked_out_genes,
+        'selected_fluxes': selected_fluxes,
+        'tracked_flux_values': {reaction_id: round(value, 3) for reaction_id, value in flux_values.items()},
+        'required_tracked_fluxes': MISSION12_REQUIRED_TRACKED_FLUXES,
+        'missing_required_fluxes': missing_required_fluxes,
+        'competing_flux_options': MISSION12_COMPETING_FLUXES,
+        'selected_competing_fluxes': selected_competing_fluxes,
+        'minimum_competing_fluxes': MISSION12_MIN_COMPETING_FLUXES,
+        'target_flux_tracked': target_flux_tracked,
+        'target_flux': round(target_flux, 3),
+        'minimum_target_flux': MISSION12_MIN_TARGET_FLUX,
+        'target_flux_positive': target_flux_positive,
+        'competing_fluxes_ready': competing_fluxes_ready,
+        'result_valid': result_valid,
+        'ready_to_deliver': (
+            method_correct
+            and objective_correct
+            and oxygen_lower_bound_closed
+            and not unexpected_environment_changes
+            and not knocked_out_genes
+            and target_flux_tracked
+            and target_flux_positive
+            and competing_fluxes_ready
+            and result_valid
+        ),
+    }
+    if objective_error:
+        mission12_data['error'] = objective_error
+    save_mission12_byproduct_check(mission12_data)
+    return mission12_data
+
+
+def run_mission12_byproduct_check(simulation_results=None):
+    method_name, selected_objective, genes, reactions = _read_simulation_file()
+
+    objective_result = None
+    production_fluxes = None
+    objective_error = None
+    try:
+        if simulation_results and simulation_results[0] == selected_objective:
+            objective_result = simulation_results[1]
+            production_fluxes = simulation_results[2] if len(simulation_results) > 2 else None
+    except Exception:
+        objective_result = None
+
+    if objective_result is None:
+        objective_error = 'Run the simulation before delivering Mission 12.'
+
+    return _build_mission12_data(
         method_name,
         selected_objective,
         objective_result,

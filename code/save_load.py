@@ -291,6 +291,26 @@ def load_mission11_flux_fingerprint_check():
         return None
 
 
+def save_mission12_byproduct_check(data):
+    if _IS_WEB:
+        _MEMSTORE['mission12_byproduct_check'] = data
+        return
+    with open(get_save_path('mission12_byproduct_check.txt'), 'w') as byproduct_file:
+        json.dump(data, byproduct_file)
+
+
+def load_mission12_byproduct_check():
+    if _IS_WEB:
+        return _MEMSTORE.get('mission12_byproduct_check')
+    try:
+        with open(get_save_path('mission12_byproduct_check.txt')) as byproduct_file:
+            return json.load(byproduct_file)
+    except FileNotFoundError:
+        return None
+    except Exception:
+        return None
+
+
 def clear_challenge_score():
     _delete_save_artifact('challenge_score', 'challenge_score.txt')
 
@@ -313,4 +333,8 @@ def clear_mission10_robust_design_check():
 
 def clear_mission11_flux_fingerprint_check():
     _delete_save_artifact('mission11_flux_fingerprint_check', 'mission11_flux_fingerprint_check.txt')
+
+
+def clear_mission12_byproduct_check():
+    _delete_save_artifact('mission12_byproduct_check', 'mission12_byproduct_check.txt')
 
