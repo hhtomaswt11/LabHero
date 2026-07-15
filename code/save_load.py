@@ -311,6 +311,67 @@ def load_mission12_byproduct_check():
         return None
 
 
+def save_mission13_method_check(data):
+    if _IS_WEB:
+        _MEMSTORE['mission13_method_check'] = data
+        return
+    with open(get_save_path('mission13_method_check.txt'), 'w') as method_file:
+        json.dump(data, method_file)
+
+
+def load_mission13_method_check():
+    if _IS_WEB:
+        return _MEMSTORE.get('mission13_method_check')
+    try:
+        with open(get_save_path('mission13_method_check.txt')) as method_file:
+            return json.load(method_file)
+    except FileNotFoundError:
+        return None
+    except Exception:
+        return None
+
+
+
+def save_mission14_reduction_check(data):
+    if _IS_WEB:
+        _MEMSTORE['mission14_reduction_check'] = data
+        return
+    with open(get_save_path('mission14_reduction_check.txt'), 'w') as reduction_file:
+        json.dump(data, reduction_file)
+
+
+def load_mission14_reduction_check():
+    if _IS_WEB:
+        return _MEMSTORE.get('mission14_reduction_check')
+    try:
+        with open(get_save_path('mission14_reduction_check.txt')) as reduction_file:
+            return json.load(reduction_file)
+    except FileNotFoundError:
+        return None
+    except Exception:
+        return None
+
+
+def save_mission15_diagnostic_report_check(data):
+    if _IS_WEB:
+        _MEMSTORE['mission15_diagnostic_report_check'] = data
+        return
+    with open(get_save_path('mission15_diagnostic_report_check.txt'), 'w') as report_file:
+        json.dump(data, report_file)
+
+
+def load_mission15_diagnostic_report_check():
+    if _IS_WEB:
+        return _MEMSTORE.get('mission15_diagnostic_report_check')
+    try:
+        with open(get_save_path('mission15_diagnostic_report_check.txt')) as report_file:
+            return json.load(report_file)
+    except FileNotFoundError:
+        return None
+    except Exception:
+        return None
+
+
 def clear_challenge_score():
     _delete_save_artifact('challenge_score', 'challenge_score.txt')
 
@@ -337,4 +398,16 @@ def clear_mission11_flux_fingerprint_check():
 
 def clear_mission12_byproduct_check():
     _delete_save_artifact('mission12_byproduct_check', 'mission12_byproduct_check.txt')
+
+
+def clear_mission13_method_check():
+    _delete_save_artifact('mission13_method_check', 'mission13_method_check.txt')
+
+
+def clear_mission14_reduction_check():
+    _delete_save_artifact('mission14_reduction_check', 'mission14_reduction_check.txt')
+
+
+def clear_mission15_diagnostic_report_check():
+    _delete_save_artifact('mission15_diagnostic_report_check', 'mission15_diagnostic_report_check.txt')
 

@@ -638,6 +638,350 @@ def _build_mission12_text(byproduct_data):
     )
 
 
+def _build_mission13_text(method_data):
+    if not method_data:
+        return ''
+
+    if method_data.get('error') and method_data.get('objective_result') in (None, 'None'):
+        return f"Mission 13 Method Check\nError: {method_data.get('error')}"
+
+    if method_data.get('method_correct'):
+        method_status = 'Method: pFBA selected for parsimonious flux analysis.'
+    elif method_data.get('baseline_method_selected'):
+        method_status = 'Method: this is the FBA baseline. Switch to pFBA for this mission.'
+    else:
+        method_status = 'Method: choose pFBA for the method-comparison step.'
+
+    objective_status = (
+        'Objective: target product is being prioritised.'
+        if method_data.get('objective_correct')
+        else 'Objective: not prioritising the requested product yet.'
+    )
+    oxygen_status = (
+        'Environment: respiration-limited constraint detected.'
+        if method_data.get('oxygen_lower_bound_closed')
+        else 'Environment: still aerobic. Keep the comparison under the same product-forming constraint.'
+    )
+    environment_status = (
+        'Extra constraints: none.'
+        if not method_data.get('unexpected_environment_changes')
+        else 'Extra constraints: too many environmental changes. Keep only the key constraint.'
+    )
+    knockout_status = (
+        'Gene knockouts: none.'
+        if not method_data.get('knocked_out_genes')
+        else 'Gene knockouts detected. Keep the strain unchanged for this method comparison.'
+    )
+    target_flux_status = (
+        'Evidence: target product flux is being tracked.'
+        if method_data.get('target_flux_tracked')
+        else 'Evidence: track the target product in Production Flux.'
+    )
+    competing_status = (
+        'Evidence: enough competing byproducts are being tracked.'
+        if method_data.get('competing_fluxes_ready')
+        else f"Evidence: track at least {method_data.get('minimum_competing_fluxes')} competing byproducts."
+    )
+    target_production_status = (
+        'Target flux: positive production detected.'
+        if method_data.get('target_flux_positive')
+        else 'Target flux: not enough target production detected yet.'
+    )
+    baseline_status = (
+        f"Previous FBA baseline loaded: {float(method_data.get('previous_fba_target_flux', 0.0)):.3f}"
+        if method_data.get('baseline_available') and method_data.get('previous_fba_target_flux') is not None
+        else 'Previous FBA baseline: not loaded. Use the current pFBA evidence.'
+    )
+
+    selected_fluxes = method_data.get('selected_fluxes') or []
+    selected_competing = method_data.get('selected_competing_fluxes') or []
+    flux_values = method_data.get('tracked_flux_values') or {}
+
+    flux_lines = []
+    for reaction_id in selected_fluxes:
+        value = flux_values.get(reaction_id)
+        if value is None:
+            flux_lines.append(f'- {reaction_id}: not measured')
+        else:
+            flux_lines.append(f'- {reaction_id}: {float(value):.3f}')
+    flux_text = '\n'.join(flux_lines) if flux_lines else 'none'
+
+    difference = method_data.get('target_flux_difference_from_fba')
+    difference_text = 'not available'
+    if difference is not None:
+        prefix = '+' if float(difference) > 0 else ''
+        difference_text = f'{prefix}{float(difference):.3f}'
+
+    final_status = (
+        'pFBA method comparison ready. Return to Dr. Almeida and deliver the results.'
+        if method_data.get('ready_to_deliver')
+        else 'Not ready yet. Keep comparing method, objective, environment and flux evidence.'
+    )
+
+    return (
+        'Mission 13 Method Check\n\n'
+        f"Target product: {method_data.get('target_product')}\n"
+        f"Selected method: {method_data.get('method')}\n"
+        f"Selected objective: {method_data.get('selected_objective')}\n"
+        f"Objective flux: {method_data.get('objective_result')}\n\n"
+        f"Tracked fluxes:\n{flux_text}\n\n"
+        f"Selected competing byproducts: {', '.join(selected_competing) if selected_competing else 'none'}\n"
+        f"pFBA target flux: {float(method_data.get('target_flux', 0.0)):.3f}\n"
+        f"{baseline_status}\n"
+        f"Difference from previous FBA target flux: {difference_text}\n\n"
+        f"{method_status}\n"
+        f"{objective_status}\n"
+        f"{oxygen_status}\n"
+        f"{environment_status}\n"
+        f"{knockout_status}\n"
+        f"{target_flux_status}\n"
+        f"{competing_status}\n"
+        f"{target_production_status}\n\n"
+        f"{final_status}"
+    )
+
+
+
+def _build_mission14_text(reduction_data):
+    if not reduction_data:
+        return ''
+
+    if reduction_data.get('error') and reduction_data.get('objective_result') in (None, 'None'):
+        return f"Mission 14 Reduction Check\nError: {reduction_data.get('error')}"
+
+    method_status = (
+        'Method: pFBA selected for reduction analysis.'
+        if reduction_data.get('method_correct')
+        else 'Method: use pFBA for this reduction analysis.'
+    )
+    objective_status = (
+        'Objective: target product is being prioritised.'
+        if reduction_data.get('objective_correct')
+        else 'Objective: not prioritising the requested target product yet.'
+    )
+    oxygen_status = (
+        'Environment: respiration-limited constraint detected.'
+        if reduction_data.get('oxygen_lower_bound_closed')
+        else 'Environment: still aerobic. Keep the same product-forming constraint.'
+    )
+    environment_status = (
+        'Extra constraints: none.'
+        if not reduction_data.get('unexpected_environment_changes')
+        else 'Extra constraints: too many environmental changes. Keep only the key constraint.'
+    )
+    knockout_count_status = (
+        'Knockouts: exactly one candidate gene is disabled.'
+        if reduction_data.get('exact_one_knockout')
+        else 'Knockouts: use exactly one candidate gene.'
+    )
+    knockout_effect_status = (
+        'Knockout effect: unwanted byproduct route reduced.'
+        if reduction_data.get('target_gene_found')
+        else 'Knockout effect: keep testing candidates to reduce the unwanted byproduct.'
+    )
+    evidence_status = (
+        'Evidence: target and unwanted product fluxes are being tracked.'
+        if reduction_data.get('required_fluxes_ready')
+        else 'Evidence: track both the target and unwanted product fluxes.'
+    )
+    target_flux_status = (
+        'Target flux: positive target production detected.'
+        if reduction_data.get('target_flux_positive')
+        else 'Target flux: target product is not high enough yet.'
+    )
+    unwanted_flux_status = (
+        'Byproduct flux: unwanted product is sufficiently reduced.'
+        if reduction_data.get('unwanted_flux_reduced')
+        else 'Byproduct flux: unwanted product is still too high.'
+    )
+
+    selected_fluxes = reduction_data.get('selected_fluxes') or []
+    flux_values = reduction_data.get('tracked_flux_values') or {}
+    flux_lines = []
+    for reaction_id in selected_fluxes:
+        value = flux_values.get(reaction_id)
+        if value is None:
+            flux_lines.append(f'- {reaction_id}: not measured')
+        else:
+            flux_lines.append(f'- {reaction_id}: {float(value):.3f}')
+    flux_text = '\n'.join(flux_lines) if flux_lines else 'none'
+
+    previous_unwanted = reduction_data.get('previous_unwanted_flux')
+    previous_text = 'not loaded'
+    if previous_unwanted is not None:
+        previous_text = f"{float(previous_unwanted):.3f}"
+
+    change = reduction_data.get('unwanted_flux_change_from_previous')
+    change_text = 'not available'
+    if change is not None:
+        prefix = '+' if float(change) > 0 else ''
+        change_text = f'{prefix}{float(change):.3f}'
+
+    knocked_out = reduction_data.get('knocked_out_genes') or []
+    knocked_out_text = ', '.join(knocked_out) if knocked_out else 'none'
+
+    final_status = (
+        'Reduction design ready. Return to Dr. Almeida and deliver the results.'
+        if reduction_data.get('ready_to_deliver')
+        else 'Not ready yet. Keep testing the knockout, method, environment and flux evidence.'
+    )
+
+    return (
+        'Mission 14 Reduction Check\n\n'
+        f"Target product: {reduction_data.get('target_product')}\n"
+        f"Unwanted byproduct: {reduction_data.get('unwanted_product')}\n"
+        f"Selected method: {reduction_data.get('method')}\n"
+        f"Selected objective: {reduction_data.get('selected_objective')}\n"
+        f"Objective flux: {reduction_data.get('objective_result')}\n"
+        f"Knockout selected: {knocked_out_text}\n\n"
+        f"Tracked fluxes:\n{flux_text}\n\n"
+        f"Target flux: {float(reduction_data.get('target_flux', 0.0)):.3f}\n"
+        f"Current unwanted flux: {float(reduction_data.get('current_unwanted_flux', 0.0)):.3f}\n"
+        f"Previous unwanted flux: {previous_text}\n"
+        f"Change from previous diagnostic run: {change_text}\n\n"
+        f"{method_status}\n"
+        f"{objective_status}\n"
+        f"{oxygen_status}\n"
+        f"{environment_status}\n"
+        f"{knockout_count_status}\n"
+        f"{knockout_effect_status}\n"
+        f"{evidence_status}\n"
+        f"{target_flux_status}\n"
+        f"{unwanted_flux_status}\n\n"
+        f"{final_status}"
+    )
+
+
+
+def _build_mission15_text(report_data):
+    if not report_data:
+        return ''
+
+    if report_data.get('error') and report_data.get('objective_result') in (None, 'None'):
+        return f"Mission 15 Diagnostic Report\nError: {report_data.get('error')}"
+
+    method_status = (
+        'Method: pFBA selected for the final diagnostic report.'
+        if report_data.get('method_correct')
+        else 'Method: use pFBA for this final report.'
+    )
+    objective_status = (
+        'Objective: target product is being prioritised.'
+        if report_data.get('objective_correct')
+        else 'Objective: not prioritising the requested target product yet.'
+    )
+    oxygen_status = (
+        'Environment: respiration-limited constraint detected.'
+        if report_data.get('oxygen_lower_bound_closed')
+        else 'Environment: still aerobic. Keep the product-forming constraint.'
+    )
+    environment_status = (
+        'Extra constraints: none.'
+        if not report_data.get('unexpected_environment_changes')
+        else 'Extra constraints: too many environmental changes. Keep only the key constraint.'
+    )
+    knockout_count_status = (
+        'Knockouts: exactly one candidate gene is disabled.'
+        if report_data.get('exact_one_knockout')
+        else 'Knockouts: use exactly one candidate gene.'
+    )
+    knockout_effect_status = (
+        'Knockout effect: byproduct profile is controlled.'
+        if report_data.get('target_gene_found')
+        else 'Knockout effect: keep testing candidates to control the byproduct profile.'
+    )
+    evidence_status = (
+        'Evidence: full production-flux panel is being tracked.'
+        if report_data.get('required_fluxes_ready')
+        else 'Evidence: track the full production-flux panel.'
+    )
+    target_flux_status = (
+        'Target flux: positive target production detected.'
+        if report_data.get('target_flux_positive')
+        else 'Target flux: target product is not high enough yet.'
+    )
+    unwanted_flux_status = (
+        'Byproduct control: unwanted product remains low.'
+        if report_data.get('unwanted_flux_reduced')
+        else 'Byproduct control: unwanted product is still too high.'
+    )
+    dominance_status = (
+        'Profile verdict: target product dominates the tracked byproduct profile.'
+        if report_data.get('target_dominates_byproducts')
+        else 'Profile verdict: target product does not dominate the tracked byproducts yet.'
+    )
+
+    selected_fluxes = report_data.get('selected_fluxes') or []
+    flux_values = report_data.get('tracked_flux_values') or {}
+    flux_lines = []
+    for reaction_id in selected_fluxes:
+        value = flux_values.get(reaction_id)
+        if value is None:
+            flux_lines.append(f'- {reaction_id}: not measured')
+        else:
+            flux_lines.append(f'- {reaction_id}: {float(value):.3f}')
+    flux_text = '\n'.join(flux_lines) if flux_lines else 'none'
+
+    previous_target = report_data.get('previous_target_flux')
+    previous_target_text = 'not loaded'
+    if previous_target is not None:
+        previous_target_text = f"{float(previous_target):.3f}"
+
+    previous_unwanted = report_data.get('previous_unwanted_flux')
+    previous_unwanted_text = 'not loaded'
+    if previous_unwanted is not None:
+        previous_unwanted_text = f"{float(previous_unwanted):.3f}"
+
+    target_change = report_data.get('target_flux_change_from_previous')
+    target_change_text = 'not available'
+    if target_change is not None:
+        prefix = '+' if float(target_change) > 0 else ''
+        target_change_text = f'{prefix}{float(target_change):.3f}'
+
+    unwanted_change = report_data.get('unwanted_flux_change_from_previous')
+    unwanted_change_text = 'not available'
+    if unwanted_change is not None:
+        prefix = '+' if float(unwanted_change) > 0 else ''
+        unwanted_change_text = f'{prefix}{float(unwanted_change):.3f}'
+
+    knocked_out = report_data.get('knocked_out_genes') or []
+    knocked_out_text = ', '.join(knocked_out) if knocked_out else 'none'
+
+    final_status = (
+        'Final diagnostic report ready. Return to Dr. Almeida and deliver the results.'
+        if report_data.get('ready_to_deliver')
+        else 'Not ready yet. Refine method, environment, knockout choice and flux evidence.'
+    )
+
+    return (
+        'Mission 15 Diagnostic Report\n\n'
+        f"Target product: {report_data.get('target_product')}\n"
+        f"Selected method: {report_data.get('method')}\n"
+        f"Selected objective: {report_data.get('selected_objective')}\n"
+        f"Objective flux: {report_data.get('objective_result')}\n"
+        f"Knockout selected: {knocked_out_text}\n\n"
+        f"Tracked fluxes:\n{flux_text}\n\n"
+        f"Target flux: {float(report_data.get('target_flux', 0.0)):.3f}\n"
+        f"Current unwanted flux: {float(report_data.get('current_unwanted_flux', 0.0)):.3f}\n"
+        f"Highest tracked byproduct flux: {float(report_data.get('highest_byproduct_flux', 0.0)):.3f}\n"
+        f"Previous target flux: {previous_target_text}\n"
+        f"Target change from previous design: {target_change_text}\n"
+        f"Previous unwanted flux: {previous_unwanted_text}\n"
+        f"Unwanted change from previous design: {unwanted_change_text}\n\n"
+        f"{method_status}\n"
+        f"{objective_status}\n"
+        f"{oxygen_status}\n"
+        f"{environment_status}\n"
+        f"{knockout_count_status}\n"
+        f"{knockout_effect_status}\n"
+        f"{evidence_status}\n"
+        f"{target_flux_status}\n"
+        f"{unwanted_flux_status}\n"
+        f"{dominance_status}\n\n"
+        f"{final_status}"
+    )
+
+
 def _build_mission04_text(production_data):
     if not production_data:
         return ''
@@ -1214,6 +1558,18 @@ class Window:
             if '12' in self.player.missions_activated and '12' not in self.player.missions_completed:
                 mission12_data = run_mission12_byproduct_check(self.results)
 
+            mission13_data = None
+            if '13' in self.player.missions_activated and '13' not in self.player.missions_completed:
+                mission13_data = run_mission13_method_check(self.results)
+
+            mission14_data = None
+            if '14' in self.player.missions_activated and '14' not in self.player.missions_completed:
+                mission14_data = run_mission14_reduction_check(self.results)
+
+            mission15_data = None
+            if '15' in self.player.missions_activated and '15' not in self.player.missions_completed:
+                mission15_data = run_mission15_diagnostic_report_check(self.results)
+
             mission04_data = None
             if '04' in self.player.missions_activated and '04' not in self.player.missions_completed:
                 if sys.platform == 'emscripten':
@@ -1324,6 +1680,39 @@ class Window:
                     background_color='white',
                     font_size=24,
                     label_id='mission12_byproduct_check'
+                )
+                menu_simul.add.vertical_margin(20)
+
+            if mission13_data is not None:
+                menu_simul.add.label(
+                    _build_mission13_text(mission13_data),
+                    wordwrap=True,
+                    padding=(20, 20, 20, 20),
+                    background_color='white',
+                    font_size=24,
+                    label_id='mission13_method_check'
+                )
+                menu_simul.add.vertical_margin(20)
+
+            if mission14_data is not None:
+                menu_simul.add.label(
+                    _build_mission14_text(mission14_data),
+                    wordwrap=True,
+                    padding=(20, 20, 20, 20),
+                    background_color='white',
+                    font_size=24,
+                    label_id='mission14_reduction_check'
+                )
+                menu_simul.add.vertical_margin(20)
+
+            if mission15_data is not None:
+                menu_simul.add.label(
+                    _build_mission15_text(mission15_data),
+                    wordwrap=True,
+                    padding=(20, 20, 20, 20),
+                    background_color='white',
+                    font_size=24,
+                    label_id='mission15_diagnostic_report_check'
                 )
                 menu_simul.add.vertical_margin(20)
 

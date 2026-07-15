@@ -15,8 +15,17 @@ from simulation import (
     MISSION11_GROWTH_OBJECTIVE,
     MISSION11_MIN_POSITIVE_PRODUCTS,
     MISSION12_TARGET_PRODUCT,
+    MISSION13_TARGET_PRODUCT,
+    MISSION13_TARGET_METHOD,
+    MISSION14_TARGET_PRODUCT,
+    MISSION14_UNWANTED_PRODUCT,
+    MISSION15_TARGET_PRODUCT,
+    MISSION15_TARGET_METHOD,
 )
 from mission12 import Mission12_info
+from mission13 import Mission13_info
+from mission14 import Mission14_info
+from mission15 import Mission15_info
 
 
 class Mission11:
@@ -78,12 +87,60 @@ class Mission11:
         self.m12_step2 = [
             f"Excellent work, {self.player.player_name}.",
             "You used flux evidence to separate a target product from competing byproducts.",
-            "That is the beginning of real pathway diagnosis."
+            "Now we can test whether the simulation method changes the diagnosis."
+        ]
+
+        self.m13_step1 = [
+            "Mission 13 is active. Compare the same product problem with pFBA.",
+            f"Target {MISSION13_TARGET_PRODUCT}, but focus on the simulation method this time.",
+            "Use Production Flux evidence to support the method comparison."
+        ]
+
+        self.m13_step2 = [
+            f"Excellent method comparison, {self.player.player_name}.",
+            "You have shown that the simulation method is part of the modelling decision.",
+            "Next we will use flux evidence to reduce an unwanted byproduct."
+        ]
+
+        self.m14_step1 = [
+            "Mission 14 is active. Now improve the quality of the design.",
+            f"Keep {MISSION14_TARGET_PRODUCT} as the target, but reduce {MISSION14_UNWANTED_PRODUCT}.",
+            "Use exactly one knockout and prove the result with Production Flux evidence."
+        ]
+
+        self.m14_step2 = [
+            f"Excellent reduction design, {self.player.player_name}.",
+            "You did not just maximize a product; you diagnosed and reduced a competing byproduct.",
+            "One final Dr. Almeida diagnostic challenge will come next."
+        ]
+
+        self.m15_step1 = [
+            "Mission 15 is active. This is my final diagnostic challenge.",
+            f"Build a complete report for {MISSION15_TARGET_PRODUCT} production using {MISSION15_TARGET_METHOD}.",
+            "Use method choice, one knockout and full Production Flux evidence."
+        ]
+
+        self.m15_step2 = [
+            f"Outstanding work, {self.player.player_name}.",
+            "You can now design, diagnose and justify metabolic engineering strategies.",
+            "This laboratory's flux-diagnostics training is complete."
         ]
 
         self.input()
-        if '12' in self.missions_completed:
-            self.menu_message(self.m12_step2, buttons=False)
+        if '15' in self.missions_completed:
+            self.menu_message(self.m15_step2, buttons=False)
+        elif '14' in self.missions_completed and '15' in self.missions_activated:
+            self.menu_message(self.m15_step1, target_mission='15')
+        elif '14' in self.missions_completed:
+            self.menu_message(self.m14_step2, target_mission='15')
+        elif '13' in self.missions_completed and '14' in self.missions_activated:
+            self.menu_message(self.m14_step1, target_mission='14')
+        elif '13' in self.missions_completed:
+            self.menu_message(self.m13_step2, target_mission='14')
+        elif '12' in self.missions_completed and '13' in self.missions_activated:
+            self.menu_message(self.m13_step1, target_mission='13')
+        elif '12' in self.missions_completed:
+            self.menu_message(self.m12_step2, target_mission='13')
         elif '11' in self.missions_completed and '12' in self.missions_activated:
             self.menu_message(self.m12_step1, target_mission='12')
         elif '11' in self.missions_completed:
@@ -102,7 +159,7 @@ class Mission11:
         pygame.draw.rect(self.screen, (255, 215, 0), [0, 500, 1280, 220], width=5)
         pygame.draw.rect(self.screen, (186, 214, 177), [5, 505, 1270, 210])
 
-        imagem_path = get_resource_path('graphics/dialogues/rio.jpg')
+        imagem_path = get_resource_path('graphics/dialogues/almeida.jpg')
         imagem = pygame.image.load(imagem_path).convert()
         if imagem.get_size() != (150, 150):
             imagem = pygame.transform.smoothscale(imagem, (150, 150))
@@ -118,7 +175,16 @@ class Mission11:
 
         if buttons:
             def click_yes():
-                if target_mission == '12':
+                if target_mission == '15':
+                    mission15_menu = Mission15_info(self.toggle_menu, self.player)
+                    self.pending = mission15_menu.update
+                elif target_mission == '14':
+                    mission14_menu = Mission14_info(self.toggle_menu, self.player)
+                    self.pending = mission14_menu.update
+                elif target_mission == '13':
+                    mission13_menu = Mission13_info(self.toggle_menu, self.player)
+                    self.pending = mission13_menu.update
+                elif target_mission == '12':
                     mission12_menu = Mission12_info(self.toggle_menu, self.player)
                     self.pending = mission12_menu.update
                 else:
