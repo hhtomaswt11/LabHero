@@ -107,6 +107,97 @@ MISSION15_MIN_TARGET_FLUX = 1.0
 MISSION15_MAX_UNWANTED_FLUX = 1.0
 MISSION15_MIN_GROWTH = 1.0
 
+MISSION16_METHOD = 'FBA'
+MISSION16_GROWTH_OBJECTIVE = 'BIOMASS_Ecoli_core_w_GAM'
+MISSION16_BLOCKED_CARBON_SOURCE = 'EX_glc__D_e'
+MISSION16_TARGET_CONTEXT = 'alternative carbon rescue'
+MISSION16_CANDIDATE_CARBON_SOURCES = ['EX_ac_e', 'EX_pyr_e', 'EX_mal__L_e', 'EX_fum_e', 'EX_akg_e']
+MISSION16_REQUIRED_MEDIUM_FLUXES = [
+    MISSION16_BLOCKED_CARBON_SOURCE,
+    'EX_ac_e',
+    'EX_pyr_e',
+    'EX_mal__L_e',
+    'EX_fum_e',
+    'EX_akg_e',
+    'EX_nh4_e',
+    'EX_pi_e',
+    'EX_o2_e',
+]
+MISSION16_MIN_GROWTH = 5.0
+MISSION16_MIN_SOURCE_UPTAKE = 0.001
+
+MISSION17_METHOD = 'FBA'
+MISSION17_GROWTH_OBJECTIVE = 'BIOMASS_Ecoli_core_w_GAM'
+MISSION17_TARGET_CONTEXT = 'essential medium component'
+MISSION17_TARGET_NUTRIENT = 'EX_pi_e'
+MISSION17_TARGET_NUTRIENT_NAME = 'phosphate'
+MISSION17_CANDIDATE_NUTRIENTS = ['EX_nh4_e', 'EX_pi_e', 'EX_h2o_e', 'EX_h_e', 'EX_co2_e']
+MISSION17_REQUIRED_MEDIUM_FLUXES = [
+    'EX_glc__D_e',
+    'EX_nh4_e',
+    'EX_pi_e',
+    'EX_h2o_e',
+    'EX_h_e',
+    'EX_co2_e',
+    'EX_o2_e',
+]
+MISSION17_MAX_GROWTH = 1.0
+MISSION17_MIN_BASELINE_GROWTH = 5.0
+
+MISSION18_METHOD = 'FBA'
+MISSION18_GROWTH_OBJECTIVE = 'BIOMASS_Ecoli_core_w_GAM'
+MISSION18_TARGET_CONTEXT = 'export bottleneck'
+MISSION18_BLOCKED_CARBON_SOURCE = 'EX_glc__D_e'
+MISSION18_ALTERNATIVE_CARBON_SOURCE = 'EX_pyr_e'
+MISSION18_EXPORT_BOTTLENECK = 'EX_ac_e'
+MISSION18_EXPORT_BOTTLENECK_NAME = 'acetate'
+MISSION18_REQUIRED_MEDIUM_FLUXES = [
+    MISSION18_BLOCKED_CARBON_SOURCE,
+    MISSION18_ALTERNATIVE_CARBON_SOURCE,
+    MISSION18_EXPORT_BOTTLENECK,
+    'EX_etoh_e',
+    'EX_for_e',
+    'EX_succ_e',
+    'EX_nh4_e',
+    'EX_pi_e',
+    'EX_o2_e',
+]
+MISSION18_REQUIRED_TRACKED_FLUXES = ['EX_ac_e', 'EX_etoh_e', 'EX_for_e', 'EX_succ_e']
+MISSION18_MIN_GROWTH = 1.0
+MISSION18_MIN_SOURCE_UPTAKE = 0.001
+MISSION18_MAX_BLOCKED_EXPORT_FLUX = 0.001
+
+MISSION19_TARGET_METHOD = 'lMOMA'
+MISSION19_GROWTH_OBJECTIVE = 'BIOMASS_Ecoli_core_w_GAM'
+MISSION19_TARGET_CONTEXT = 'single-gene perturbation response'
+MISSION19_TARGET_GENE = 'b2296'
+MISSION19_TARGET_GENE_NAME = 'ackA'
+MISSION19_CANDIDATE_GENES = ['b0118', 'b1276', 'b0720', 'b1611', 'b3236', 'b0728', 'b2296']
+MISSION19_REQUIRED_TRACKED_FLUXES = ['EX_ac_e', 'EX_etoh_e', 'EX_for_e', 'EX_lac__D_e', 'EX_succ_e']
+MISSION19_MIN_GROWTH = 0.1
+
+MISSION20_TARGET_METHOD = 'pFBA'
+MISSION20_GROWTH_OBJECTIVE = 'BIOMASS_Ecoli_core_w_GAM'
+MISSION20_TARGET_CONTEXT = 'final medium robustness report'
+MISSION20_BLOCKED_CARBON_SOURCE = 'EX_glc__D_e'
+MISSION20_ALTERNATIVE_CARBON_SOURCE = 'EX_pyr_e'
+MISSION20_EXPORT_BOTTLENECK = 'EX_ac_e'
+MISSION20_EXPORT_BOTTLENECK_NAME = 'acetate'
+MISSION20_REQUIRED_ESSENTIAL_UPTAKES = ['EX_nh4_e', 'EX_pi_e']
+MISSION20_REQUIRED_MEDIUM_FLUXES = [
+    MISSION20_BLOCKED_CARBON_SOURCE,
+    MISSION20_ALTERNATIVE_CARBON_SOURCE,
+    MISSION20_EXPORT_BOTTLENECK,
+    'EX_nh4_e',
+    'EX_pi_e',
+    'EX_o2_e',
+]
+MISSION20_REQUIRED_TRACKED_FLUXES = ['EX_ac_e', 'EX_etoh_e', 'EX_for_e', 'EX_succ_e', 'EX_lac__D_e']
+MISSION20_MIN_GROWTH = 1.0
+MISSION20_MIN_SOURCE_UPTAKE = 0.001
+MISSION20_MIN_ESSENTIAL_UPTAKE = 0.001
+MISSION20_MAX_BLOCKED_EXPORT_FLUX = 0.001
+
 VILLAIN_SCORE = 14500.0
 
 
@@ -742,6 +833,61 @@ def _build_production_flux_data(selected_ids, flux_getter=None, error=None):
     return data
 
 
+def _reaction_display_label(reaction_id):
+    try:
+        reaction_ids = list(REACTIONS.index)
+        reaction_index = reaction_ids.index(reaction_id)
+        reaction_name = str(REACTIONS.name.iloc[reaction_index])
+        return f'{reaction_name} ({reaction_id})'
+    except Exception:
+        return reaction_id
+
+
+def _build_medium_flux_data(reaction_ids=None, flux_getter=None, error=None):
+    """Build a compact uptake/exchange report for medium-engineering missions.
+
+    For exchange reactions, negative flux means uptake/consumption and positive
+    flux means secretion/export. Production Flux already focuses on exported
+    products; this report focuses on what the model is taking from the medium.
+    """
+    reaction_ids = reaction_ids or MISSION16_REQUIRED_MEDIUM_FLUXES
+    reaction_ids = [reaction_id for reaction_id in reaction_ids if reaction_id in list(REACTIONS.index)]
+
+    data = {
+        'reaction_ids': reaction_ids,
+        'items': [],
+    }
+
+    if error:
+        data['error'] = error
+        return data
+
+    for reaction_id in reaction_ids:
+        raw_flux = None
+        if callable(flux_getter):
+            try:
+                raw_flux = flux_getter(reaction_id)
+            except Exception:
+                raw_flux = None
+
+        raw_value = _as_float_or_none(raw_flux)
+        item = {
+            'reaction_id': reaction_id,
+            'label': _reaction_display_label(reaction_id),
+        }
+
+        if raw_value is None:
+            item['error'] = 'Flux not available in this simulation result.'
+        else:
+            item['raw_flux'] = round(raw_value, 6)
+            item['uptake_flux'] = round(max(-raw_value, 0.0), 3)
+            item['secretion_flux'] = round(max(raw_value, 0.0), 3)
+
+        data['items'].append(item)
+
+    return data
+
+
 def _simulate_local_objective_with_production_fluxes(method_name, objective_name, genes, reactions, selected_fluxes):
     simul, constraints = _build_local_constraints(genes, reactions)
     simul.objective = objective_name
@@ -749,17 +895,42 @@ def _simulate_local_objective_with_production_fluxes(method_name, objective_name
     objective_result = _normalise_result(result)
 
     if objective_result == 'Status: INFEASIBLE':
-        return objective_result, _build_production_flux_data(
-            selected_fluxes,
-            error='Simulation infeasible. Production fluxes could not be measured.'
+        return (
+            objective_result,
+            _build_production_flux_data(
+                selected_fluxes,
+                error='Simulation infeasible. Production fluxes could not be measured.'
+            ),
+            _build_medium_flux_data(
+                error='Simulation infeasible. Medium fluxes could not be measured.'
+            )
         )
 
+    flux_getter = lambda reaction_id: _extract_flux(result, reaction_id)
     production_fluxes = _build_production_flux_data(
         selected_fluxes,
-        flux_getter=lambda reaction_id: _extract_flux(result, reaction_id)
+        flux_getter=flux_getter
     )
-    return objective_result, production_fluxes
+    medium_fluxes = _build_medium_flux_data(
+        flux_getter=flux_getter
+    )
+    return objective_result, production_fluxes, medium_fluxes
 
+
+
+
+def _simulate_local_reaction_flux(method_name, objective_name, genes, reactions, reaction_id):
+    """Run a local simulation and read one reaction flux from its solution.
+
+    For lMOMA/ROOM, the printed objective value may represent the method
+    objective instead of the biomass reaction flux. Mission 19 therefore reads
+    the biomass reaction flux directly from the solution.
+    """
+    simul, constraints = _build_local_constraints(genes, reactions)
+    simul.objective = objective_name
+    result = simul.simulate(method=method_name, constraints=constraints)
+    raw_flux = _extract_flux(result, reaction_id)
+    return _as_float_or_none(raw_flux)
 
 def _build_challenge_data(growth, production_flux, error=None):
     growth_value = _numeric_result(growth)
@@ -1745,6 +1916,850 @@ def run_mission15_diagnostic_report_check(simulation_results=None):
     )
 
 
+def _mission16_environment_status(reactions):
+    """Evaluate the medium changes required for Mission 16.
+
+    The player must close glucose uptake and open exactly one candidate
+    alternative carbon source, without adding unrelated medium changes.
+    """
+    reaction_values = list(reactions.values())
+    glucose_lower_bound_closed = False
+    selected_sources = []
+    unexpected_changes = []
+
+    for i in range(len(REACTIONS.index)):
+        lb_index = i * 2
+        ub_index = lb_index + 1
+
+        if ub_index >= len(reaction_values):
+            break
+
+        reaction_id = REACTIONS.index[i]
+        lower_bound_open = bool(reaction_values[lb_index])
+        upper_bound_open = bool(reaction_values[ub_index])
+
+        default_lower_bound_open = REACTIONS.lb.iloc[i] != 0
+        default_upper_bound_open = REACTIONS.ub.iloc[i] != 0
+
+        lower_changed = lower_bound_open != default_lower_bound_open
+        upper_changed = upper_bound_open != default_upper_bound_open
+
+        if reaction_id == MISSION16_BLOCKED_CARBON_SOURCE:
+            glucose_lower_bound_closed = not lower_bound_open
+            if upper_changed:
+                unexpected_changes.append(f'{reaction_id} upper bound')
+            continue
+
+        if reaction_id in MISSION16_CANDIDATE_CARBON_SOURCES:
+            if lower_changed and lower_bound_open:
+                selected_sources.append(reaction_id)
+            elif lower_changed:
+                unexpected_changes.append(f'{reaction_id} lower bound')
+            if upper_changed:
+                unexpected_changes.append(f'{reaction_id} upper bound')
+            continue
+
+        if lower_changed:
+            unexpected_changes.append(f'{reaction_id} lower bound')
+        if upper_changed:
+            unexpected_changes.append(f'{reaction_id} upper bound')
+
+    return glucose_lower_bound_closed, selected_sources, unexpected_changes
+
+
+def _medium_flux_maps(medium_fluxes):
+    raw_fluxes = {}
+    uptake_fluxes = {}
+    secretion_fluxes = {}
+
+    if not medium_fluxes or medium_fluxes.get('error'):
+        return raw_fluxes, uptake_fluxes, secretion_fluxes
+
+    for item in medium_fluxes.get('items') or []:
+        reaction_id = item.get('reaction_id')
+        if not reaction_id or item.get('error'):
+            continue
+        raw_fluxes[reaction_id] = float(item.get('raw_flux', 0.0))
+        uptake_fluxes[reaction_id] = float(item.get('uptake_flux', 0.0))
+        secretion_fluxes[reaction_id] = float(item.get('secretion_flux', 0.0))
+
+    return raw_fluxes, uptake_fluxes, secretion_fluxes
+
+
+def _build_mission16_data(method_name, selected_objective, objective_result, genes, reactions, medium_fluxes=None, objective_error=None):
+    knocked_out_genes = _knocked_out_genes(genes)
+    method_correct = method_name == MISSION16_METHOD
+    objective_correct = selected_objective == MISSION16_GROWTH_OBJECTIVE
+    objective_value = _as_float_or_none(objective_result)
+    growth_value = _numeric_result(objective_value)
+    growth_ok = growth_value >= MISSION16_MIN_GROWTH
+
+    glucose_lower_bound_closed, selected_sources, unexpected_environment_changes = _mission16_environment_status(reactions)
+    exactly_one_alternative_source = len(selected_sources) == 1
+    selected_source = selected_sources[0] if exactly_one_alternative_source else None
+
+    raw_fluxes, uptake_fluxes, secretion_fluxes = _medium_flux_maps(medium_fluxes)
+    selected_source_uptake = uptake_fluxes.get(selected_source, 0.0) if selected_source else 0.0
+    glucose_uptake = uptake_fluxes.get(MISSION16_BLOCKED_CARBON_SOURCE, 0.0)
+    source_uptake_detected = selected_source_uptake >= MISSION16_MIN_SOURCE_UPTAKE
+    glucose_uptake_blocked = glucose_uptake <= MISSION16_MIN_SOURCE_UPTAKE
+
+    result_valid = objective_value is not None and objective_value > 0
+
+    mission16_data = {
+        'mission_id': '16',
+        'check_version': 1,
+        'mission_title': 'Alternative Carbon Rescue',
+        'target_context': MISSION16_TARGET_CONTEXT,
+        'method': method_name,
+        'target_method': MISSION16_METHOD,
+        'method_correct': method_correct,
+        'selected_objective': selected_objective,
+        'growth_objective': MISSION16_GROWTH_OBJECTIVE,
+        'objective_correct': objective_correct,
+        'objective_result': round(growth_value, 3) if objective_value is not None else str(objective_result),
+        'blocked_carbon_source': MISSION16_BLOCKED_CARBON_SOURCE,
+        'candidate_carbon_sources': MISSION16_CANDIDATE_CARBON_SOURCES,
+        'glucose_lower_bound_closed': glucose_lower_bound_closed,
+        'selected_alternative_sources': selected_sources,
+        'selected_source': selected_source,
+        'exactly_one_alternative_source': exactly_one_alternative_source,
+        'unexpected_environment_changes': unexpected_environment_changes,
+        'knocked_out_genes': knocked_out_genes,
+        'medium_fluxes': medium_fluxes or {},
+        'medium_raw_fluxes': {reaction_id: round(value, 3) for reaction_id, value in raw_fluxes.items()},
+        'medium_uptake_fluxes': {reaction_id: round(value, 3) for reaction_id, value in uptake_fluxes.items()},
+        'medium_secretion_fluxes': {reaction_id: round(value, 3) for reaction_id, value in secretion_fluxes.items()},
+        'selected_source_uptake': round(selected_source_uptake, 3),
+        'glucose_uptake': round(glucose_uptake, 3),
+        'minimum_source_uptake': MISSION16_MIN_SOURCE_UPTAKE,
+        'source_uptake_detected': source_uptake_detected,
+        'glucose_uptake_blocked': glucose_uptake_blocked,
+        'minimum_growth': MISSION16_MIN_GROWTH,
+        'growth_ok': growth_ok,
+        'result_valid': result_valid,
+        'ready_to_deliver': (
+            method_correct
+            and objective_correct
+            and glucose_lower_bound_closed
+            and glucose_uptake_blocked
+            and exactly_one_alternative_source
+            and not unexpected_environment_changes
+            and not knocked_out_genes
+            and source_uptake_detected
+            and growth_ok
+            and result_valid
+        ),
+    }
+    if objective_error:
+        mission16_data['error'] = objective_error
+    save_mission16_medium_report_check(mission16_data)
+    return mission16_data
+
+
+def run_mission16_medium_report_check(simulation_results=None):
+    method_name, selected_objective, genes, reactions = _read_simulation_file()
+
+    objective_result = None
+    medium_fluxes = None
+    objective_error = None
+    try:
+        if simulation_results and simulation_results[0] == selected_objective:
+            objective_result = simulation_results[1]
+            medium_fluxes = simulation_results[3] if len(simulation_results) > 3 else None
+    except Exception:
+        objective_result = None
+
+    if objective_result is None:
+        objective_error = 'Run the simulation before delivering Mission 16.'
+
+    return _build_mission16_data(
+        method_name,
+        selected_objective,
+        objective_result,
+        genes,
+        reactions,
+        medium_fluxes=medium_fluxes,
+        objective_error=objective_error,
+    )
+
+
+
+def _mission17_environment_status(reactions):
+    """Evaluate the medium perturbation required for Mission 17.
+
+    The player must close exactly one candidate medium component, and the
+    intended component is phosphate. This teaches that growth depends on
+    essential nutrients, not only on carbon sources or oxygen.
+    """
+    reaction_values = list(reactions.values())
+    closed_candidate_nutrients = []
+    unexpected_changes = []
+
+    for i in range(len(REACTIONS.index)):
+        lb_index = i * 2
+        ub_index = lb_index + 1
+
+        if ub_index >= len(reaction_values):
+            break
+
+        reaction_id = REACTIONS.index[i]
+        lower_bound_open = bool(reaction_values[lb_index])
+        upper_bound_open = bool(reaction_values[ub_index])
+
+        default_lower_bound_open = REACTIONS.lb.iloc[i] != 0
+        default_upper_bound_open = REACTIONS.ub.iloc[i] != 0
+
+        lower_changed = lower_bound_open != default_lower_bound_open
+        upper_changed = upper_bound_open != default_upper_bound_open
+
+        if reaction_id in MISSION17_CANDIDATE_NUTRIENTS:
+            if lower_changed and not lower_bound_open:
+                closed_candidate_nutrients.append(reaction_id)
+            elif lower_changed:
+                unexpected_changes.append(f'{reaction_id} lower bound')
+            if upper_changed:
+                unexpected_changes.append(f'{reaction_id} upper bound')
+            continue
+
+        if lower_changed:
+            unexpected_changes.append(f'{reaction_id} lower bound')
+        if upper_changed:
+            unexpected_changes.append(f'{reaction_id} upper bound')
+
+    return closed_candidate_nutrients, unexpected_changes
+
+
+def _build_mission17_data(method_name, selected_objective, objective_result, genes, reactions, medium_fluxes=None, objective_error=None):
+    knocked_out_genes = _knocked_out_genes(genes)
+    method_correct = method_name == MISSION17_METHOD
+    objective_correct = selected_objective == MISSION17_GROWTH_OBJECTIVE
+
+    objective_value = _as_float_or_none(objective_result)
+    if objective_value is None and str(objective_result) == 'Status: INFEASIBLE':
+        growth_value = 0.0
+        result_available = True
+        infeasible = True
+    else:
+        growth_value = _numeric_result(objective_value)
+        result_available = objective_value is not None
+        infeasible = False
+
+    growth_collapsed = result_available and growth_value <= MISSION17_MAX_GROWTH
+
+    closed_candidate_nutrients, unexpected_environment_changes = _mission17_environment_status(reactions)
+    exactly_one_candidate_closed = len(closed_candidate_nutrients) == 1
+    selected_nutrient = closed_candidate_nutrients[0] if exactly_one_candidate_closed else None
+    target_nutrient_closed = selected_nutrient == MISSION17_TARGET_NUTRIENT
+
+    raw_fluxes, uptake_fluxes, secretion_fluxes = _medium_flux_maps(medium_fluxes)
+    target_uptake = uptake_fluxes.get(MISSION17_TARGET_NUTRIENT, 0.0)
+    target_uptake_blocked = target_nutrient_closed and target_uptake <= 0.001
+
+    mission17_data = {
+        'mission_id': '17',
+        'check_version': 1,
+        'mission_title': 'Essential Medium Component',
+        'target_context': MISSION17_TARGET_CONTEXT,
+        'method': method_name,
+        'target_method': MISSION17_METHOD,
+        'method_correct': method_correct,
+        'selected_objective': selected_objective,
+        'growth_objective': MISSION17_GROWTH_OBJECTIVE,
+        'objective_correct': objective_correct,
+        'objective_result': round(growth_value, 3) if result_available else str(objective_result),
+        'simulation_infeasible': infeasible,
+        'target_nutrient': MISSION17_TARGET_NUTRIENT,
+        'target_nutrient_name': MISSION17_TARGET_NUTRIENT_NAME,
+        'candidate_nutrients': MISSION17_CANDIDATE_NUTRIENTS,
+        'closed_candidate_nutrients': closed_candidate_nutrients,
+        'selected_nutrient': selected_nutrient,
+        'exactly_one_candidate_closed': exactly_one_candidate_closed,
+        'target_nutrient_closed': target_nutrient_closed,
+        'unexpected_environment_changes': unexpected_environment_changes,
+        'knocked_out_genes': knocked_out_genes,
+        'medium_fluxes': medium_fluxes or {},
+        'medium_raw_fluxes': {reaction_id: round(value, 3) for reaction_id, value in raw_fluxes.items()},
+        'medium_uptake_fluxes': {reaction_id: round(value, 3) for reaction_id, value in uptake_fluxes.items()},
+        'medium_secretion_fluxes': {reaction_id: round(value, 3) for reaction_id, value in secretion_fluxes.items()},
+        'target_nutrient_uptake': round(target_uptake, 3),
+        'target_uptake_blocked': target_uptake_blocked,
+        'maximum_growth_after_removal': MISSION17_MAX_GROWTH,
+        'growth_collapsed': growth_collapsed,
+        'result_available': result_available,
+        'ready_to_deliver': (
+            method_correct
+            and objective_correct
+            and exactly_one_candidate_closed
+            and target_nutrient_closed
+            and not unexpected_environment_changes
+            and not knocked_out_genes
+            and growth_collapsed
+            and result_available
+        ),
+    }
+    if objective_error:
+        mission17_data['error'] = objective_error
+    save_mission17_essential_medium_check(mission17_data)
+    return mission17_data
+
+
+def run_mission17_essential_medium_check(simulation_results=None):
+    method_name, selected_objective, genes, reactions = _read_simulation_file()
+
+    objective_result = None
+    medium_fluxes = None
+    objective_error = None
+    try:
+        if simulation_results and simulation_results[0] == selected_objective:
+            objective_result = simulation_results[1]
+            medium_fluxes = simulation_results[3] if len(simulation_results) > 3 else None
+    except Exception:
+        objective_result = None
+
+    if objective_result is None:
+        objective_error = 'Run the simulation before delivering Mission 17.'
+
+    return _build_mission17_data(
+        method_name,
+        selected_objective,
+        objective_result,
+        genes,
+        reactions,
+        medium_fluxes=medium_fluxes,
+        objective_error=objective_error,
+    )
+
+
+def _mission18_environment_status(reactions):
+    """Evaluate the export-bottleneck setup required for Mission 18.
+
+    The player must remove glucose uptake, open pyruvate uptake and close
+    acetate export. This teaches that exchange bounds affect both import and
+    export, and that upper bounds can create secretion bottlenecks.
+    """
+    reaction_values = list(reactions.values())
+    glucose_lower_bound_closed = False
+    pyruvate_lower_bound_open = False
+    acetate_upper_bound_closed = False
+    unexpected_changes = []
+
+    for i in range(len(REACTIONS.index)):
+        lb_index = i * 2
+        ub_index = lb_index + 1
+
+        if ub_index >= len(reaction_values):
+            break
+
+        reaction_id = REACTIONS.index[i]
+        lower_bound_open = bool(reaction_values[lb_index])
+        upper_bound_open = bool(reaction_values[ub_index])
+
+        default_lower_bound_open = REACTIONS.lb.iloc[i] != 0
+        default_upper_bound_open = REACTIONS.ub.iloc[i] != 0
+
+        lower_changed = lower_bound_open != default_lower_bound_open
+        upper_changed = upper_bound_open != default_upper_bound_open
+
+        if reaction_id == MISSION18_BLOCKED_CARBON_SOURCE:
+            glucose_lower_bound_closed = not lower_bound_open
+            if upper_changed:
+                unexpected_changes.append(f'{reaction_id} upper bound')
+            continue
+
+        if reaction_id == MISSION18_ALTERNATIVE_CARBON_SOURCE:
+            pyruvate_lower_bound_open = lower_bound_open
+            if upper_changed:
+                unexpected_changes.append(f'{reaction_id} upper bound')
+            continue
+
+        if reaction_id == MISSION18_EXPORT_BOTTLENECK:
+            acetate_upper_bound_closed = not upper_bound_open
+            if lower_changed:
+                unexpected_changes.append(f'{reaction_id} lower bound')
+            continue
+
+        if lower_changed:
+            unexpected_changes.append(f'{reaction_id} lower bound')
+        if upper_changed:
+            unexpected_changes.append(f'{reaction_id} upper bound')
+
+    return (
+        glucose_lower_bound_closed,
+        pyruvate_lower_bound_open,
+        acetate_upper_bound_closed,
+        unexpected_changes,
+    )
+
+
+def _build_mission18_data(method_name, selected_objective, objective_result, genes, reactions, production_fluxes=None, medium_fluxes=None, objective_error=None):
+    knocked_out_genes = _knocked_out_genes(genes)
+    selected_fluxes = _read_selected_production_fluxes()
+    production_values = _production_flux_value_map(production_fluxes)
+
+    method_correct = method_name == MISSION18_METHOD
+    objective_correct = selected_objective == MISSION18_GROWTH_OBJECTIVE
+    objective_value = _as_float_or_none(objective_result)
+    result_available = objective_value is not None
+    growth_value = _numeric_result(objective_value)
+    growth_ok = result_available and growth_value >= MISSION18_MIN_GROWTH
+
+    (
+        glucose_lower_bound_closed,
+        pyruvate_lower_bound_open,
+        acetate_upper_bound_closed,
+        unexpected_environment_changes,
+    ) = _mission18_environment_status(reactions)
+
+    raw_fluxes, uptake_fluxes, secretion_fluxes = _medium_flux_maps(medium_fluxes)
+    glucose_uptake = uptake_fluxes.get(MISSION18_BLOCKED_CARBON_SOURCE, 0.0)
+    pyruvate_uptake = uptake_fluxes.get(MISSION18_ALTERNATIVE_CARBON_SOURCE, 0.0)
+    acetate_medium_secretion = secretion_fluxes.get(MISSION18_EXPORT_BOTTLENECK, 0.0)
+    acetate_production_flux = production_values.get(MISSION18_EXPORT_BOTTLENECK, 0.0)
+
+    glucose_uptake_blocked = glucose_uptake <= MISSION18_MIN_SOURCE_UPTAKE
+    pyruvate_uptake_detected = pyruvate_uptake >= MISSION18_MIN_SOURCE_UPTAKE
+    acetate_export_blocked = acetate_upper_bound_closed and acetate_production_flux <= MISSION18_MAX_BLOCKED_EXPORT_FLUX
+
+    missing_required_fluxes = [
+        reaction_id
+        for reaction_id in MISSION18_REQUIRED_TRACKED_FLUXES
+        if reaction_id not in selected_fluxes
+    ]
+    tracking_ready = not missing_required_fluxes
+
+    mission18_data = {
+        'mission_id': '18',
+        'check_version': 1,
+        'mission_title': 'Export Bottleneck',
+        'target_context': MISSION18_TARGET_CONTEXT,
+        'method': method_name,
+        'target_method': MISSION18_METHOD,
+        'method_correct': method_correct,
+        'selected_objective': selected_objective,
+        'growth_objective': MISSION18_GROWTH_OBJECTIVE,
+        'objective_correct': objective_correct,
+        'objective_result': round(growth_value, 3) if result_available else str(objective_result),
+        'blocked_carbon_source': MISSION18_BLOCKED_CARBON_SOURCE,
+        'alternative_carbon_source': MISSION18_ALTERNATIVE_CARBON_SOURCE,
+        'export_bottleneck': MISSION18_EXPORT_BOTTLENECK,
+        'export_bottleneck_name': MISSION18_EXPORT_BOTTLENECK_NAME,
+        'glucose_lower_bound_closed': glucose_lower_bound_closed,
+        'pyruvate_lower_bound_open': pyruvate_lower_bound_open,
+        'acetate_upper_bound_closed': acetate_upper_bound_closed,
+        'unexpected_environment_changes': unexpected_environment_changes,
+        'knocked_out_genes': knocked_out_genes,
+        'medium_fluxes': medium_fluxes or {},
+        'medium_uptake_fluxes': {reaction_id: round(value, 3) for reaction_id, value in uptake_fluxes.items()},
+        'medium_secretion_fluxes': {reaction_id: round(value, 3) for reaction_id, value in secretion_fluxes.items()},
+        'glucose_uptake': round(glucose_uptake, 3),
+        'pyruvate_uptake': round(pyruvate_uptake, 3),
+        'acetate_medium_secretion': round(acetate_medium_secretion, 3),
+        'minimum_source_uptake': MISSION18_MIN_SOURCE_UPTAKE,
+        'glucose_uptake_blocked': glucose_uptake_blocked,
+        'pyruvate_uptake_detected': pyruvate_uptake_detected,
+        'selected_fluxes': selected_fluxes,
+        'tracked_flux_values': {reaction_id: round(value, 3) for reaction_id, value in production_values.items()},
+        'required_tracked_fluxes': MISSION18_REQUIRED_TRACKED_FLUXES,
+        'missing_required_fluxes': missing_required_fluxes,
+        'tracking_ready': tracking_ready,
+        'acetate_production_flux': round(acetate_production_flux, 3),
+        'maximum_blocked_export_flux': MISSION18_MAX_BLOCKED_EXPORT_FLUX,
+        'acetate_export_blocked': acetate_export_blocked,
+        'minimum_growth': MISSION18_MIN_GROWTH,
+        'growth_ok': growth_ok,
+        'result_available': result_available,
+        'ready_to_deliver': (
+            method_correct
+            and objective_correct
+            and glucose_lower_bound_closed
+            and glucose_uptake_blocked
+            and pyruvate_lower_bound_open
+            and pyruvate_uptake_detected
+            and acetate_upper_bound_closed
+            and acetate_export_blocked
+            and not unexpected_environment_changes
+            and not knocked_out_genes
+            and tracking_ready
+            and growth_ok
+            and result_available
+        ),
+    }
+    if objective_error:
+        mission18_data['error'] = objective_error
+    save_mission18_export_bottleneck_check(mission18_data)
+    return mission18_data
+
+
+def run_mission18_export_bottleneck_check(simulation_results=None):
+    method_name, selected_objective, genes, reactions = _read_simulation_file()
+
+    objective_result = None
+    production_fluxes = None
+    medium_fluxes = None
+    objective_error = None
+    try:
+        if simulation_results and simulation_results[0] == selected_objective:
+            objective_result = simulation_results[1]
+            production_fluxes = simulation_results[2] if len(simulation_results) > 2 else None
+            medium_fluxes = simulation_results[3] if len(simulation_results) > 3 else None
+    except Exception:
+        objective_result = None
+
+    if objective_result is None:
+        objective_error = 'Run the simulation before delivering Mission 18.'
+
+    return _build_mission18_data(
+        method_name,
+        selected_objective,
+        objective_result,
+        genes,
+        reactions,
+        production_fluxes=production_fluxes,
+        medium_fluxes=medium_fluxes,
+        objective_error=objective_error,
+    )
+
+
+
+def _build_mission19_data(method_name, selected_objective, objective_result, genes, reactions, production_fluxes=None, biomass_flux=None, objective_error=None):
+    """Evaluate Mission 19: lMOMA response to a single gene perturbation."""
+    knocked_out_genes = _knocked_out_genes(genes)
+    selected_fluxes = _read_selected_production_fluxes()
+    flux_values = _production_flux_value_map(production_fluxes)
+
+    method_correct = method_name == MISSION19_TARGET_METHOD
+    objective_correct = selected_objective == MISSION19_GROWTH_OBJECTIVE
+    objective_value = _as_float_or_none(objective_result)
+    biomass_flux_value = _as_float_or_none(biomass_flux)
+    result_available = objective_value is not None
+
+    # lMOMA minimises a perturbation-distance objective. The printed objective
+    # result can therefore be 0 even when the biomass reaction still carries
+    # flux. For viability, use the actual biomass flux from the solution when
+    # it is available.
+    if biomass_flux_value is not None:
+        growth_value = _numeric_result(biomass_flux_value)
+        growth_measure = 'biomass flux from lMOMA solution'
+    else:
+        growth_value = _numeric_result(objective_value)
+        growth_measure = 'objective result'
+
+    growth_ok = result_available and growth_value >= MISSION19_MIN_GROWTH
+
+    environment_changed = _environment_has_changes(reactions)
+    exact_one_knockout = len(knocked_out_genes) == 1
+    target_gene_found = knocked_out_genes == [MISSION19_TARGET_GENE]
+
+    missing_required_fluxes = [
+        reaction_id
+        for reaction_id in MISSION19_REQUIRED_TRACKED_FLUXES
+        if reaction_id not in selected_fluxes
+    ]
+    tracking_ready = not missing_required_fluxes
+
+    mission19_data = {
+        'mission_id': '19',
+        'check_version': 2,
+        'mission_title': 'Perturbation Method Challenge',
+        'target_context': MISSION19_TARGET_CONTEXT,
+        'method': method_name,
+        'target_method': MISSION19_TARGET_METHOD,
+        'method_correct': method_correct,
+        'selected_objective': selected_objective,
+        'growth_objective': MISSION19_GROWTH_OBJECTIVE,
+        'objective_correct': objective_correct,
+        'objective_result': round(_numeric_result(objective_value), 3) if objective_value is not None else str(objective_result),
+        'biomass_flux': round(growth_value, 3) if result_available else None,
+        'growth_measure': growth_measure,
+        'candidate_genes': MISSION19_CANDIDATE_GENES,
+        'target_gene': MISSION19_TARGET_GENE,
+        'target_gene_name': MISSION19_TARGET_GENE_NAME,
+        'knocked_out_genes': knocked_out_genes,
+        'exact_one_knockout': exact_one_knockout,
+        'target_gene_found': target_gene_found,
+        'environment_changed': environment_changed,
+        'selected_fluxes': selected_fluxes,
+        'tracked_flux_values': {reaction_id: round(value, 3) for reaction_id, value in flux_values.items()},
+        'required_tracked_fluxes': MISSION19_REQUIRED_TRACKED_FLUXES,
+        'missing_required_fluxes': missing_required_fluxes,
+        'tracking_ready': tracking_ready,
+        'minimum_growth': MISSION19_MIN_GROWTH,
+        'growth_ok': growth_ok,
+        'result_available': result_available,
+        'ready_to_deliver': (
+            method_correct
+            and objective_correct
+            and exact_one_knockout
+            and target_gene_found
+            and not environment_changed
+            and tracking_ready
+            and growth_ok
+            and result_available
+        ),
+    }
+    if objective_error:
+        mission19_data['error'] = objective_error
+    save_mission19_perturbation_check(mission19_data)
+    return mission19_data
+
+
+def run_mission19_perturbation_check(simulation_results=None):
+    method_name, selected_objective, genes, reactions = _read_simulation_file()
+
+    objective_result = None
+    production_fluxes = None
+    biomass_flux = None
+    objective_error = None
+    try:
+        if simulation_results and simulation_results[0] == selected_objective:
+            objective_result = simulation_results[1]
+            production_fluxes = simulation_results[2] if len(simulation_results) > 2 else None
+    except Exception:
+        objective_result = None
+
+    try:
+        biomass_flux = _simulate_local_reaction_flux(
+            method_name,
+            selected_objective,
+            genes,
+            reactions,
+            MISSION19_GROWTH_OBJECTIVE,
+        )
+    except Exception:
+        biomass_flux = None
+
+    if objective_result is None:
+        objective_error = 'Run the simulation before delivering Mission 19.'
+
+    return _build_mission19_data(
+        method_name,
+        selected_objective,
+        objective_result,
+        genes,
+        reactions,
+        production_fluxes=production_fluxes,
+        biomass_flux=biomass_flux,
+        objective_error=objective_error,
+    )
+
+
+def _mission20_environment_status(reactions):
+    """Evaluate the medium/stress setup required for Mission 20."""
+    reaction_values = list(reactions.values())
+    glucose_lower_bound_closed = False
+    pyruvate_lower_bound_open = False
+    acetate_upper_bound_closed = False
+    unexpected_changes = []
+
+    for i in range(len(REACTIONS.index)):
+        lb_index = i * 2
+        ub_index = lb_index + 1
+
+        if ub_index >= len(reaction_values):
+            break
+
+        reaction_id = REACTIONS.index[i]
+        lower_bound_open = bool(reaction_values[lb_index])
+        upper_bound_open = bool(reaction_values[ub_index])
+
+        default_lower_bound_open = REACTIONS.lb.iloc[i] != 0
+        default_upper_bound_open = REACTIONS.ub.iloc[i] != 0
+
+        lower_changed = lower_bound_open != default_lower_bound_open
+        upper_changed = upper_bound_open != default_upper_bound_open
+
+        if reaction_id == MISSION20_BLOCKED_CARBON_SOURCE:
+            glucose_lower_bound_closed = not lower_bound_open
+            if upper_changed:
+                unexpected_changes.append(f'{reaction_id} upper bound')
+            continue
+
+        if reaction_id == MISSION20_ALTERNATIVE_CARBON_SOURCE:
+            pyruvate_lower_bound_open = lower_bound_open
+            if not lower_changed or not lower_bound_open:
+                unexpected_changes.append(f'{reaction_id} lower bound')
+            if upper_changed:
+                unexpected_changes.append(f'{reaction_id} upper bound')
+            continue
+
+        if reaction_id == MISSION20_EXPORT_BOTTLENECK:
+            acetate_upper_bound_closed = not upper_bound_open
+            if lower_changed:
+                unexpected_changes.append(f'{reaction_id} lower bound')
+            continue
+
+        if lower_changed:
+            unexpected_changes.append(f'{reaction_id} lower bound')
+        if upper_changed:
+            unexpected_changes.append(f'{reaction_id} upper bound')
+
+    return (
+        glucose_lower_bound_closed,
+        pyruvate_lower_bound_open,
+        acetate_upper_bound_closed,
+        unexpected_changes,
+    )
+
+
+def _build_mission20_data(method_name, selected_objective, objective_result, genes, reactions, production_fluxes=None, medium_fluxes=None, objective_error=None):
+    """Evaluate Mission 20: final medium robustness report."""
+    knocked_out_genes = _knocked_out_genes(genes)
+    selected_fluxes = _read_selected_production_fluxes()
+    production_values = _production_flux_value_map(production_fluxes)
+
+    method_correct = method_name == MISSION20_TARGET_METHOD
+    objective_correct = selected_objective == MISSION20_GROWTH_OBJECTIVE
+    objective_value = _as_float_or_none(objective_result)
+    result_available = objective_value is not None
+    growth_value = _numeric_result(objective_value)
+    growth_ok = result_available and growth_value >= MISSION20_MIN_GROWTH
+
+    (
+        glucose_lower_bound_closed,
+        pyruvate_lower_bound_open,
+        acetate_upper_bound_closed,
+        unexpected_environment_changes,
+    ) = _mission20_environment_status(reactions)
+
+    raw_fluxes, uptake_fluxes, secretion_fluxes = _medium_flux_maps(medium_fluxes)
+    glucose_uptake = uptake_fluxes.get(MISSION20_BLOCKED_CARBON_SOURCE, 0.0)
+    pyruvate_uptake = uptake_fluxes.get(MISSION20_ALTERNATIVE_CARBON_SOURCE, 0.0)
+    acetate_medium_secretion = secretion_fluxes.get(MISSION20_EXPORT_BOTTLENECK, 0.0)
+    acetate_production_flux = production_values.get(MISSION20_EXPORT_BOTTLENECK, 0.0)
+
+    glucose_uptake_blocked = glucose_uptake <= MISSION20_MIN_SOURCE_UPTAKE
+    pyruvate_uptake_detected = pyruvate_uptake >= MISSION20_MIN_SOURCE_UPTAKE
+    acetate_export_blocked = acetate_upper_bound_closed and acetate_production_flux <= MISSION20_MAX_BLOCKED_EXPORT_FLUX
+
+    essential_uptake_values = {
+        reaction_id: uptake_fluxes.get(reaction_id, 0.0)
+        for reaction_id in MISSION20_REQUIRED_ESSENTIAL_UPTAKES
+    }
+    missing_essential_uptakes = [
+        reaction_id
+        for reaction_id, value in essential_uptake_values.items()
+        if value < MISSION20_MIN_ESSENTIAL_UPTAKE
+    ]
+    essential_uptake_ready = not missing_essential_uptakes
+
+    missing_required_fluxes = [
+        reaction_id
+        for reaction_id in MISSION20_REQUIRED_TRACKED_FLUXES
+        if reaction_id not in selected_fluxes
+    ]
+    tracking_ready = not missing_required_fluxes
+
+    tracked_byproduct_values = {
+        reaction_id: round(production_values.get(reaction_id, 0.0), 3)
+        for reaction_id in MISSION20_REQUIRED_TRACKED_FLUXES
+    }
+    positive_tracked_products = [
+        reaction_id
+        for reaction_id, value in tracked_byproduct_values.items()
+        if value > 0.001
+    ]
+
+    mission20_data = {
+        'mission_id': '20',
+        'check_version': 1,
+        'mission_title': 'Final Medium Robustness Report',
+        'target_context': MISSION20_TARGET_CONTEXT,
+        'method': method_name,
+        'target_method': MISSION20_TARGET_METHOD,
+        'method_correct': method_correct,
+        'selected_objective': selected_objective,
+        'growth_objective': MISSION20_GROWTH_OBJECTIVE,
+        'objective_correct': objective_correct,
+        'objective_result': round(growth_value, 3) if result_available else str(objective_result),
+        'blocked_carbon_source': MISSION20_BLOCKED_CARBON_SOURCE,
+        'alternative_carbon_source': MISSION20_ALTERNATIVE_CARBON_SOURCE,
+        'export_bottleneck': MISSION20_EXPORT_BOTTLENECK,
+        'export_bottleneck_name': MISSION20_EXPORT_BOTTLENECK_NAME,
+        'glucose_lower_bound_closed': glucose_lower_bound_closed,
+        'pyruvate_lower_bound_open': pyruvate_lower_bound_open,
+        'acetate_upper_bound_closed': acetate_upper_bound_closed,
+        'unexpected_environment_changes': unexpected_environment_changes,
+        'knocked_out_genes': knocked_out_genes,
+        'medium_fluxes': medium_fluxes or {},
+        'medium_uptake_fluxes': {reaction_id: round(value, 3) for reaction_id, value in uptake_fluxes.items()},
+        'medium_secretion_fluxes': {reaction_id: round(value, 3) for reaction_id, value in secretion_fluxes.items()},
+        'glucose_uptake': round(glucose_uptake, 3),
+        'pyruvate_uptake': round(pyruvate_uptake, 3),
+        'acetate_medium_secretion': round(acetate_medium_secretion, 3),
+        'essential_uptake_values': {reaction_id: round(value, 3) for reaction_id, value in essential_uptake_values.items()},
+        'required_essential_uptakes': MISSION20_REQUIRED_ESSENTIAL_UPTAKES,
+        'missing_essential_uptakes': missing_essential_uptakes,
+        'essential_uptake_ready': essential_uptake_ready,
+        'minimum_source_uptake': MISSION20_MIN_SOURCE_UPTAKE,
+        'minimum_essential_uptake': MISSION20_MIN_ESSENTIAL_UPTAKE,
+        'glucose_uptake_blocked': glucose_uptake_blocked,
+        'pyruvate_uptake_detected': pyruvate_uptake_detected,
+        'selected_fluxes': selected_fluxes,
+        'tracked_flux_values': tracked_byproduct_values,
+        'positive_tracked_products': positive_tracked_products,
+        'required_tracked_fluxes': MISSION20_REQUIRED_TRACKED_FLUXES,
+        'missing_required_fluxes': missing_required_fluxes,
+        'tracking_ready': tracking_ready,
+        'acetate_production_flux': round(acetate_production_flux, 3),
+        'maximum_blocked_export_flux': MISSION20_MAX_BLOCKED_EXPORT_FLUX,
+        'acetate_export_blocked': acetate_export_blocked,
+        'minimum_growth': MISSION20_MIN_GROWTH,
+        'growth_ok': growth_ok,
+        'result_available': result_available,
+        'ready_to_deliver': (
+            method_correct
+            and objective_correct
+            and glucose_lower_bound_closed
+            and glucose_uptake_blocked
+            and pyruvate_lower_bound_open
+            and pyruvate_uptake_detected
+            and acetate_upper_bound_closed
+            and acetate_export_blocked
+            and essential_uptake_ready
+            and not unexpected_environment_changes
+            and not knocked_out_genes
+            and tracking_ready
+            and growth_ok
+            and result_available
+        ),
+    }
+    if objective_error:
+        mission20_data['error'] = objective_error
+    save_mission20_robustness_report_check(mission20_data)
+    return mission20_data
+
+
+def run_mission20_robustness_report_check(simulation_results=None):
+    method_name, selected_objective, genes, reactions = _read_simulation_file()
+
+    objective_result = None
+    production_fluxes = None
+    medium_fluxes = None
+    objective_error = None
+    try:
+        if simulation_results and simulation_results[0] == selected_objective:
+            objective_result = simulation_results[1]
+            production_fluxes = simulation_results[2] if len(simulation_results) > 2 else None
+            medium_fluxes = simulation_results[3] if len(simulation_results) > 3 else None
+    except Exception:
+        objective_result = None
+
+    if objective_result is None:
+        objective_error = 'Run the simulation before delivering Mission 20.'
+
+    return _build_mission20_data(
+        method_name,
+        selected_objective,
+        objective_result,
+        genes,
+        reactions,
+        production_fluxes=production_fluxes,
+        medium_fluxes=medium_fluxes,
+        objective_error=objective_error,
+    )
+
+
 def run_mission10_robust_design_check(simulation_results=None):
     _method_name, selected_objective, genes, reactions = _read_simulation_file()
 
@@ -1898,14 +2913,14 @@ def run_mission05_production_check():
 def run_simul():
     method_name, objective_name, genes, reactions = _read_simulation_file()
     selected_fluxes = _read_selected_production_fluxes()
-    results, production_fluxes = _simulate_local_objective_with_production_fluxes(
+    results, production_fluxes, medium_fluxes = _simulate_local_objective_with_production_fluxes(
         method_name,
         objective_name,
         genes,
         reactions,
         selected_fluxes,
     )
-    return objective_name, results, production_fluxes
+    return objective_name, results, production_fluxes, medium_fluxes
 
 
 def run_challenge_score():
@@ -2001,24 +3016,34 @@ def run_simul_remote(backend_url):
         return payload['objective'], f'Error: {e}', _build_production_flux_data(
             selected_fluxes,
             error=f'Backend error: {e}'
+        ), _build_medium_flux_data(
+            error=f'Backend error: {e}'
         )
 
     if response.get('status') == 'ok':
         fluxes = response.get('fluxes') or {}
+        flux_getter = lambda reaction_id: fluxes.get(reaction_id)
         return response['objective'], response['result'], _build_production_flux_data(
             selected_fluxes,
-            flux_getter=lambda reaction_id: fluxes.get(reaction_id)
+            flux_getter=flux_getter
+        ), _build_medium_flux_data(
+            flux_getter=flux_getter
         )
     if response.get('status') == 'infeasible':
         return response['objective'], 'Status: INFEASIBLE', _build_production_flux_data(
             selected_fluxes,
             error='Simulation infeasible. Production fluxes could not be measured.'
+        ), _build_medium_flux_data(
+            error='Simulation infeasible. Medium fluxes could not be measured.'
         )
     return (
         response.get('objective', payload['objective']),
         f'Error: {response.get("message", "unknown")}',
         _build_production_flux_data(
             selected_fluxes,
+            error=response.get('message', 'unknown backend error')
+        ),
+        _build_medium_flux_data(
             error=response.get('message', 'unknown backend error')
         )
     )

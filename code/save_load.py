@@ -372,6 +372,87 @@ def load_mission15_diagnostic_report_check():
         return None
 
 
+
+def save_mission16_medium_report_check(data):
+    if _IS_WEB:
+        _MEMSTORE['mission16_medium_report_check'] = data
+        return
+    with open(get_save_path('mission16_medium_report_check.txt'), 'w') as report_file:
+        json.dump(data, report_file)
+
+
+def load_mission16_medium_report_check():
+    if _IS_WEB:
+        return _MEMSTORE.get('mission16_medium_report_check')
+    try:
+        with open(get_save_path('mission16_medium_report_check.txt')) as report_file:
+            return json.load(report_file)
+    except FileNotFoundError:
+        return None
+    except Exception:
+        return None
+
+
+def save_mission17_essential_medium_check(data):
+    if _IS_WEB:
+        _MEMSTORE['mission17_essential_medium_check'] = data
+        return
+    with open(get_save_path('mission17_essential_medium_check.txt'), 'w') as report_file:
+        json.dump(data, report_file)
+
+
+def load_mission17_essential_medium_check():
+    if _IS_WEB:
+        return _MEMSTORE.get('mission17_essential_medium_check')
+    try:
+        with open(get_save_path('mission17_essential_medium_check.txt')) as report_file:
+            return json.load(report_file)
+    except FileNotFoundError:
+        return None
+    except Exception:
+        return None
+
+
+def save_mission18_export_bottleneck_check(data):
+    if _IS_WEB:
+        _MEMSTORE['mission18_export_bottleneck_check'] = data
+        return
+    with open(get_save_path('mission18_export_bottleneck_check.txt'), 'w') as report_file:
+        json.dump(data, report_file)
+
+
+def load_mission18_export_bottleneck_check():
+    if _IS_WEB:
+        return _MEMSTORE.get('mission18_export_bottleneck_check')
+    try:
+        with open(get_save_path('mission18_export_bottleneck_check.txt')) as report_file:
+            return json.load(report_file)
+    except FileNotFoundError:
+        return None
+    except Exception:
+        return None
+
+
+def save_mission19_perturbation_check(data):
+    if _IS_WEB:
+        _MEMSTORE['mission19_perturbation_check'] = data
+        return
+    with open(get_save_path('mission19_perturbation_check.txt'), 'w') as report_file:
+        json.dump(data, report_file)
+
+
+def load_mission19_perturbation_check():
+    if _IS_WEB:
+        return _MEMSTORE.get('mission19_perturbation_check')
+    try:
+        with open(get_save_path('mission19_perturbation_check.txt')) as report_file:
+            return json.load(report_file)
+    except FileNotFoundError:
+        return None
+    except Exception:
+        return None
+
+
 def clear_challenge_score():
     _delete_save_artifact('challenge_score', 'challenge_score.txt')
 
@@ -410,4 +491,46 @@ def clear_mission14_reduction_check():
 
 def clear_mission15_diagnostic_report_check():
     _delete_save_artifact('mission15_diagnostic_report_check', 'mission15_diagnostic_report_check.txt')
+
+
+def clear_mission16_medium_report_check():
+    _delete_save_artifact('mission16_medium_report_check', 'mission16_medium_report_check.txt')
+
+
+def clear_mission17_essential_medium_check():
+    _delete_save_artifact('mission17_essential_medium_check', 'mission17_essential_medium_check.txt')
+
+
+
+def clear_mission18_export_bottleneck_check():
+    _delete_save_artifact('mission18_export_bottleneck_check', 'mission18_export_bottleneck_check.txt')
+
+
+def clear_mission19_perturbation_check():
+    _delete_save_artifact('mission19_perturbation_check', 'mission19_perturbation_check.txt')
+
+
+
+def save_mission20_robustness_report_check(data):
+    if _IS_WEB:
+        _MEMSTORE['mission20_robustness_report_check'] = data
+        return
+    with open(get_save_path('mission20_robustness_report_check.txt'), 'w') as report_file:
+        json.dump(data, report_file)
+
+
+def load_mission20_robustness_report_check():
+    if _IS_WEB:
+        return _MEMSTORE.get('mission20_robustness_report_check')
+    try:
+        with open(get_save_path('mission20_robustness_report_check.txt')) as report_file:
+            return json.load(report_file)
+    except FileNotFoundError:
+        return None
+    except Exception:
+        return None
+
+
+def clear_mission20_robustness_report_check():
+    _delete_save_artifact('mission20_robustness_report_check', 'mission20_robustness_report_check.txt')
 
