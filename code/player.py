@@ -6,9 +6,11 @@ import time
 from utils import *
 
 class Player(pygame.sprite.Sprite):
-    def __init__(self, pos, group, collision_sprites, tree_sprites, interaction, soil_layer, toggle_shop, desk_menu, books, ecoli, inventory2, talk_1, talk_2, talk_3, talk_7, talk_11, talk_16, dialogues):
+    def __init__(self, pos, group, collision_sprites, tree_sprites, interaction, soil_layer, toggle_shop, desk_menu, books, ecoli, inventory2, talk_1, talk_2, talk_3, talk_7, talk_11, talk_16, dialogues, skin_manager=None):
         super().__init__(group)
 
+        self.skin_manager = skin_manager
+        self.current_skin_id = getattr(skin_manager, 'default_skin_id', 'default')
         self.import_assets()
         self.status = 'down_idle'
         self.frame_index = 0
@@ -145,6 +147,11 @@ class Player(pygame.sprite.Sprite):
         self.status = saved_status
         self.frame_index = 0
         self.image = self.animations[self.status][self.frame_index]
+
+        saved_skin_id = player_state.get('skin_id')
+        if saved_skin_id:
+            self.set_skin(saved_skin_id)
+
         self.update_interaction_area()
         self.get_target_pos()
 
@@ -155,7 +162,8 @@ class Player(pygame.sprite.Sprite):
             'x': float(self.pos.x),
             'y': float(self.pos.y),
             'facing': facing,
-            'status': self.status
+            'status': self.status,
+            'skin_id': self.current_skin_id
         }
 
     def get_save_data(self):
@@ -181,6 +189,11 @@ class Player(pygame.sprite.Sprite):
     
         
     def import_assets(self):
+        if self.skin_manager is not None:
+            self.animations = self.skin_manager.get_animations(self.current_skin_id)
+            return
+
+        # Fallback used only if Player is created without SkinManager.
         self.animations = {'up': [], 'down': [], 'left': [], 'right': [],
                            'right_idle': [], 'left_idle': [], 'up_idle': [], 'down_idle': []}
         
@@ -188,6 +201,28 @@ class Player(pygame.sprite.Sprite):
             path_1 = get_resource_path('graphics/character/')
             full_path = path_1 + animation
             self.animations[animation] = import_folder(full_path)
+
+    def set_skin(self, skin_id):
+        if self.skin_manager is None or not self.skin_manager.is_valid_skin(skin_id):
+            return False
+        if not self.skin_manager.is_unlocked(skin_id):
+            return False
+
+        center = self.rect.center if hasattr(self, 'rect') else None
+        self.current_skin_id = skin_id
+        self.animations = self.skin_manager.get_animations(skin_id)
+
+        if self.status not in self.animations:
+            self.status = 'down_idle'
+        self.frame_index = 0
+        self.image = self.animations[self.status][self.frame_index]
+
+        if center is not None:
+            self.rect = self.image.get_rect(center=center)
+            self.hitbox.center = self.rect.center
+            self.update_interaction_area()
+            self.get_target_pos()
+        return True
     
     def animate(self, dt):
         self.frame_index += 4 * dt

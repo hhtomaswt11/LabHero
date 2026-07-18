@@ -77,7 +77,7 @@ class Mission20_info:
             This final Rio challenge combines method choice, medium changes,
             exchange-bound stress and flux evidence.
 
-            Use the Medium Report to inspect uptake from the environment.
+            Use the Exchange Flux Report to inspect uptake from the environment.
             Use Production Flux to inspect exported products and byproducts.
             """,
             max_char=-1,
@@ -101,7 +101,7 @@ class Mission20_info:
             Dr. Rio final robustness challenge.
 
             Build a viable medium design under exchange-bound stress and justify it
-            using both uptake evidence and production-flux evidence.
+            using both Exchange Flux Report evidence and Production Flux evidence.
 
             Use {MISSION20_TARGET_METHOD} with the growth objective.
             Keep the strain unchanged.
@@ -115,7 +115,7 @@ class Mission20_info:
             Export bottleneck target:
             {MISSION20_EXPORT_BOTTLENECK_NAME} ({MISSION20_EXPORT_BOTTLENECK})
 
-            Essential uptake evidence:
+            Required Exchange Flux evidence:
             {'  '.join(MISSION20_REQUIRED_ESSENTIAL_UPTAKES)}
 
             Required Production Flux evidence:
@@ -186,7 +186,7 @@ class Mission20_info:
         elif not report_data.get('pyruvate_uptake_detected'):
             animation_text_save('Pyruvate is selected but not being consumed enough yet.', time=3000)
         elif not report_data.get('essential_uptake_ready'):
-            animation_text_save('The Medium Report is missing essential uptake evidence.', time=3000)
+            animation_text_save('The Exchange Flux Report is missing essential uptake evidence.', time=3000)
         elif not report_data.get('acetate_export_blocked'):
             animation_text_save('Acetate export is still not constrained enough.', time=3000)
         elif not report_data.get('growth_ok'):

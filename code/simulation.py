@@ -198,6 +198,29 @@ MISSION20_MIN_SOURCE_UPTAKE = 0.001
 MISSION20_MIN_ESSENTIAL_UPTAKE = 0.001
 MISSION20_MAX_BLOCKED_EXPORT_FLUX = 0.001
 
+
+EXCHANGE_FLUX_REPORT_REACTION_IDS = [
+    'EX_glc__D_e',   # D-Glucose
+    'EX_fru_e',      # D-Fructose
+    'EX_ac_e',       # Acetate
+    'EX_pyr_e',      # Pyruvate
+    'EX_mal__L_e',   # L-Malate
+    'EX_fum_e',      # Fumarate
+    'EX_akg_e',      # 2-Oxoglutarate
+    'EX_succ_e',     # Succinate
+    'EX_etoh_e',     # Ethanol
+    'EX_for_e',      # Formate
+    'EX_lac__D_e',   # D-lactate
+    'EX_nh4_e',      # Ammonia
+    'EX_pi_e',       # Phosphate
+    'EX_o2_e',       # Oxygen
+    'EX_co2_e',      # CO2
+    'EX_h2o_e',      # Water
+    'EX_h_e',        # Protons
+    'EX_gln__L_e',   # L-Glutamine
+    'EX_glu__L_e',   # L-Glutamate
+]
+
 VILLAIN_SCORE = 14500.0
 
 
@@ -850,7 +873,7 @@ def _build_medium_flux_data(reaction_ids=None, flux_getter=None, error=None):
     flux means secretion/export. Production Flux already focuses on exported
     products; this report focuses on what the model is taking from the medium.
     """
-    reaction_ids = reaction_ids or MISSION16_REQUIRED_MEDIUM_FLUXES
+    reaction_ids = reaction_ids or EXCHANGE_FLUX_REPORT_REACTION_IDS
     reaction_ids = [reaction_id for reaction_id in reaction_ids if reaction_id in list(REACTIONS.index)]
 
     data = {

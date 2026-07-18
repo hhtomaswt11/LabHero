@@ -184,6 +184,87 @@ def _build_production_fluxes_text(production_fluxes):
     return '\n'.join(lines)
 
 
+
+def _exchange_items_by_id(exchange_fluxes):
+    items = {}
+    if not exchange_fluxes or exchange_fluxes.get('error'):
+        return items
+
+    for item in exchange_fluxes.get('items') or []:
+        reaction_id = item.get('reaction_id')
+        if reaction_id:
+            items[reaction_id] = item
+    return items
+
+
+def _format_exchange_flux_line(reaction_id, items_by_id):
+    item = items_by_id.get(reaction_id)
+    if not item:
+        return f'- {reaction_id}: not measured'
+
+    label = item.get('label') or reaction_id
+    if item.get('error'):
+        return f'- {label}: not available'
+
+    raw_flux = float(item.get('raw_flux', 0.0))
+    uptake_flux = float(item.get('uptake_flux', 0.0))
+    secretion_flux = float(item.get('secretion_flux', 0.0))
+
+    if uptake_flux > 0.001:
+        status = f'consumed / uptake {uptake_flux:.3f}'
+    elif secretion_flux > 0.001:
+        status = f'secreted / export {secretion_flux:.3f}'
+    else:
+        status = 'no exchange detected'
+
+    return f'- {label}: {raw_flux:.3f} -> {status}'
+
+
+def _build_exchange_flux_report_text(exchange_fluxes):
+    if not exchange_fluxes:
+        return 'Exchange Flux Report\n\nRun a simulation first to generate exchange-flux evidence.'
+
+    if exchange_fluxes.get('error'):
+        return f"Exchange Flux Report\n\nError: {exchange_fluxes.get('error')}"
+
+    items_by_id = _exchange_items_by_id(exchange_fluxes)
+
+    sections = [
+        (
+            'Carbon and medium sources',
+            ['EX_glc__D_e', 'EX_fru_e', 'EX_ac_e', 'EX_pyr_e', 'EX_mal__L_e', 'EX_fum_e', 'EX_akg_e', 'EX_succ_e', 'EX_gln__L_e', 'EX_glu__L_e']
+        ),
+        (
+            'Essential nutrients and respiration',
+            ['EX_nh4_e', 'EX_pi_e', 'EX_o2_e', 'EX_co2_e', 'EX_h2o_e', 'EX_h_e']
+        ),
+        (
+            'Products and byproducts',
+            ['EX_ac_e', 'EX_etoh_e', 'EX_for_e', 'EX_lac__D_e', 'EX_succ_e', 'EX_co2_e']
+        ),
+    ]
+
+    lines = [
+        'Exchange Flux Report',
+        '',
+        'Exchange reactions connect the cell to the medium.',
+        'Negative flux means uptake/consumption. Positive flux means secretion/export.',
+        '',
+    ]
+
+    for title, reaction_ids in sections:
+        measured_ids = [reaction_id for reaction_id in reaction_ids if reaction_id in items_by_id]
+        if not measured_ids:
+            continue
+        lines.append(f'{title}:')
+        for reaction_id in measured_ids:
+            lines.append(_format_exchange_flux_line(reaction_id, items_by_id))
+        lines.append('')
+
+    lines.append('Use this report to verify what the model consumes from the medium and what it secretes after the simulation.')
+    return '\n'.join(lines)
+
+
 def _build_simulation_results_text(results):
     try:
         objective_name = results[0]
@@ -1431,9 +1512,9 @@ def _build_mission20_text(report_data):
         else 'Objective: use the biomass objective to evaluate growth viability.'
     )
     carbon_status = (
-        'Carbon source: glucose blocked and pyruvate uptake detected.'
+        'Carbon source: glucose blocked and pyruvate uptake detected in the Exchange Flux Report.'
         if report_data.get('glucose_uptake_blocked') and report_data.get('pyruvate_uptake_detected')
-        else 'Carbon source: verify glucose removal and pyruvate uptake in the Medium Report.'
+        else 'Carbon source: verify glucose removal and pyruvate uptake in the Exchange Flux Report.'
     )
     bottleneck_status = (
         'Export stress: acetate export bottleneck detected.'
@@ -1443,7 +1524,7 @@ def _build_mission20_text(report_data):
     essential_status = (
         'Essential uptake: required nutrient uptake evidence detected.'
         if report_data.get('essential_uptake_ready')
-        else 'Essential uptake: Medium Report is missing required nutrient evidence.'
+        else 'Essential uptake: Exchange Flux Report is missing required nutrient evidence.'
     )
     environment_status = (
         'Extra medium changes: none.'
@@ -1504,7 +1585,7 @@ def _build_mission20_text(report_data):
         f"Selected objective: {report_data.get('selected_objective')}\n"
         f"Growth/objective result: {report_data.get('objective_result')}\n"
         f"Knocked-out genes: {knocked_out}\n\n"
-        f"Medium uptake evidence:\n{medium_text}\n"
+        f"Exchange Flux Report evidence:\n{medium_text}\n"
         f"Missing essential uptake evidence: {missing_uptakes_text}\n\n"
         f"Production/byproduct evidence:\n{flux_text}\n"
         f"Missing production evidence: {missing_fluxes_text}\n\n"
@@ -1976,6 +2057,36 @@ class Window:
             else:
                 self.results = run_simul()
 
+            exchange_flux_data = None
+            try:
+                exchange_flux_data = self.results[3] if len(self.results) > 3 else None
+            except Exception:
+                exchange_flux_data = None
+
+            menu_exchange_report = pygame_menu.Menu(
+                height=720,
+                center_content=False,
+                onclose=pygame_menu.events.BACK,
+                theme=mytheme,
+                title='Exchange Flux Report',
+                width=1280,
+                menu_id='menu_exchange_flux_report'
+            )
+            menu_exchange_report.add.vertical_margin(20)
+            menu_exchange_report.add.label(
+                _build_exchange_flux_report_text(exchange_flux_data),
+                wordwrap=True,
+                padding=(20, 20, 20, 20),
+                background_color='white',
+                font_size=24
+            )
+            menu_exchange_report.add.vertical_margin(20)
+            menu_exchange_report.add.button(
+                'Back',
+                pygame_menu.events.BACK,
+                background_color=(70, 70, 70)
+            )
+
             mission07_data = None
             if '07' in self.player.missions_activated and '07' not in self.player.missions_completed:
                 mission07_data = run_mission07_objective_check(self.results)
@@ -2082,6 +2193,14 @@ class Window:
                 font_color='white',
                 background_color=(20, 100, 100),
                 button_id='simulation_summary'
+            )
+            menu_simul.add.vertical_margin(10)
+            menu_simul.add.button(
+                'Exchange Flux Report',
+                menu_exchange_report,
+                font_color='white',
+                background_color=(20, 100, 100),
+                button_id='exchange_flux_report'
             )
             menu_simul.add.vertical_margin(20)
 

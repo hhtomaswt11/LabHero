@@ -75,7 +75,8 @@ DEFAULT_PLAYER_STATE = {
     'x': None,
     'y': None,
     'facing': 'down',
-    'status': 'down_idle'
+    'status': 'down_idle',
+    'skin_id': 'default'
 }
 
 DEFAULT_INVENTORY_2 = [

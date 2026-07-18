@@ -21,6 +21,8 @@ from dialogues import Dialogues
 from save_load import save_file
 from functions import *
 from utils import *
+from skins import SkinManager
+from skin_menu import SkinSelectionMenu
 
 class Level:
 	def __init__(self, load_game):
@@ -36,6 +38,9 @@ class Level:
 		self.collision_sprites = pygame.sprite.Group()
 		self.tree_sprites = pygame.sprite.Group()
 		self.interaction_sprites = pygame.sprite.Group()
+
+		# Character skin system: load all skin sprite frames once.
+		self.skin_manager = SkinManager()
 
 		self.soil_layer = SoilLayer(self.all_sprites, self.collision_sprites)
 		self.setup()
@@ -63,6 +68,9 @@ class Level:
 		self.ecoli = Ecoli(self.see_ecoli)
 		self.dialogues = Dialogues(self.toggle_dialogue, self.player)
 		self.dialogues_active = False
+		self.skin_menu_active = False
+		self.skin_menu = SkinSelectionMenu(self.skin_manager, self.player)
+		self.skin_open_key_locked = False
 
 		# sounds
 		success_path = get_resource_path('audio/success.ogg')
@@ -140,7 +148,8 @@ class Level:
 					talk_7 = self.toggle_talk_7,
 					talk_11 = self.toggle_talk_11,
 					talk_16 = self.toggle_talk_16,
-					dialogues = self.toggle_dialogue
+					dialogues = self.toggle_dialogue,
+					skin_manager = self.skin_manager
 					# music = self.music_bg
 					)
 			
@@ -232,6 +241,29 @@ class Level:
 	def see_ecoli(self):
 		self.ecoli_active = not self.ecoli_active
 
+	def any_modal_active(self):
+		return (
+			self.menu_active or
+			self.desk_active or
+			self.books_active or
+			self.ecoli_active or
+			self.talk_1_active or
+			self.talk_2_active or
+			self.talk_3_active or
+			self.talk_7_active or
+			self.talk_11_active or
+			self.talk_16_active or
+			self.dialogues_active
+		)
+
+	def handle_skin_menu_shortcut(self):
+		keys = pygame.key.get_pressed()
+		c_pressed = keys[pygame.K_c]
+		if c_pressed and not self.skin_open_key_locked and not self.any_modal_active():
+			self.skin_menu.open()
+			self.skin_menu_active = True
+		self.skin_open_key_locked = c_pressed
+
 	def plant_collision(self):
 		if self.soil_layer.plant_sprites: # se houver plantas
 			for plant in self.soil_layer.plant_sprites.sprites():
@@ -267,6 +299,18 @@ class Level:
 		# drawing logic
 		self.display_surface.fill('black')
 		self.all_sprites.custom_draw(self.player)
+
+		if self.skin_menu_active:
+			result = self.skin_menu.update()
+			self.skin_menu.draw()
+			if result in ('confirm', 'cancel'):
+				self.skin_menu_active = False
+			return
+
+		self.handle_skin_menu_shortcut()
+		if self.skin_menu_active:
+			self.skin_menu.draw()
+			return
 
 		#updates
 		if self.menu_active:
