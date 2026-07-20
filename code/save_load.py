@@ -534,3 +534,157 @@ def load_mission20_robustness_report_check():
 def clear_mission20_robustness_report_check():
     _delete_save_artifact('mission20_robustness_report_check', 'mission20_robustness_report_check.txt')
 
+
+def save_compare_runs(data):
+    """Store the two runs used by the Compare Runs report.
+
+    Schema:
+    {
+        'run_a': snapshot or None,
+        'run_b': snapshot or None,
+    }
+    """
+    if _IS_WEB:
+        _MEMSTORE['compare_runs'] = data
+        return
+    with open(get_save_path('compare_runs.txt'), 'w') as compare_file:
+        json.dump(data, compare_file)
+
+
+def load_compare_runs():
+    if _IS_WEB:
+        return _MEMSTORE.get('compare_runs')
+    try:
+        with open(get_save_path('compare_runs.txt')) as compare_file:
+            return json.load(compare_file)
+    except FileNotFoundError:
+        return None
+    except Exception:
+        return None
+
+
+def clear_compare_runs():
+    _delete_save_artifact('compare_runs', 'compare_runs.txt')
+
+
+def save_mission21_comparison_check(data):
+    if _IS_WEB:
+        _MEMSTORE['mission21_comparison_check'] = data
+        return
+    with open(get_save_path('mission21_comparison_check.txt'), 'w') as report_file:
+        json.dump(data, report_file)
+
+
+def load_mission21_comparison_check():
+    if _IS_WEB:
+        return _MEMSTORE.get('mission21_comparison_check')
+    try:
+        with open(get_save_path('mission21_comparison_check.txt')) as report_file:
+            return json.load(report_file)
+    except FileNotFoundError:
+        return None
+    except Exception:
+        return None
+
+
+def clear_mission21_comparison_check():
+    _delete_save_artifact('mission21_comparison_check', 'mission21_comparison_check.txt')
+
+
+
+
+def save_mission22_comparison_check(data):
+    if _IS_WEB:
+        _MEMSTORE['mission22_comparison_check'] = data
+        return
+    with open(get_save_path('mission22_comparison_check.txt'), 'w') as report_file:
+        json.dump(data, report_file)
+
+
+def load_mission22_comparison_check():
+    if _IS_WEB:
+        return _MEMSTORE.get('mission22_comparison_check')
+    try:
+        with open(get_save_path('mission22_comparison_check.txt')) as report_file:
+            return json.load(report_file)
+    except FileNotFoundError:
+        return None
+    except Exception:
+        return None
+
+
+def clear_mission22_comparison_check():
+    _delete_save_artifact('mission22_comparison_check', 'mission22_comparison_check.txt')
+
+
+def save_mission23_comparison_check(data):
+    if _IS_WEB:
+        _MEMSTORE['mission23_comparison_check'] = data
+        return
+    with open(get_save_path('mission23_comparison_check.txt'), 'w') as report_file:
+        json.dump(data, report_file)
+
+
+def load_mission23_comparison_check():
+    if _IS_WEB:
+        return _MEMSTORE.get('mission23_comparison_check')
+    try:
+        with open(get_save_path('mission23_comparison_check.txt')) as report_file:
+            return json.load(report_file)
+    except FileNotFoundError:
+        return None
+    except Exception:
+        return None
+
+
+def clear_mission23_comparison_check():
+    _delete_save_artifact('mission23_comparison_check', 'mission23_comparison_check.txt')
+
+
+def save_mission24_comparison_check(data):
+    if _IS_WEB:
+        _MEMSTORE['mission24_comparison_check'] = data
+        return
+    with open(get_save_path('mission24_comparison_check.txt'), 'w') as report_file:
+        json.dump(data, report_file)
+
+
+def load_mission24_comparison_check():
+    if _IS_WEB:
+        return _MEMSTORE.get('mission24_comparison_check')
+    try:
+        with open(get_save_path('mission24_comparison_check.txt')) as report_file:
+            return json.load(report_file)
+    except FileNotFoundError:
+        return None
+    except Exception:
+        return None
+
+
+def clear_mission24_comparison_check():
+    _delete_save_artifact('mission24_comparison_check', 'mission24_comparison_check.txt')
+
+
+def save_mission25_comparison_check(data):
+    if _IS_WEB:
+        _MEMSTORE['mission25_comparison_check'] = data
+        return
+    with open(get_save_path('mission25_comparison_check.txt'), 'w') as report_file:
+        json.dump(data, report_file)
+
+
+def load_mission25_comparison_check():
+    if _IS_WEB:
+        return _MEMSTORE.get('mission25_comparison_check')
+    try:
+        with open(get_save_path('mission25_comparison_check.txt')) as report_file:
+            return json.load(report_file)
+    except FileNotFoundError:
+        return None
+    except Exception:
+        return None
+
+
+def clear_mission25_comparison_check():
+    _delete_save_artifact('mission25_comparison_check', 'mission25_comparison_check.txt')
+

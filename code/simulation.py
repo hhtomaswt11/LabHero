@@ -198,6 +198,51 @@ MISSION20_MIN_SOURCE_UPTAKE = 0.001
 MISSION20_MIN_ESSENTIAL_UPTAKE = 0.001
 MISSION20_MAX_BLOCKED_EXPORT_FLUX = 0.001
 
+MISSION21_METHOD = 'FBA'
+MISSION21_GROWTH_OBJECTIVE = 'BIOMASS_Ecoli_core_w_GAM'
+MISSION21_OXYGEN_REACTION = 'EX_o2_e'
+MISSION21_TARGET_CONTEXT = 'controlled comparison: aerobic vs anaerobic growth'
+MISSION21_MIN_VIABLE_GROWTH = 0.1
+MISSION21_MIN_GROWTH_DROP = 1.0
+
+MISSION22_METHOD = 'FBA'
+MISSION22_GROWTH_OBJECTIVE = 'BIOMASS_Ecoli_core_w_GAM'
+MISSION22_TARGET_CONTEXT = 'controlled comparison: no knockout vs production knockout'
+MISSION22_TARGET_PRODUCT = 'ethanol'
+MISSION22_TARGET_FLUX = 'EX_etoh_e'
+MISSION22_TARGET_GENE = 'b2297'
+MISSION22_TARGET_GENE_NAME = 'pta'
+MISSION22_CANDIDATE_GENES = ['b0728', 'b1241', 'b2975', 'b2297', 'b0723']
+MISSION22_MIN_GROWTH = 1.0
+MISSION22_MIN_PRODUCTION_INCREASE = 20.0
+
+MISSION23_METHOD = 'FBA'
+MISSION23_TARGET_CONTEXT = 'controlled comparison: biomass objective vs product objective'
+MISSION23_BASELINE_OBJECTIVE = 'BIOMASS_Ecoli_core_w_GAM'
+MISSION23_TARGET_OBJECTIVE = 'EX_etoh_e'
+MISSION23_TARGET_PRODUCT = 'ethanol'
+MISSION23_TARGET_FLUX = 'EX_etoh_e'
+MISSION23_MIN_BASELINE_OBJECTIVE_VALUE = 0.1
+MISSION23_MIN_TARGET_OBJECTIVE_VALUE = 1.0
+MISSION23_MIN_PRODUCTION_INCREASE = 20.0
+
+MISSION24_BASELINE_METHOD = 'FBA'
+MISSION24_TARGET_METHOD = 'pFBA'
+MISSION24_TARGET_CONTEXT = 'controlled comparison: FBA vs pFBA method'
+MISSION24_GROWTH_OBJECTIVE = 'BIOMASS_Ecoli_core_w_GAM'
+MISSION24_REQUIRED_TRACKED_FLUXES = ['EX_ac_e', 'EX_etoh_e', 'EX_for_e', 'EX_lac__D_e', 'EX_succ_e']
+MISSION24_MIN_OBJECTIVE_VALUE = 0.1
+
+MISSION25_METHOD = 'FBA'
+MISSION25_TARGET_CONTEXT = 'final controlled comparison report: aerobic vs oxygen-limited product profile'
+MISSION25_GROWTH_OBJECTIVE = 'BIOMASS_Ecoli_core_w_GAM'
+MISSION25_OXYGEN_REACTION = 'EX_o2_e'
+MISSION25_REQUIRED_TRACKED_FLUXES = ['EX_ac_e', 'EX_etoh_e', 'EX_for_e', 'EX_lac__D_e', 'EX_succ_e']
+MISSION25_MIN_VIABLE_GROWTH = 0.1
+MISSION25_MIN_GROWTH_DROP = 1.0
+MISSION25_MIN_CHANGED_FLUXES = 2
+MISSION25_MIN_FLUX_CHANGE = 0.001
+
 
 EXCHANGE_FLUX_REPORT_REACTION_IDS = [
     'EX_glc__D_e',   # D-Glucose
@@ -2931,6 +2976,924 @@ def run_mission05_production_check():
         _oxygen_lower_bound_closed(reactions),
         error=error,
     )
+
+
+
+def _result_value_from_simulation_results(simulation_results):
+    try:
+        return simulation_results[1]
+    except Exception:
+        return None
+
+
+def _bound_state_for_reaction(reactions, reaction_id):
+    """Return lower/upper bound UI booleans for a reaction.
+
+    The environmental menu stores two booleans per exchange reaction:
+    lower-bound open/closed and upper-bound open/closed.
+    """
+    try:
+        reaction_index = list(REACTIONS.index).index(reaction_id)
+    except ValueError:
+        return None, None
+
+    reaction_values = list(reactions.values())
+    lb_index = reaction_index * 2
+    ub_index = lb_index + 1
+    if ub_index >= len(reaction_values):
+        return None, None
+
+    return bool(reaction_values[lb_index]), bool(reaction_values[ub_index])
+
+
+def _mission21_environment_status(reactions):
+    """Evaluate whether the setup is default or only oxygen-limited."""
+    reaction_values = list(reactions.values())
+    oxygen_lower_bound_closed = False
+    unexpected_changes = []
+
+    try:
+        oxygen_index = list(REACTIONS.index).index(MISSION21_OXYGEN_REACTION)
+    except ValueError:
+        oxygen_index = None
+
+    for i in range(len(REACTIONS.index)):
+        lb_index = i * 2
+        ub_index = lb_index + 1
+        if ub_index >= len(reaction_values):
+            break
+
+        reaction_id = REACTIONS.index[i]
+        lower_bound_open = bool(reaction_values[lb_index])
+        upper_bound_open = bool(reaction_values[ub_index])
+        default_lower_bound_open = REACTIONS.lb.iloc[i] != 0
+        default_upper_bound_open = REACTIONS.ub.iloc[i] != 0
+
+        if i == oxygen_index:
+            oxygen_lower_bound_closed = not lower_bound_open
+            if upper_bound_open != default_upper_bound_open:
+                unexpected_changes.append(f'{reaction_id} upper bound')
+        else:
+            if lower_bound_open != default_lower_bound_open:
+                unexpected_changes.append(f'{reaction_id} lower bound')
+            if upper_bound_open != default_upper_bound_open:
+                unexpected_changes.append(f'{reaction_id} upper bound')
+
+    return oxygen_lower_bound_closed, unexpected_changes
+
+
+def _compare_run_name(snapshot):
+    if not snapshot:
+        return 'empty run'
+    return snapshot.get('name') or snapshot.get('slot') or 'simulation run'
+
+
+def _build_compare_run_snapshot(slot, simulation_results=None):
+    method_name, objective_name, genes, reactions = _read_simulation_file()
+    objective_result = _result_value_from_simulation_results(simulation_results)
+    objective_value = _as_float_or_none(objective_result)
+    growth_value = _numeric_result(objective_value)
+    knocked_out = _knocked_out_genes(genes)
+    environment_changed = _environment_has_changes(reactions)
+    oxygen_lower_bound_open, oxygen_upper_bound_open = _bound_state_for_reaction(
+        reactions,
+        MISSION21_OXYGEN_REACTION,
+    )
+    oxygen_lower_bound_closed, oxygen_unexpected_changes = _mission21_environment_status(reactions)
+
+    production_fluxes = None
+    medium_fluxes = None
+    try:
+        production_fluxes = simulation_results[2] if len(simulation_results) > 2 else None
+        medium_fluxes = simulation_results[3] if len(simulation_results) > 3 else None
+    except Exception:
+        pass
+
+    production_values = _production_flux_value_map(production_fluxes)
+    raw_fluxes, uptake_fluxes, secretion_fluxes = _medium_flux_maps(medium_fluxes)
+
+    if knocked_out and not environment_changed:
+        run_kind = 'gene knockout: ' + ', '.join(knocked_out)
+    elif knocked_out and environment_changed:
+        run_kind = 'gene + environment design'
+    elif (not environment_changed) and objective_name != MISSION21_GROWTH_OBJECTIVE:
+        run_kind = 'objective test: ' + objective_name
+    elif not environment_changed:
+        run_kind = 'default growth setup'
+    elif oxygen_lower_bound_closed and not oxygen_unexpected_changes:
+        run_kind = 'oxygen-limited medium'
+    else:
+        run_kind = 'modified setup'
+
+    return {
+        'slot': slot,
+        'name': f'Run {slot}',
+        'run_kind': run_kind,
+        'method': method_name,
+        'objective': objective_name,
+        'objective_result': round(growth_value, 3) if objective_value is not None else str(objective_result),
+        # Kept for backwards compatibility with missions where the objective is biomass.
+        'growth_value': round(growth_value, 3),
+        'objective_value': round(growth_value, 3),
+        'result_available': objective_value is not None,
+        'knocked_out_genes': knocked_out,
+        'environment_changed': environment_changed,
+        'oxygen_reaction': MISSION21_OXYGEN_REACTION,
+        'oxygen_lower_bound_open': oxygen_lower_bound_open,
+        'oxygen_upper_bound_open': oxygen_upper_bound_open,
+        'oxygen_lower_bound_closed': oxygen_lower_bound_closed,
+        'oxygen_unexpected_changes': oxygen_unexpected_changes,
+        'production_flux_values': {reaction_id: round(value, 3) for reaction_id, value in production_values.items()},
+        'exchange_raw_fluxes': {reaction_id: round(value, 3) for reaction_id, value in raw_fluxes.items()},
+        'exchange_uptake_fluxes': {reaction_id: round(value, 3) for reaction_id, value in uptake_fluxes.items()},
+        'exchange_secretion_fluxes': {reaction_id: round(value, 3) for reaction_id, value in secretion_fluxes.items()},
+        'selected_production_fluxes': _read_selected_production_fluxes(),
+    }
+
+
+def capture_compare_run_snapshot(simulation_results=None):
+    """Capture the previous and current simulation for the Compare Runs report.
+
+    The UI always keeps the previous simulation as Run A and the latest
+    simulation as Run B. This makes Mission 21 simple: run the baseline first,
+    then run the oxygen-limited setup, and open Compare Runs.
+    """
+    existing = load_compare_runs() or {}
+    previous_current = existing.get('run_b')
+    snapshot = _build_compare_run_snapshot('B', simulation_results)
+
+    if previous_current:
+        previous_current = dict(previous_current)
+        previous_current['slot'] = 'A'
+        previous_current['name'] = 'Run A'
+
+    compare_runs = {
+        'run_a': previous_current,
+        'run_b': snapshot,
+    }
+    save_compare_runs(compare_runs)
+    return compare_runs
+
+
+def _fmt_compare_value(value):
+    try:
+        return f'{float(value):.3f}'
+    except Exception:
+        return str(value)
+
+
+def _fmt_compare_delta(delta):
+    if delta is None:
+        return 'not available'
+    try:
+        prefix = '+' if float(delta) > 0 else ''
+        return f'{prefix}{float(delta):.3f}'
+    except Exception:
+        return str(delta)
+
+
+def _safe_delta(value_b, value_a):
+    try:
+        return round(float(value_b) - float(value_a), 3)
+    except Exception:
+        return None
+
+
+def _format_compare_knockouts(snapshot):
+    knocked_out = snapshot.get('knocked_out_genes') or []
+    return ', '.join(knocked_out) if knocked_out else 'none'
+
+
+def _format_compare_environment(snapshot):
+    if not snapshot.get('environment_changed'):
+        return 'unchanged'
+    if snapshot.get('oxygen_lower_bound_closed') and not snapshot.get('oxygen_unexpected_changes'):
+        return f"oxygen lower bound closed ({MISSION21_OXYGEN_REACTION})"
+    unexpected = snapshot.get('oxygen_unexpected_changes') or []
+    if unexpected:
+        return 'modified: ' + ', '.join(unexpected)
+    return 'modified'
+
+
+def _format_compare_tracked_fluxes(snapshot):
+    selected_fluxes = snapshot.get('selected_production_fluxes') or []
+    if not selected_fluxes:
+        return 'none'
+    return ', '.join(
+        PRODUCTION_FLUX_LABELS.get(reaction_id, reaction_id)
+        for reaction_id in selected_fluxes
+    )
+
+
+def _format_compare_setup(snapshot):
+    return (
+        f"{snapshot.get('run_kind', 'simulation')}\n"
+        f"  Method: {snapshot.get('method')}\n"
+        f"  Objective: {snapshot.get('objective')}\n"
+        f"  Genes off: {_format_compare_knockouts(snapshot)}\n"
+        f"  Environment: {_format_compare_environment(snapshot)}\n"
+        f"  Production Flux tracked: {_format_compare_tracked_fluxes(snapshot)}"
+    )
+
+
+def _format_compare_change_list(run_a, run_b):
+    changes = []
+
+    if run_a.get('method') != run_b.get('method'):
+        changes.append(f"- Method: {run_a.get('method')} -> {run_b.get('method')}")
+    if run_a.get('objective') != run_b.get('objective'):
+        changes.append(f"- Objective: {run_a.get('objective')} -> {run_b.get('objective')}")
+
+    genes_a = _format_compare_knockouts(run_a)
+    genes_b = _format_compare_knockouts(run_b)
+    if genes_a != genes_b:
+        changes.append(f"- Genes off: {genes_a} -> {genes_b}")
+
+    env_a = _format_compare_environment(run_a)
+    env_b = _format_compare_environment(run_b)
+    if env_a != env_b:
+        changes.append(f"- Environment: {env_a} -> {env_b}")
+
+    tracked_a = _format_compare_tracked_fluxes(run_a)
+    tracked_b = _format_compare_tracked_fluxes(run_b)
+    if tracked_a != tracked_b:
+        changes.append(f"- Production Flux tracked: {tracked_a} -> {tracked_b}")
+
+    if not changes:
+        changes.append('- No setup difference detected. Change one variable and run again.')
+
+    return '\n'.join(changes)
+
+
+def build_compare_runs_report_text(compare_runs=None):
+    compare_runs = compare_runs or load_compare_runs() or {}
+    run_a = compare_runs.get('run_a')
+    run_b = compare_runs.get('run_b')
+
+    lines = [
+        'Compare Runs',
+        '',
+        'Run A = previous simulation.',
+        'Run B = latest simulation.',
+        'Recommended flow: run the baseline first, then change ONE variable and run again.',
+        'This makes it clear what caused the difference in the results.',
+        '',
+    ]
+
+    if not run_a or not run_b:
+        lines.append('Run two simulations to generate a comparison.')
+        if run_b:
+            lines.append('')
+            lines.append('Current captured run:')
+            lines.append('Run B:')
+            lines.append(_format_compare_setup(run_b))
+            lines.append('')
+            lines.append('Now run one more simulation. The current Run B will become Run A.')
+        return '\n'.join(lines)
+
+    growth_a = run_a.get('growth_value')
+    growth_b = run_b.get('growth_value')
+    growth_delta = _safe_delta(growth_b, growth_a)
+
+    oxygen_id = MISSION21_OXYGEN_REACTION
+    oxygen_a = (run_a.get('exchange_uptake_fluxes') or {}).get(oxygen_id, 0.0)
+    oxygen_b = (run_b.get('exchange_uptake_fluxes') or {}).get(oxygen_id, 0.0)
+    oxygen_delta = _safe_delta(oxygen_b, oxygen_a)
+
+    lines.extend([
+        'What is being compared:',
+        '',
+        'Run A:',
+        _format_compare_setup(run_a),
+        '',
+        'Run B:',
+        _format_compare_setup(run_b),
+        '',
+        'Setup changes detected:',
+        _format_compare_change_list(run_a, run_b),
+        '',
+        'Main numeric comparison:',
+        f"- Objective value: {_fmt_compare_value(growth_a)} -> {_fmt_compare_value(growth_b)} ({_fmt_compare_delta(growth_delta)})",
+        f"- Oxygen uptake ({oxygen_id}): {_fmt_compare_value(oxygen_a)} -> {_fmt_compare_value(oxygen_b)} ({_fmt_compare_delta(oxygen_delta)})",
+    ])
+
+    if run_a.get('objective') != run_b.get('objective'):
+        lines.extend([
+            '',
+            'Objective note:',
+            '- The objective value belongs to the objective selected in each run.',
+            '- When objectives are different, use the tracked production fluxes for the clearest product comparison.',
+        ])
+
+    tracked_ids = []
+    for reaction_id in (run_a.get('selected_production_fluxes') or []) + (run_b.get('selected_production_fluxes') or []):
+        if reaction_id not in tracked_ids:
+            tracked_ids.append(reaction_id)
+
+    if tracked_ids:
+        lines.append('')
+        lines.append('Tracked production fluxes:')
+        values_a = run_a.get('production_flux_values') or {}
+        values_b = run_b.get('production_flux_values') or {}
+        for reaction_id in tracked_ids:
+            val_a = values_a.get(reaction_id, 0.0)
+            val_b = values_b.get(reaction_id, 0.0)
+            label = PRODUCTION_FLUX_LABELS.get(reaction_id, reaction_id)
+            lines.append(
+                f"- {label}: {_fmt_compare_value(val_a)} -> {_fmt_compare_value(val_b)} "
+                f"({_fmt_compare_delta(_safe_delta(val_b, val_a))})"
+            )
+
+    lines.extend([
+        '',
+        'Interpretation guide:',
+        '- Negative objective delta = Run B has a lower value for its shown objective.',
+        '- Positive production delta = Run B secreted/exported more of that tracked product.',
+        '- If many setup changes appear, the comparison is not controlled.',
+    ])
+    return '\n'.join(lines)
+
+def _mission21_is_baseline_run(snapshot):
+    if not snapshot:
+        return False
+    return (
+        snapshot.get('method') == MISSION21_METHOD
+        and snapshot.get('objective') == MISSION21_GROWTH_OBJECTIVE
+        and not snapshot.get('knocked_out_genes')
+        and not snapshot.get('environment_changed')
+        and snapshot.get('growth_value', 0.0) >= MISSION21_MIN_VIABLE_GROWTH
+    )
+
+
+def _mission21_is_oxygen_limited_run(snapshot):
+    if not snapshot:
+        return False
+    return (
+        snapshot.get('method') == MISSION21_METHOD
+        and snapshot.get('objective') == MISSION21_GROWTH_OBJECTIVE
+        and not snapshot.get('knocked_out_genes')
+        and snapshot.get('oxygen_lower_bound_closed')
+        and not snapshot.get('oxygen_unexpected_changes')
+        and snapshot.get('growth_value', 0.0) >= MISSION21_MIN_VIABLE_GROWTH
+    )
+
+
+def _build_mission21_data(compare_runs=None, error=None):
+    compare_runs = compare_runs or load_compare_runs() or {}
+    run_a = compare_runs.get('run_a')
+    run_b = compare_runs.get('run_b')
+    available_runs = [run for run in (run_a, run_b) if run]
+
+    baseline_run = next((run for run in available_runs if _mission21_is_baseline_run(run)), None)
+    oxygen_limited_run = next((run for run in available_runs if _mission21_is_oxygen_limited_run(run)), None)
+
+    baseline_growth = baseline_run.get('growth_value') if baseline_run else None
+    oxygen_growth = oxygen_limited_run.get('growth_value') if oxygen_limited_run else None
+    growth_drop = None
+    growth_decreased = False
+    if baseline_growth is not None and oxygen_growth is not None:
+        growth_drop = round(float(baseline_growth) - float(oxygen_growth), 3)
+        growth_decreased = growth_drop >= MISSION21_MIN_GROWTH_DROP
+
+    oxygen_id = MISSION21_OXYGEN_REACTION
+    baseline_o2 = None
+    oxygen_limited_o2 = None
+    oxygen_uptake_decreased = False
+    if baseline_run:
+        baseline_o2 = (baseline_run.get('exchange_uptake_fluxes') or {}).get(oxygen_id)
+    if oxygen_limited_run:
+        oxygen_limited_o2 = (oxygen_limited_run.get('exchange_uptake_fluxes') or {}).get(oxygen_id)
+    if baseline_o2 is not None and oxygen_limited_o2 is not None:
+        try:
+            oxygen_uptake_decreased = float(baseline_o2) > float(oxygen_limited_o2) + 0.001
+        except Exception:
+            oxygen_uptake_decreased = False
+
+    mission21_data = {
+        'mission_id': '21',
+        'check_version': 1,
+        'mission_title': 'Controlled Comparison',
+        'target_context': MISSION21_TARGET_CONTEXT,
+        'target_method': MISSION21_METHOD,
+        'growth_objective': MISSION21_GROWTH_OBJECTIVE,
+        'oxygen_reaction': MISSION21_OXYGEN_REACTION,
+        'run_a': run_a,
+        'run_b': run_b,
+        'baseline_run_found': baseline_run is not None,
+        'oxygen_limited_run_found': oxygen_limited_run is not None,
+        'baseline_growth': round(float(baseline_growth), 3) if baseline_growth is not None else None,
+        'oxygen_limited_growth': round(float(oxygen_growth), 3) if oxygen_growth is not None else None,
+        'growth_drop': growth_drop,
+        'growth_decreased': growth_decreased,
+        'baseline_oxygen_uptake': round(float(baseline_o2), 3) if baseline_o2 is not None else None,
+        'oxygen_limited_oxygen_uptake': round(float(oxygen_limited_o2), 3) if oxygen_limited_o2 is not None else None,
+        'oxygen_uptake_decreased': oxygen_uptake_decreased,
+        'ready_to_deliver': (
+            baseline_run is not None
+            and oxygen_limited_run is not None
+            and growth_decreased
+        ),
+    }
+    if error:
+        mission21_data['error'] = error
+    save_mission21_comparison_check(mission21_data)
+    return mission21_data
+
+
+def run_mission21_comparison_check(compare_runs=None):
+    compare_runs = compare_runs or load_compare_runs()
+    if not compare_runs or not compare_runs.get('run_a') or not compare_runs.get('run_b'):
+        return _build_mission21_data(compare_runs, error='Run two simulations before delivering Mission 21.')
+    return _build_mission21_data(compare_runs)
+
+
+def _mission22_is_baseline_run(snapshot):
+    if not snapshot:
+        return False
+    selected_fluxes = snapshot.get('selected_production_fluxes') or []
+    return (
+        snapshot.get('method') == MISSION22_METHOD
+        and snapshot.get('objective') == MISSION22_GROWTH_OBJECTIVE
+        and not snapshot.get('knocked_out_genes')
+        and not snapshot.get('environment_changed')
+        and MISSION22_TARGET_FLUX in selected_fluxes
+        and snapshot.get('growth_value', 0.0) >= MISSION22_MIN_GROWTH
+    )
+
+
+def _mission22_is_knockout_run(snapshot):
+    if not snapshot:
+        return False
+    selected_fluxes = snapshot.get('selected_production_fluxes') or []
+    return (
+        snapshot.get('method') == MISSION22_METHOD
+        and snapshot.get('objective') == MISSION22_GROWTH_OBJECTIVE
+        and snapshot.get('knocked_out_genes') == [MISSION22_TARGET_GENE]
+        and not snapshot.get('environment_changed')
+        and MISSION22_TARGET_FLUX in selected_fluxes
+        and snapshot.get('growth_value', 0.0) >= MISSION22_MIN_GROWTH
+    )
+
+
+def _build_mission22_data(compare_runs=None, error=None):
+    compare_runs = compare_runs or load_compare_runs() or {}
+    run_a = compare_runs.get('run_a')
+    run_b = compare_runs.get('run_b')
+    available_runs = [run for run in (run_a, run_b) if run]
+
+    baseline_run = next((run for run in available_runs if _mission22_is_baseline_run(run)), None)
+    knockout_run = next((run for run in available_runs if _mission22_is_knockout_run(run)), None)
+
+    baseline_growth = baseline_run.get('growth_value') if baseline_run else None
+    knockout_growth = knockout_run.get('growth_value') if knockout_run else None
+
+    baseline_flux = None
+    knockout_flux = None
+    if baseline_run:
+        baseline_flux = (baseline_run.get('production_flux_values') or {}).get(MISSION22_TARGET_FLUX)
+    if knockout_run:
+        knockout_flux = (knockout_run.get('production_flux_values') or {}).get(MISSION22_TARGET_FLUX)
+
+    production_increase = None
+    production_increased = False
+    if baseline_flux is not None and knockout_flux is not None:
+        production_increase = round(float(knockout_flux) - float(baseline_flux), 3)
+        production_increased = production_increase >= MISSION22_MIN_PRODUCTION_INCREASE
+
+    target_flux_tracked = False
+    if baseline_run and knockout_run:
+        target_flux_tracked = (
+            MISSION22_TARGET_FLUX in (baseline_run.get('selected_production_fluxes') or [])
+            and MISSION22_TARGET_FLUX in (knockout_run.get('selected_production_fluxes') or [])
+        )
+
+    growth_ok = (
+        baseline_growth is not None
+        and knockout_growth is not None
+        and float(baseline_growth) >= MISSION22_MIN_GROWTH
+        and float(knockout_growth) >= MISSION22_MIN_GROWTH
+    )
+
+    mission22_data = {
+        'mission_id': '22',
+        'check_version': 1,
+        'mission_title': 'Knockout Comparison',
+        'target_context': MISSION22_TARGET_CONTEXT,
+        'target_method': MISSION22_METHOD,
+        'growth_objective': MISSION22_GROWTH_OBJECTIVE,
+        'target_product': MISSION22_TARGET_PRODUCT,
+        'target_flux': MISSION22_TARGET_FLUX,
+        'target_gene': MISSION22_TARGET_GENE,
+        'target_gene_name': MISSION22_TARGET_GENE_NAME,
+        'candidate_genes': MISSION22_CANDIDATE_GENES,
+        'minimum_growth': MISSION22_MIN_GROWTH,
+        'minimum_production_increase': MISSION22_MIN_PRODUCTION_INCREASE,
+        'run_a': run_a,
+        'run_b': run_b,
+        'baseline_run_found': baseline_run is not None,
+        'knockout_run_found': knockout_run is not None,
+        'baseline_growth': round(float(baseline_growth), 3) if baseline_growth is not None else None,
+        'knockout_growth': round(float(knockout_growth), 3) if knockout_growth is not None else None,
+        'baseline_product_flux': round(float(baseline_flux), 3) if baseline_flux is not None else None,
+        'knockout_product_flux': round(float(knockout_flux), 3) if knockout_flux is not None else None,
+        'production_increase': production_increase,
+        'production_increased': production_increased,
+        'target_flux_tracked': target_flux_tracked,
+        'growth_ok': growth_ok,
+        'ready_to_deliver': (
+            baseline_run is not None
+            and knockout_run is not None
+            and target_flux_tracked
+            and production_increased
+            and growth_ok
+        ),
+    }
+    if error:
+        mission22_data['error'] = error
+    save_mission22_comparison_check(mission22_data)
+    return mission22_data
+
+
+def run_mission22_comparison_check(compare_runs=None):
+    compare_runs = compare_runs or load_compare_runs()
+    if not compare_runs or not compare_runs.get('run_a') or not compare_runs.get('run_b'):
+        return _build_mission22_data(compare_runs, error='Run two simulations before delivering Mission 22.')
+    return _build_mission22_data(compare_runs)
+
+
+def _mission23_is_growth_objective_run(snapshot):
+    if not snapshot:
+        return False
+    selected_fluxes = snapshot.get('selected_production_fluxes') or []
+    return (
+        snapshot.get('method') == MISSION23_METHOD
+        and snapshot.get('objective') == MISSION23_BASELINE_OBJECTIVE
+        and not snapshot.get('knocked_out_genes')
+        and not snapshot.get('environment_changed')
+        and MISSION23_TARGET_FLUX in selected_fluxes
+        and snapshot.get('objective_value', snapshot.get('growth_value', 0.0)) >= MISSION23_MIN_BASELINE_OBJECTIVE_VALUE
+    )
+
+
+def _mission23_is_product_objective_run(snapshot):
+    if not snapshot:
+        return False
+    selected_fluxes = snapshot.get('selected_production_fluxes') or []
+    return (
+        snapshot.get('method') == MISSION23_METHOD
+        and snapshot.get('objective') == MISSION23_TARGET_OBJECTIVE
+        and not snapshot.get('knocked_out_genes')
+        and not snapshot.get('environment_changed')
+        and MISSION23_TARGET_FLUX in selected_fluxes
+        and snapshot.get('objective_value', snapshot.get('growth_value', 0.0)) >= MISSION23_MIN_TARGET_OBJECTIVE_VALUE
+    )
+
+
+def _build_mission23_data(compare_runs=None, error=None):
+    compare_runs = compare_runs or load_compare_runs() or {}
+    run_a = compare_runs.get('run_a')
+    run_b = compare_runs.get('run_b')
+    available_runs = [run for run in (run_a, run_b) if run]
+
+    growth_objective_run = next((run for run in available_runs if _mission23_is_growth_objective_run(run)), None)
+    product_objective_run = next((run for run in available_runs if _mission23_is_product_objective_run(run)), None)
+
+    growth_objective_value = None
+    product_objective_value = None
+    if growth_objective_run:
+        growth_objective_value = growth_objective_run.get('objective_value', growth_objective_run.get('growth_value'))
+    if product_objective_run:
+        product_objective_value = product_objective_run.get('objective_value', product_objective_run.get('growth_value'))
+
+    baseline_flux = None
+    product_flux = None
+    if growth_objective_run:
+        baseline_flux = (growth_objective_run.get('production_flux_values') or {}).get(MISSION23_TARGET_FLUX)
+    if product_objective_run:
+        product_flux = (product_objective_run.get('production_flux_values') or {}).get(MISSION23_TARGET_FLUX)
+
+    production_increase = None
+    production_increased = False
+    if baseline_flux is not None and product_flux is not None:
+        production_increase = round(float(product_flux) - float(baseline_flux), 3)
+        production_increased = production_increase >= MISSION23_MIN_PRODUCTION_INCREASE
+
+    target_flux_tracked = False
+    if growth_objective_run and product_objective_run:
+        target_flux_tracked = (
+            MISSION23_TARGET_FLUX in (growth_objective_run.get('selected_production_fluxes') or [])
+            and MISSION23_TARGET_FLUX in (product_objective_run.get('selected_production_fluxes') or [])
+        )
+
+    objective_changed = (
+        growth_objective_run is not None
+        and product_objective_run is not None
+        and growth_objective_run.get('objective') != product_objective_run.get('objective')
+    )
+
+    mission23_data = {
+        'mission_id': '23',
+        'check_version': 1,
+        'mission_title': 'Objective Comparison',
+        'target_context': MISSION23_TARGET_CONTEXT,
+        'target_method': MISSION23_METHOD,
+        'baseline_objective': MISSION23_BASELINE_OBJECTIVE,
+        'target_objective': MISSION23_TARGET_OBJECTIVE,
+        'target_product': MISSION23_TARGET_PRODUCT,
+        'target_flux': MISSION23_TARGET_FLUX,
+        'minimum_production_increase': MISSION23_MIN_PRODUCTION_INCREASE,
+        'run_a': run_a,
+        'run_b': run_b,
+        'growth_objective_run_found': growth_objective_run is not None,
+        'product_objective_run_found': product_objective_run is not None,
+        'growth_objective_value': round(float(growth_objective_value), 3) if growth_objective_value is not None else None,
+        'product_objective_value': round(float(product_objective_value), 3) if product_objective_value is not None else None,
+        'baseline_product_flux': round(float(baseline_flux), 3) if baseline_flux is not None else None,
+        'product_objective_flux': round(float(product_flux), 3) if product_flux is not None else None,
+        'production_increase': production_increase,
+        'production_increased': production_increased,
+        'target_flux_tracked': target_flux_tracked,
+        'objective_changed': objective_changed,
+        'ready_to_deliver': (
+            growth_objective_run is not None
+            and product_objective_run is not None
+            and objective_changed
+            and target_flux_tracked
+            and production_increased
+        ),
+    }
+    if error:
+        mission23_data['error'] = error
+    save_mission23_comparison_check(mission23_data)
+    return mission23_data
+
+
+def run_mission23_comparison_check(compare_runs=None):
+    compare_runs = compare_runs or load_compare_runs()
+    if not compare_runs or not compare_runs.get('run_a') or not compare_runs.get('run_b'):
+        return _build_mission23_data(compare_runs, error='Run two simulations before delivering Mission 23.')
+    return _build_mission23_data(compare_runs)
+
+
+def _mission24_same_base_setup(snapshot):
+    if not snapshot:
+        return False
+    return (
+        snapshot.get('objective') == MISSION24_GROWTH_OBJECTIVE
+        and not snapshot.get('knocked_out_genes')
+        and not snapshot.get('environment_changed')
+        and snapshot.get('objective_value', snapshot.get('growth_value', 0.0)) >= MISSION24_MIN_OBJECTIVE_VALUE
+    )
+
+
+def _mission24_is_fba_run(snapshot):
+    return (
+        _mission24_same_base_setup(snapshot)
+        and snapshot.get('method') == MISSION24_BASELINE_METHOD
+    )
+
+
+def _mission24_is_pfba_run(snapshot):
+    return (
+        _mission24_same_base_setup(snapshot)
+        and snapshot.get('method') == MISSION24_TARGET_METHOD
+    )
+
+
+def _mission24_tracking_ready(snapshot):
+    if not snapshot:
+        return False
+    selected_fluxes = snapshot.get('selected_production_fluxes') or []
+    return all(
+        reaction_id in selected_fluxes
+        for reaction_id in MISSION24_REQUIRED_TRACKED_FLUXES
+    )
+
+
+def _build_mission24_data(compare_runs=None, error=None):
+    compare_runs = compare_runs or load_compare_runs() or {}
+    run_a = compare_runs.get('run_a')
+    run_b = compare_runs.get('run_b')
+    available_runs = [run for run in (run_a, run_b) if run]
+
+    fba_run = next((run for run in available_runs if _mission24_is_fba_run(run)), None)
+    pfba_run = next((run for run in available_runs if _mission24_is_pfba_run(run)), None)
+
+    fba_value = fba_run.get('objective_value', fba_run.get('growth_value')) if fba_run else None
+    pfba_value = pfba_run.get('objective_value', pfba_run.get('growth_value')) if pfba_run else None
+
+    fba_tracking_ready = _mission24_tracking_ready(fba_run)
+    pfba_tracking_ready = _mission24_tracking_ready(pfba_run)
+    tracking_ready = fba_tracking_ready and pfba_tracking_ready
+
+    method_changed = (
+        fba_run is not None
+        and pfba_run is not None
+        and fba_run.get('method') != pfba_run.get('method')
+    )
+
+    same_objective = (
+        fba_run is not None
+        and pfba_run is not None
+        and fba_run.get('objective') == pfba_run.get('objective') == MISSION24_GROWTH_OBJECTIVE
+    )
+
+    same_clean_setup = (
+        fba_run is not None
+        and pfba_run is not None
+        and not fba_run.get('knocked_out_genes')
+        and not pfba_run.get('knocked_out_genes')
+        and not fba_run.get('environment_changed')
+        and not pfba_run.get('environment_changed')
+    )
+
+    fba_flux_values = fba_run.get('production_flux_values') if fba_run else {}
+    pfba_flux_values = pfba_run.get('production_flux_values') if pfba_run else {}
+    flux_differences = {}
+    for reaction_id in MISSION24_REQUIRED_TRACKED_FLUXES:
+        if reaction_id in fba_flux_values and reaction_id in pfba_flux_values:
+            flux_differences[reaction_id] = round(float(pfba_flux_values.get(reaction_id, 0.0)) - float(fba_flux_values.get(reaction_id, 0.0)), 3)
+
+    mission24_data = {
+        'mission_id': '24',
+        'check_version': 1,
+        'mission_title': 'Method Comparison',
+        'target_context': MISSION24_TARGET_CONTEXT,
+        'baseline_method': MISSION24_BASELINE_METHOD,
+        'target_method': MISSION24_TARGET_METHOD,
+        'growth_objective': MISSION24_GROWTH_OBJECTIVE,
+        'required_tracked_fluxes': MISSION24_REQUIRED_TRACKED_FLUXES,
+        'run_a': run_a,
+        'run_b': run_b,
+        'fba_run_found': fba_run is not None,
+        'pfba_run_found': pfba_run is not None,
+        'fba_objective_value': round(float(fba_value), 3) if fba_value is not None else None,
+        'pfba_objective_value': round(float(pfba_value), 3) if pfba_value is not None else None,
+        'method_changed': method_changed,
+        'same_objective': same_objective,
+        'same_clean_setup': same_clean_setup,
+        'fba_tracking_ready': fba_tracking_ready,
+        'pfba_tracking_ready': pfba_tracking_ready,
+        'tracking_ready': tracking_ready,
+        'fba_tracked_flux_values': {reaction_id: round(float(fba_flux_values.get(reaction_id, 0.0)), 3) for reaction_id in MISSION24_REQUIRED_TRACKED_FLUXES},
+        'pfba_tracked_flux_values': {reaction_id: round(float(pfba_flux_values.get(reaction_id, 0.0)), 3) for reaction_id in MISSION24_REQUIRED_TRACKED_FLUXES},
+        'tracked_flux_differences': flux_differences,
+        'ready_to_deliver': (
+            fba_run is not None
+            and pfba_run is not None
+            and method_changed
+            and same_objective
+            and same_clean_setup
+            and tracking_ready
+        ),
+    }
+    if error:
+        mission24_data['error'] = error
+    save_mission24_comparison_check(mission24_data)
+    return mission24_data
+
+
+def run_mission24_comparison_check(compare_runs=None):
+    compare_runs = compare_runs or load_compare_runs()
+    if not compare_runs or not compare_runs.get('run_a') or not compare_runs.get('run_b'):
+        return _build_mission24_data(compare_runs, error='Run two simulations before delivering Mission 24.')
+    return _build_mission24_data(compare_runs)
+
+
+
+def _mission25_tracking_ready(snapshot):
+    if not snapshot:
+        return False
+    selected_fluxes = snapshot.get('selected_production_fluxes') or []
+    return all(
+        reaction_id in selected_fluxes
+        for reaction_id in MISSION25_REQUIRED_TRACKED_FLUXES
+    )
+
+
+def _mission25_is_baseline_run(snapshot):
+    if not snapshot:
+        return False
+    return (
+        snapshot.get('method') == MISSION25_METHOD
+        and snapshot.get('objective') == MISSION25_GROWTH_OBJECTIVE
+        and not snapshot.get('knocked_out_genes')
+        and not snapshot.get('environment_changed')
+        and snapshot.get('growth_value', 0.0) >= MISSION25_MIN_VIABLE_GROWTH
+    )
+
+
+def _mission25_is_oxygen_limited_run(snapshot):
+    if not snapshot:
+        return False
+    return (
+        snapshot.get('method') == MISSION25_METHOD
+        and snapshot.get('objective') == MISSION25_GROWTH_OBJECTIVE
+        and not snapshot.get('knocked_out_genes')
+        and snapshot.get('oxygen_lower_bound_closed')
+        and not snapshot.get('oxygen_unexpected_changes')
+        and snapshot.get('growth_value', 0.0) >= MISSION25_MIN_VIABLE_GROWTH
+    )
+
+
+def _build_mission25_data(compare_runs=None, error=None):
+    compare_runs = compare_runs or load_compare_runs() or {}
+    run_a = compare_runs.get('run_a')
+    run_b = compare_runs.get('run_b')
+    available_runs = [run for run in (run_a, run_b) if run]
+
+    baseline_run = next((run for run in available_runs if _mission25_is_baseline_run(run)), None)
+    oxygen_limited_run = next((run for run in available_runs if _mission25_is_oxygen_limited_run(run)), None)
+
+    baseline_growth = baseline_run.get('growth_value') if baseline_run else None
+    oxygen_growth = oxygen_limited_run.get('growth_value') if oxygen_limited_run else None
+    growth_drop = None
+    growth_decreased = False
+    if baseline_growth is not None and oxygen_growth is not None:
+        growth_drop = round(float(baseline_growth) - float(oxygen_growth), 3)
+        growth_decreased = growth_drop >= MISSION25_MIN_GROWTH_DROP
+
+    baseline_flux_values = baseline_run.get('production_flux_values') if baseline_run else {}
+    oxygen_flux_values = oxygen_limited_run.get('production_flux_values') if oxygen_limited_run else {}
+    flux_differences = {}
+    changed_fluxes = []
+    for reaction_id in MISSION25_REQUIRED_TRACKED_FLUXES:
+        if reaction_id in baseline_flux_values and reaction_id in oxygen_flux_values:
+            difference = round(float(oxygen_flux_values.get(reaction_id, 0.0)) - float(baseline_flux_values.get(reaction_id, 0.0)), 3)
+            flux_differences[reaction_id] = difference
+            if abs(difference) >= MISSION25_MIN_FLUX_CHANGE:
+                changed_fluxes.append(reaction_id)
+
+    baseline_tracking_ready = _mission25_tracking_ready(baseline_run)
+    oxygen_tracking_ready = _mission25_tracking_ready(oxygen_limited_run)
+    tracking_ready = baseline_tracking_ready and oxygen_tracking_ready
+    production_profile_changed = len(changed_fluxes) >= MISSION25_MIN_CHANGED_FLUXES
+
+    oxygen_id = MISSION25_OXYGEN_REACTION
+    baseline_o2 = None
+    oxygen_limited_o2 = None
+    oxygen_uptake_decreased = False
+    if baseline_run:
+        baseline_o2 = (baseline_run.get('exchange_uptake_fluxes') or {}).get(oxygen_id)
+    if oxygen_limited_run:
+        oxygen_limited_o2 = (oxygen_limited_run.get('exchange_uptake_fluxes') or {}).get(oxygen_id)
+    if baseline_o2 is not None and oxygen_limited_o2 is not None:
+        try:
+            oxygen_uptake_decreased = float(baseline_o2) > float(oxygen_limited_o2) + 0.001
+        except Exception:
+            oxygen_uptake_decreased = False
+
+    mission25_data = {
+        'mission_id': '25',
+        'check_version': 1,
+        'mission_title': 'Final Controlled Report',
+        'target_context': MISSION25_TARGET_CONTEXT,
+        'target_method': MISSION25_METHOD,
+        'growth_objective': MISSION25_GROWTH_OBJECTIVE,
+        'oxygen_reaction': MISSION25_OXYGEN_REACTION,
+        'required_tracked_fluxes': MISSION25_REQUIRED_TRACKED_FLUXES,
+        'minimum_growth_drop': MISSION25_MIN_GROWTH_DROP,
+        'minimum_changed_fluxes': MISSION25_MIN_CHANGED_FLUXES,
+        'minimum_flux_change': MISSION25_MIN_FLUX_CHANGE,
+        'run_a': run_a,
+        'run_b': run_b,
+        'baseline_run_found': baseline_run is not None,
+        'oxygen_limited_run_found': oxygen_limited_run is not None,
+        'baseline_tracking_ready': baseline_tracking_ready,
+        'oxygen_tracking_ready': oxygen_tracking_ready,
+        'tracking_ready': tracking_ready,
+        'baseline_growth': round(float(baseline_growth), 3) if baseline_growth is not None else None,
+        'oxygen_limited_growth': round(float(oxygen_growth), 3) if oxygen_growth is not None else None,
+        'growth_drop': growth_drop,
+        'growth_decreased': growth_decreased,
+        'baseline_oxygen_uptake': round(float(baseline_o2), 3) if baseline_o2 is not None else None,
+        'oxygen_limited_oxygen_uptake': round(float(oxygen_limited_o2), 3) if oxygen_limited_o2 is not None else None,
+        'oxygen_uptake_decreased': oxygen_uptake_decreased,
+        'baseline_tracked_flux_values': {reaction_id: round(float(baseline_flux_values.get(reaction_id, 0.0)), 3) for reaction_id in MISSION25_REQUIRED_TRACKED_FLUXES},
+        'oxygen_limited_tracked_flux_values': {reaction_id: round(float(oxygen_flux_values.get(reaction_id, 0.0)), 3) for reaction_id in MISSION25_REQUIRED_TRACKED_FLUXES},
+        'tracked_flux_differences': flux_differences,
+        'changed_fluxes': changed_fluxes,
+        'changed_flux_count': len(changed_fluxes),
+        'production_profile_changed': production_profile_changed,
+        'ready_to_deliver': (
+            baseline_run is not None
+            and oxygen_limited_run is not None
+            and tracking_ready
+            and growth_decreased
+            and production_profile_changed
+        ),
+    }
+    if error:
+        mission25_data['error'] = error
+    save_mission25_comparison_check(mission25_data)
+    return mission25_data
+
+
+def run_mission25_comparison_check(compare_runs=None):
+    compare_runs = compare_runs or load_compare_runs()
+    if not compare_runs or not compare_runs.get('run_a') or not compare_runs.get('run_b'):
+        return _build_mission25_data(compare_runs, error='Run two simulations before delivering Mission 25.')
+    return _build_mission25_data(compare_runs)
 
 
 def run_simul():

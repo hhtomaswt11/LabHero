@@ -1603,6 +1603,366 @@ def _build_mission20_text(report_data):
 
 
 
+def _build_mission21_text(compare_data):
+    if not compare_data:
+        return 'Mission 21 Controlled Comparison\n\nRun two simulations to generate a comparison.'
+
+    if compare_data.get('error') and not compare_data.get('run_a'):
+        return f"Mission 21 Controlled Comparison\n\n{compare_data.get('error')}"
+
+    baseline_status = (
+        'Baseline run: normal growth setup found.'
+        if compare_data.get('baseline_run_found')
+        else 'Baseline run: missing. Run FBA with biomass objective, no knockouts and unchanged environment.'
+    )
+    anaerobic_status = (
+        'Modified run: oxygen-limited setup found.'
+        if compare_data.get('oxygen_limited_run_found')
+        else 'Modified run: missing. Run the same setup but close the lower bound of oxygen.'
+    )
+    growth_status = (
+        'Comparison: growth decreases under oxygen limitation.'
+        if compare_data.get('growth_decreased')
+        else 'Comparison: growth difference is not clear enough yet.'
+    )
+    oxygen_status = (
+        'Oxygen evidence: oxygen uptake decreased in the modified run.'
+        if compare_data.get('oxygen_uptake_decreased')
+        else 'Oxygen evidence: use Compare Runs / Exchange Flux Report to inspect oxygen uptake.'
+    )
+
+    final_status = (
+        'Controlled comparison ready. Return to Dr. Vega and deliver the report.'
+        if compare_data.get('ready_to_deliver')
+        else 'Not ready yet. Run the baseline first, then the oxygen-limited setup.'
+    )
+
+    baseline_growth = compare_data.get('baseline_growth')
+    oxygen_growth = compare_data.get('oxygen_limited_growth')
+    growth_drop = compare_data.get('growth_drop')
+    baseline_o2 = compare_data.get('baseline_oxygen_uptake')
+    oxygen_o2 = compare_data.get('oxygen_limited_oxygen_uptake')
+
+    def fmt(value):
+        return 'not available' if value is None else f'{float(value):.3f}'
+
+    return (
+        'Mission 21 Controlled Comparison\n\n'
+        f"Target: aerobic baseline vs oxygen-limited growth\n"
+        f"Method: {compare_data.get('target_method')}\n"
+        f"Objective: {compare_data.get('growth_objective')}\n"
+        f"Oxygen reaction: {compare_data.get('oxygen_reaction')}\n\n"
+        f"Growth comparison:\n"
+        f"- Baseline growth: {fmt(baseline_growth)}\n"
+        f"- Oxygen-limited growth: {fmt(oxygen_growth)}\n"
+        f"- Growth drop: {fmt(growth_drop)}\n\n"
+        f"Oxygen uptake evidence:\n"
+        f"- Baseline oxygen uptake: {fmt(baseline_o2)}\n"
+        f"- Oxygen-limited oxygen uptake: {fmt(oxygen_o2)}\n\n"
+        f"{baseline_status}\n"
+        f"{anaerobic_status}\n"
+        f"{growth_status}\n"
+        f"{oxygen_status}\n\n"
+        f"{final_status}"
+    )
+
+
+def _build_mission22_text(compare_data):
+    if not compare_data:
+        return 'Mission 22 Knockout Comparison\n\nRun two simulations to generate a comparison.'
+
+    if compare_data.get('error') and not compare_data.get('run_a'):
+        return f"Mission 22 Knockout Comparison\n\n{compare_data.get('error')}"
+
+    baseline_status = (
+        'Baseline run: normal strain found.'
+        if compare_data.get('baseline_run_found')
+        else 'Baseline run: missing. Run FBA with biomass objective, no knockouts, unchanged environment and ethanol tracked.'
+    )
+    knockout_status = (
+        f"Knockout run: {compare_data.get('target_gene')} / {compare_data.get('target_gene_name')} found."
+        if compare_data.get('knockout_run_found')
+        else f"Knockout run: missing. Turn off only {compare_data.get('target_gene')} and keep the environment unchanged."
+    )
+    tracking_status = (
+        f"Evidence: {compare_data.get('target_flux')} was tracked in both runs."
+        if compare_data.get('target_flux_tracked')
+        else f"Evidence: track {compare_data.get('target_flux')} in Production Flux for both runs."
+    )
+    production_status = (
+        'Comparison: target product increased after the knockout.'
+        if compare_data.get('production_increased')
+        else 'Comparison: product increase is not clear enough yet.'
+    )
+    growth_status = (
+        'Growth: both runs remain viable.'
+        if compare_data.get('growth_ok')
+        else 'Growth: one of the runs is not viable enough.'
+    )
+    final_status = (
+        'Knockout comparison ready. Return to Dr. Vega and deliver the report.'
+        if compare_data.get('ready_to_deliver')
+        else 'Not ready yet. Run the baseline first, then the knockout setup.'
+    )
+
+    baseline_growth = compare_data.get('baseline_growth')
+    knockout_growth = compare_data.get('knockout_growth')
+    baseline_flux = compare_data.get('baseline_product_flux')
+    knockout_flux = compare_data.get('knockout_product_flux')
+    production_increase = compare_data.get('production_increase')
+
+    def fmt(value):
+        return 'not available' if value is None else f'{float(value):.3f}'
+
+    return (
+        'Mission 22 Knockout Comparison\n\n'
+        f"Target: normal strain vs production knockout\n"
+        f"Method: {compare_data.get('target_method')}\n"
+        f"Objective: {compare_data.get('growth_objective')}\n"
+        f"Target product: {compare_data.get('target_product')} ({compare_data.get('target_flux')})\n"
+        f"Target gene: {compare_data.get('target_gene')} / {compare_data.get('target_gene_name')}\n\n"
+        f"Growth comparison:\n"
+        f"- Baseline growth: {fmt(baseline_growth)}\n"
+        f"- Knockout growth: {fmt(knockout_growth)}\n\n"
+        f"Production comparison:\n"
+        f"- Baseline product flux: {fmt(baseline_flux)}\n"
+        f"- Knockout product flux: {fmt(knockout_flux)}\n"
+        f"- Production increase: {fmt(production_increase)}\n\n"
+        f"{baseline_status}\n"
+        f"{knockout_status}\n"
+        f"{tracking_status}\n"
+        f"{production_status}\n"
+        f"{growth_status}\n\n"
+        f"{final_status}"
+    )
+
+
+def _build_mission23_text(compare_data):
+    if not compare_data:
+        return 'Mission 23 Objective Comparison\n\nRun two simulations to generate a comparison.'
+
+    if compare_data.get('error') and not compare_data.get('run_a'):
+        return f"Mission 23 Objective Comparison\n\n{compare_data.get('error')}"
+
+    growth_run_status = (
+        'Run with biomass objective found.'
+        if compare_data.get('growth_objective_run_found')
+        else 'Missing growth-objective run. Use FBA, biomass objective, no knockouts and unchanged environment.'
+    )
+    product_run_status = (
+        'Run with product objective found.'
+        if compare_data.get('product_objective_run_found')
+        else f"Missing product-objective run. Use {compare_data.get('target_objective')} as the objective."
+    )
+    objective_status = (
+        'Objective change detected: growth objective vs product objective.'
+        if compare_data.get('objective_changed')
+        else 'Objective change not detected yet. The two runs must use different objectives.'
+    )
+    tracking_status = (
+        f"Evidence: {compare_data.get('target_flux')} was tracked in both runs."
+        if compare_data.get('target_flux_tracked')
+        else f"Evidence: track {compare_data.get('target_flux')} in Production Flux for both runs."
+    )
+    production_status = (
+        'Comparison: target product increased when the product objective was used.'
+        if compare_data.get('production_increased')
+        else 'Comparison: product increase is not clear enough yet.'
+    )
+    final_status = (
+        'Objective comparison ready. Return to Dr. Vega and deliver the report.'
+        if compare_data.get('ready_to_deliver')
+        else 'Not ready yet. Compare the growth objective with the ethanol objective.'
+    )
+
+    growth_objective_value = compare_data.get('growth_objective_value')
+    product_objective_value = compare_data.get('product_objective_value')
+    baseline_flux = compare_data.get('baseline_product_flux')
+    product_flux = compare_data.get('product_objective_flux')
+    production_increase = compare_data.get('production_increase')
+
+    def fmt(value):
+        return 'not available' if value is None else f'{float(value):.3f}'
+
+    return (
+        'Mission 23 Objective Comparison\n\n'
+        f"Target: growth objective vs ethanol objective\n"
+        f"Method: {compare_data.get('target_method')}\n"
+        f"Growth objective: {compare_data.get('baseline_objective')}\n"
+        f"Product objective: {compare_data.get('target_objective')}\n"
+        f"Target product: {compare_data.get('target_product')} ({compare_data.get('target_flux')})\n\n"
+        f"Objective values:\n"
+        f"- Biomass objective run: {fmt(growth_objective_value)}\n"
+        f"- Product objective run: {fmt(product_objective_value)}\n\n"
+        f"Production comparison:\n"
+        f"- Product flux with biomass objective: {fmt(baseline_flux)}\n"
+        f"- Product flux with product objective: {fmt(product_flux)}\n"
+        f"- Production increase: {fmt(production_increase)}\n\n"
+        f"{growth_run_status}\n"
+        f"{product_run_status}\n"
+        f"{objective_status}\n"
+        f"{tracking_status}\n"
+        f"{production_status}\n\n"
+        f"{final_status}"
+    )
+
+
+def _build_mission24_text(compare_data):
+    if not compare_data:
+        return 'Mission 24 Method Comparison\n\nRun two simulations to generate a comparison.'
+
+    if compare_data.get('error') and not compare_data.get('run_a'):
+        return f"Mission 24 Method Comparison\n\n{compare_data.get('error')}"
+
+    fba_status = (
+        'FBA run found.'
+        if compare_data.get('fba_run_found')
+        else 'Missing FBA run. Use FBA with biomass objective, no knockouts and unchanged environment.'
+    )
+    pfba_status = (
+        'pFBA run found.'
+        if compare_data.get('pfba_run_found')
+        else 'Missing pFBA run. Use pFBA with the same objective, genes and environment.'
+    )
+    method_status = (
+        'Method change detected: FBA vs pFBA.'
+        if compare_data.get('method_changed')
+        else 'Method change not detected yet. The two runs must use different methods.'
+    )
+    setup_status = (
+        'Controlled setup: objective, genes and environment stayed the same.'
+        if compare_data.get('same_objective') and compare_data.get('same_clean_setup')
+        else 'Controlled setup: keep objective, genes and environment unchanged in both runs.'
+    )
+    tracking_status = (
+        'Evidence: full production-flux panel was tracked in both runs.'
+        if compare_data.get('tracking_ready')
+        else 'Evidence: track the full production-flux panel in both runs.'
+    )
+    final_status = (
+        'Method comparison ready. Return to Dr. Vega and deliver the report.'
+        if compare_data.get('ready_to_deliver')
+        else 'Not ready yet. Compare FBA with pFBA while keeping the setup controlled.'
+    )
+
+    def fmt(value):
+        return 'not available' if value is None else f'{float(value):.3f}'
+
+    required_fluxes = compare_data.get('required_tracked_fluxes') or []
+    fba_values = compare_data.get('fba_tracked_flux_values') or {}
+    pfba_values = compare_data.get('pfba_tracked_flux_values') or {}
+    differences = compare_data.get('tracked_flux_differences') or {}
+
+    flux_lines = []
+    for reaction_id in required_fluxes:
+        label = PRODUCTION_FLUX_LABELS.get(reaction_id, reaction_id)
+        flux_lines.append(
+            f"- {label}: FBA {fmt(fba_values.get(reaction_id))} -> pFBA {fmt(pfba_values.get(reaction_id))} "
+            f"({fmt(differences.get(reaction_id))})"
+        )
+    flux_text = '\n'.join(flux_lines) if flux_lines else 'none'
+
+    return (
+        'Mission 24 Method Comparison\n\n'
+        f"Target: FBA vs pFBA using the same growth setup\n"
+        f"Objective: {compare_data.get('growth_objective')}\n"
+        f"Methods: {compare_data.get('baseline_method')} -> {compare_data.get('target_method')}\n\n"
+        f"Objective values:\n"
+        f"- FBA objective value: {fmt(compare_data.get('fba_objective_value'))}\n"
+        f"- pFBA objective value: {fmt(compare_data.get('pfba_objective_value'))}\n\n"
+        f"Tracked production-flux panel:\n{flux_text}\n\n"
+        f"{fba_status}\n"
+        f"{pfba_status}\n"
+        f"{method_status}\n"
+        f"{setup_status}\n"
+        f"{tracking_status}\n\n"
+        f"{final_status}"
+    )
+
+
+def _build_mission25_text(compare_data):
+    if not compare_data:
+        return 'Mission 25 Final Controlled Report\n\nRun two simulations to generate the final comparison.'
+
+    if compare_data.get('error') and not compare_data.get('run_a'):
+        return f"Mission 25 Final Controlled Report\n\n{compare_data.get('error')}"
+
+    baseline_status = (
+        'Run A baseline found.'
+        if compare_data.get('baseline_run_found')
+        else 'Missing Run A. Use FBA, biomass objective, no knockouts and unchanged environment.'
+    )
+    oxygen_status = (
+        'Run B oxygen-limited setup found.'
+        if compare_data.get('oxygen_limited_run_found')
+        else f"Missing Run B. Close only the lower bound of {compare_data.get('oxygen_reaction')}."
+    )
+    tracking_status = (
+        'Evidence: full production-flux panel was tracked in both runs.'
+        if compare_data.get('tracking_ready')
+        else 'Evidence: track the full production-flux panel in both runs.'
+    )
+    growth_status = (
+        'Growth comparison: oxygen limitation reduced growth clearly.'
+        if compare_data.get('growth_decreased')
+        else 'Growth comparison: growth drop is not clear enough yet.'
+    )
+    profile_status = (
+        'Production profile: tracked products changed after oxygen limitation.'
+        if compare_data.get('production_profile_changed')
+        else 'Production profile: not enough tracked products changed yet.'
+    )
+    final_status = (
+        'Final controlled report ready. Return to Dr. Vega and deliver the report.'
+        if compare_data.get('ready_to_deliver')
+        else 'Not ready yet. Keep the comparison controlled and check Compare Runs.'
+    )
+
+    def fmt(value):
+        return 'not available' if value is None else f'{float(value):.3f}'
+
+    required_fluxes = compare_data.get('required_tracked_fluxes') or []
+    baseline_values = compare_data.get('baseline_tracked_flux_values') or {}
+    oxygen_values = compare_data.get('oxygen_limited_tracked_flux_values') or {}
+    differences = compare_data.get('tracked_flux_differences') or {}
+
+    flux_lines = []
+    for reaction_id in required_fluxes:
+        label = PRODUCTION_FLUX_LABELS.get(reaction_id, reaction_id)
+        flux_lines.append(
+            f"- {label}: baseline {fmt(baseline_values.get(reaction_id))} -> oxygen-limited {fmt(oxygen_values.get(reaction_id))} "
+            f"({fmt(differences.get(reaction_id))})"
+        )
+    flux_text = '\n'.join(flux_lines) if flux_lines else 'none'
+
+    changed_fluxes = compare_data.get('changed_fluxes') or []
+    changed_text = ', '.join(changed_fluxes) if changed_fluxes else 'none'
+
+    return (
+        'Mission 25 Final Controlled Report\n\n'
+        f"Target: aerobic baseline vs oxygen-limited medium\n"
+        f"Method: {compare_data.get('target_method')}\n"
+        f"Objective: {compare_data.get('growth_objective')}\n"
+        f"Controlled variable: oxygen uptake ({compare_data.get('oxygen_reaction')})\n\n"
+        f"Growth comparison:\n"
+        f"- Baseline growth: {fmt(compare_data.get('baseline_growth'))}\n"
+        f"- Oxygen-limited growth: {fmt(compare_data.get('oxygen_limited_growth'))}\n"
+        f"- Growth drop: {fmt(compare_data.get('growth_drop'))}\n\n"
+        f"Oxygen uptake comparison:\n"
+        f"- Baseline oxygen uptake: {fmt(compare_data.get('baseline_oxygen_uptake'))}\n"
+        f"- Oxygen-limited oxygen uptake: {fmt(compare_data.get('oxygen_limited_oxygen_uptake'))}\n\n"
+        f"Tracked production-flux profile:\n{flux_text}\n\n"
+        f"Changed tracked fluxes: {changed_text}\n"
+        f"Changed flux count: {compare_data.get('changed_flux_count', 0)} / {compare_data.get('minimum_changed_fluxes')}\n\n"
+        f"{baseline_status}\n"
+        f"{oxygen_status}\n"
+        f"{tracking_status}\n"
+        f"{growth_status}\n"
+        f"{profile_status}\n\n"
+        f"{final_status}"
+    )
+
+
 class Window:
     def __init__(self, toggle_menu, player) -> None:
 
@@ -2063,6 +2423,51 @@ class Window:
             except Exception:
                 exchange_flux_data = None
 
+            compare_runs = capture_compare_run_snapshot(self.results)
+            mission21_data = None
+            if '21' in self.player.missions_activated and '21' not in self.player.missions_completed:
+                mission21_data = run_mission21_comparison_check(compare_runs)
+
+            mission22_data = None
+            if '22' in self.player.missions_activated and '22' not in self.player.missions_completed:
+                mission22_data = run_mission22_comparison_check(compare_runs)
+
+            mission23_data = None
+            if '23' in self.player.missions_activated and '23' not in self.player.missions_completed:
+                mission23_data = run_mission23_comparison_check(compare_runs)
+
+            mission24_data = None
+            if '24' in self.player.missions_activated and '24' not in self.player.missions_completed:
+                mission24_data = run_mission24_comparison_check(compare_runs)
+
+            mission25_data = None
+            if '25' in self.player.missions_activated and '25' not in self.player.missions_completed:
+                mission25_data = run_mission25_comparison_check(compare_runs)
+
+            menu_compare_runs = pygame_menu.Menu(
+                height=720,
+                center_content=False,
+                onclose=pygame_menu.events.BACK,
+                theme=mytheme,
+                title='Compare Runs',
+                width=1280,
+                menu_id='menu_compare_runs'
+            )
+            menu_compare_runs.add.vertical_margin(20)
+            menu_compare_runs.add.label(
+                build_compare_runs_report_text(compare_runs),
+                wordwrap=True,
+                padding=(20, 20, 20, 20),
+                background_color='white',
+                font_size=24
+            )
+            menu_compare_runs.add.vertical_margin(20)
+            menu_compare_runs.add.button(
+                'Back',
+                pygame_menu.events.BACK,
+                background_color=(70, 70, 70)
+            )
+
             menu_exchange_report = pygame_menu.Menu(
                 height=720,
                 center_content=False,
@@ -2202,7 +2607,70 @@ class Window:
                 background_color=(20, 100, 100),
                 button_id='exchange_flux_report'
             )
+            menu_simul.add.vertical_margin(10)
+            menu_simul.add.button(
+                'Compare Runs',
+                menu_compare_runs,
+                font_color='white',
+                background_color=(20, 100, 100),
+                button_id='compare_runs'
+            )
             menu_simul.add.vertical_margin(20)
+
+            if mission21_data is not None:
+                menu_simul.add.label(
+                    _build_mission21_text(mission21_data),
+                    wordwrap=True,
+                    padding=(20, 20, 20, 20),
+                    background_color='white',
+                    font_size=24,
+                    label_id='mission21_comparison_check'
+                )
+                menu_simul.add.vertical_margin(20)
+
+            if mission22_data is not None:
+                menu_simul.add.label(
+                    _build_mission22_text(mission22_data),
+                    wordwrap=True,
+                    padding=(20, 20, 20, 20),
+                    background_color='white',
+                    font_size=24,
+                    label_id='mission22_comparison_check'
+                )
+                menu_simul.add.vertical_margin(20)
+
+            if mission23_data is not None:
+                menu_simul.add.label(
+                    _build_mission23_text(mission23_data),
+                    wordwrap=True,
+                    padding=(20, 20, 20, 20),
+                    background_color='white',
+                    font_size=24,
+                    label_id='mission23_comparison_check'
+                )
+                menu_simul.add.vertical_margin(20)
+
+            if mission24_data is not None:
+                menu_simul.add.label(
+                    _build_mission24_text(mission24_data),
+                    wordwrap=True,
+                    padding=(20, 20, 20, 20),
+                    background_color='white',
+                    font_size=24,
+                    label_id='mission24_comparison_check'
+                )
+                menu_simul.add.vertical_margin(20)
+
+            if mission25_data is not None:
+                menu_simul.add.label(
+                    _build_mission25_text(mission25_data),
+                    wordwrap=True,
+                    padding=(20, 20, 20, 20),
+                    background_color='white',
+                    font_size=24,
+                    label_id='mission25_comparison_check'
+                )
+                menu_simul.add.vertical_margin(20)
 
             if mission07_data is not None:
                 menu_simul.add.label(
