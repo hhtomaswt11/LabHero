@@ -265,6 +265,174 @@ def _build_exchange_flux_report_text(exchange_fluxes):
     return '\n'.join(lines)
 
 
+
+def _format_sweep_number(value):
+    try:
+        return f'{float(value):.3f}'
+    except Exception:
+        return str(value)
+
+
+def _build_bound_sweep_report_text(sweep_data):
+    if not sweep_data:
+        return 'Bound Sweep Report\n\nRun a Bound Sweep to generate sensitivity data.'
+
+    if sweep_data.get('error'):
+        return f"Bound Sweep Report\n\nError: {sweep_data.get('error')}"
+
+    reaction_id = sweep_data.get('reaction_id')
+    reaction_name = sweep_data.get('reaction_name') or reaction_id
+    bound_label = sweep_data.get('bound_label') or sweep_data.get('bound')
+    tracked_fluxes = sweep_data.get('tracked_fluxes') or []
+    rows = sweep_data.get('rows') or []
+
+    if reaction_id == 'EX_o2_e':
+        uptake_label = 'O2 uptake'
+    elif reaction_id == 'EX_glc__D_e':
+        uptake_label = 'Glucose uptake'
+    else:
+        uptake_label = 'Tested uptake'
+
+    lines = [
+        'Bound Sweep Report',
+        '',
+        f'Variable tested: {reaction_name} ({reaction_id}) {bound_label}',
+        f"Method: {sweep_data.get('method')} | Objective: {sweep_data.get('objective')}",
+        'A sweep runs the same setup several times while changing only this bound.',
+        '',
+        'Rows:',
+        f'LB value | growth | {uptake_label} | tracked products',
+    ]
+
+    for row in rows:
+        values = row.get('tracked_flux_values') or {}
+        product_parts = []
+        for flux_id in tracked_fluxes:
+            label = PRODUCTION_FLUX_NAMES.get(flux_id, flux_id)
+            product_parts.append(f"{label}: {_format_sweep_number(values.get(flux_id, 0.0))}")
+        product_text = '; '.join(product_parts) if product_parts else 'none'
+        tested_uptake = row.get('tested_reaction_uptake')
+        if tested_uptake is None:
+            tested_uptake = row.get('oxygen_uptake')
+        status_note = ' infeasible' if row.get('status') == 'infeasible' else ''
+        lines.append(
+            f"{_format_sweep_number(row.get('bound_value'))} | "
+            f"{_format_sweep_number(row.get('growth_value'))}{status_note} | "
+            f"{_format_sweep_number(tested_uptake)} | "
+            f"{product_text}"
+        )
+
+    if len(rows) >= 2:
+        first = rows[0]
+        last = rows[-1]
+        try:
+            growth_drop = float(first.get('growth_value', 0.0)) - float(last.get('growth_value', 0.0))
+            first_uptake = first.get('tested_reaction_uptake', first.get('oxygen_uptake', 0.0))
+            last_uptake = last.get('tested_reaction_uptake', last.get('oxygen_uptake', 0.0))
+            uptake_drop = float(first_uptake or 0.0) - float(last_uptake or 0.0)
+            lines.extend([
+                '',
+                'Trend summary:',
+                f"- Growth change from first to last point: {_format_sweep_number(growth_drop)} drop",
+                f"- {uptake_label} change from first to last point: {_format_sweep_number(uptake_drop)} drop",
+            ])
+        except Exception:
+            pass
+
+    if reaction_id == 'EX_glc__D_e':
+        guide_lines = [
+            '- Lower bound closer to 0 means less glucose can be consumed.',
+            '- When carbon intake becomes limiting, growth and secretion should fall together.',
+            '- Do not read only the final row: identify the trend and the collapse zone.'
+        ]
+    elif reaction_id == 'EX_o2_e':
+        guide_lines = [
+            '- Lower bound closer to 0 means less oxygen can be consumed.',
+            '- If growth and product secretion change across the rows, the model is sensitive to oxygen availability.',
+            '- This is different from Compare Runs: here you read a trend across several points, not just A vs B.',
+        ]
+    else:
+        guide_lines = [
+            '- Lower bound closer to 0 means less of the selected alternative source can be consumed.',
+            '- A useful source should support growth when available and lose growth when the bound closes.',
+            '- Check both source uptake and product/byproduct changes before delivering the mission.',
+        ]
+
+    lines.extend(['', 'Interpretation guide:'] + guide_lines)
+    return '\n'.join(lines)
+
+def _build_mission26_text(report_data):
+    if not report_data:
+        return 'Mission 26 Oxygen Sweep Check\n\nRun a Bound Sweep to generate the mission report.'
+
+    if report_data.get('error') and not report_data.get('sweep_data'):
+        return f"Mission 26 Oxygen Sweep Check\nError: {report_data.get('error')}"
+
+    clean_status = (
+        'Base setup: clean sensitivity setup detected.'
+        if report_data.get('clean_base_setup')
+        else 'Base setup: keep FBA, biomass objective, no knockouts and unchanged environment.'
+    )
+    sweep_status = (
+        'Sweep variable: oxygen lower-bound sweep selected.'
+        if report_data.get('oxygen_sweep_selected')
+        else 'Sweep variable: select the oxygen lower bound in Bound Sweep Setup.'
+    )
+    points_status = (
+        'Sweep points: all required values returned valid results.'
+        if report_data.get('all_points_valid')
+        else 'Sweep points: not enough valid points were returned.'
+    )
+    growth_status = (
+        'Growth trend: growth decreases as oxygen becomes limited.'
+        if report_data.get('growth_decreased')
+        else 'Growth trend: the drop is not clear enough yet.'
+    )
+    oxygen_status = (
+        'Oxygen trend: oxygen uptake decreases across the sweep.'
+        if report_data.get('oxygen_uptake_decreased')
+        else 'Oxygen trend: uptake did not decrease clearly.'
+    )
+    profile_status = (
+        'Product profile: enough tracked products/byproducts changed.'
+        if report_data.get('profile_changed')
+        else 'Product profile: not enough tracked products/byproducts changed yet.'
+    )
+    final_status = (
+        'Oxygen sensitivity sweep ready. Return to Dr. Luna and deliver it.'
+        if report_data.get('ready_to_deliver')
+        else 'Not ready yet. Open the Bound Sweep Report and inspect the trend.'
+    )
+
+    changed_fluxes = report_data.get('changed_fluxes') or []
+    changed_text = ', '.join(changed_fluxes) if changed_fluxes else 'none'
+
+    return (
+        'Mission 26 Oxygen Sweep Check\n\n'
+        f"Context: {report_data.get('target_context')}\n"
+        f"Variable: {report_data.get('sweep_reaction')} {report_data.get('sweep_bound')} bound\n"
+        f"Values tested: {', '.join(str(v).rstrip('0').rstrip('.') for v in report_data.get('sweep_values') or [])}\n"
+        f"Valid points: {report_data.get('valid_point_count')}\n\n"
+        f"Growth trend:\n"
+        f"- First point growth: {_format_sweep_number(report_data.get('first_growth'))}\n"
+        f"- Last point growth: {_format_sweep_number(report_data.get('last_growth'))}\n"
+        f"- Growth drop: {_format_sweep_number(report_data.get('growth_drop'))}\n"
+        f"- Required minimum drop: {_format_sweep_number(report_data.get('minimum_growth_drop'))}\n\n"
+        f"Oxygen trend:\n"
+        f"- First point O2 uptake: {_format_sweep_number(report_data.get('first_oxygen_uptake'))}\n"
+        f"- Last point O2 uptake: {_format_sweep_number(report_data.get('last_oxygen_uptake'))}\n"
+        f"- O2 uptake drop: {_format_sweep_number(report_data.get('oxygen_uptake_drop'))}\n\n"
+        f"Changed tracked fluxes: {changed_text}\n"
+        f"Changed flux count: {report_data.get('changed_flux_count', 0)} / {report_data.get('minimum_changed_fluxes')}\n\n"
+        f"{clean_status}\n"
+        f"{sweep_status}\n"
+        f"{points_status}\n"
+        f"{growth_status}\n"
+        f"{oxygen_status}\n"
+        f"{profile_status}\n\n"
+        f"{final_status}"
+    )
+
 def _build_simulation_results_text(results):
     try:
         objective_name = results[0]
@@ -291,6 +459,197 @@ def _build_simulation_results_text(results):
 
 
 
+
+
+
+def _build_mission27_text(report_data):
+    if not report_data:
+        return 'Mission 27 Glucose Sweep Check\n\nRun a Bound Sweep to generate the mission report.'
+
+    if report_data.get('error') and not report_data.get('sweep_data'):
+        return f"Mission 27 Glucose Sweep Check\nError: {report_data.get('error')}"
+
+    clean_status = (
+        'Base setup: clean sensitivity setup detected.'
+        if report_data.get('clean_base_setup')
+        else 'Base setup: keep FBA, biomass objective, no knockouts and unchanged environment.'
+    )
+    sweep_status = (
+        'Sweep variable: glucose lower-bound sweep selected.'
+        if report_data.get('glucose_sweep_selected')
+        else 'Sweep variable: select the D-Glucose lower bound in Bound Sweep Setup.'
+    )
+    tracking_status = (
+        'Production Flux: full product/byproduct panel selected by the player.'
+        if report_data.get('tracking_ready')
+        else 'Production Flux: select the full product/byproduct panel before running the sweep.'
+    )
+    points_status = (
+        'Sweep points: all required glucose-limitation points returned results.'
+        if report_data.get('all_points_returned')
+        else 'Sweep points: the glucose sweep is missing result points.'
+    )
+    growth_status = (
+        'Growth trend: growth falls strongly as glucose becomes limiting.'
+        if report_data.get('growth_decreased')
+        else 'Growth trend: the drop is not strong enough for a carbon-limitation experiment.'
+    )
+    collapse_status = (
+        'Collapse zone: final point shows severe/no growth.'
+        if report_data.get('final_growth_low')
+        else 'Collapse zone: the final point does not show strong enough limitation.'
+    )
+    gradual_status = (
+        'Trend shape: several decreasing steps detected, not just one isolated change.'
+        if report_data.get('trend_is_gradual')
+        else 'Trend shape: look for a progressive decrease across several rows.'
+    )
+    uptake_status = (
+        'Glucose uptake: uptake decreases across the sweep.'
+        if report_data.get('glucose_uptake_decreased')
+        else 'Glucose uptake: the tested uptake did not decrease enough.'
+    )
+    profile_status = (
+        'Product profile: secretion profile decreases with carbon limitation.'
+        if report_data.get('profile_decreased')
+        else 'Product profile: not enough tracked products/byproducts decreased.'
+    )
+    final_status = (
+        'Glucose limitation sweep ready. Return to Dr. Luna and deliver it.'
+        if report_data.get('ready_to_deliver')
+        else 'Not ready yet. Use the Bound Sweep Report to identify the glucose-limitation trend.'
+    )
+
+    decreased_fluxes = report_data.get('decreased_fluxes') or []
+    decreased_text = ', '.join(decreased_fluxes) if decreased_fluxes else 'none'
+
+    return (
+        'Mission 27 Glucose Sweep Check\n\n'
+        f"Context: {report_data.get('target_context')}\n"
+        f"Variable: {report_data.get('sweep_reaction')} {report_data.get('sweep_bound')} bound\n"
+        f"Values tested: {', '.join(str(v).rstrip('0').rstrip('.') for v in report_data.get('sweep_values') or [])}\n"
+        f"Result points: {report_data.get('result_point_count')} / {report_data.get('minimum_result_points')}\n"
+        f"Decreasing growth steps: {report_data.get('decreasing_steps')} / {report_data.get('minimum_decreasing_steps')}\n\n"
+        f"Growth trend:\n"
+        f"- First point growth: {_format_sweep_number(report_data.get('first_growth'))}\n"
+        f"- Last point growth: {_format_sweep_number(report_data.get('last_growth'))}\n"
+        f"- Growth drop: {_format_sweep_number(report_data.get('growth_drop'))}\n"
+        f"- Required minimum drop: {_format_sweep_number(report_data.get('minimum_growth_drop'))}\n"
+        f"- Final growth must be <= {_format_sweep_number(report_data.get('maximum_final_growth'))}\n\n"
+        f"Glucose uptake trend:\n"
+        f"- First point glucose uptake: {_format_sweep_number(report_data.get('first_glucose_uptake'))}\n"
+        f"- Last point glucose uptake: {_format_sweep_number(report_data.get('last_glucose_uptake'))}\n"
+        f"- Glucose uptake drop: {_format_sweep_number(report_data.get('glucose_uptake_drop'))}\n"
+        f"- Required minimum uptake drop: {_format_sweep_number(report_data.get('minimum_uptake_drop'))}\n\n"
+        f"Decreased tracked fluxes: {decreased_text}\n"
+        f"Decreased flux count: {report_data.get('decreased_flux_count', 0)} / {report_data.get('minimum_changed_fluxes')}\n\n"
+        f"{clean_status}\n"
+        f"{sweep_status}\n"
+        f"{tracking_status}\n"
+        f"{points_status}\n"
+        f"{growth_status}\n"
+        f"{collapse_status}\n"
+        f"{gradual_status}\n"
+        f"{uptake_status}\n"
+        f"{profile_status}\n\n"
+        f"{final_status}"
+    )
+
+
+
+def _build_mission28_text(report_data):
+    if not report_data:
+        return 'Mission 28 Carbon Source Sweep Check\n\nRun a Bound Sweep to generate the mission report.'
+
+    if report_data.get('error') and not report_data.get('sweep_data'):
+        return f"Mission 28 Carbon Source Sweep Check\nError: {report_data.get('error')}"
+
+    base_status = (
+        'Base medium: glucose uptake blocked, with no unrelated medium changes.'
+        if report_data.get('base_medium_ready')
+        else 'Base medium: close only glucose uptake before the sweep.'
+    )
+    sweep_status = (
+        'Sweep variable: candidate alternative carbon-source lower bound selected.'
+        if report_data.get('candidate_sweep_selected')
+        else 'Sweep variable: choose one candidate carbon-source lower bound in Bound Sweep Setup.'
+    )
+    tracking_status = (
+        'Production Flux: full product/byproduct panel selected.'
+        if report_data.get('tracking_ready')
+        else 'Production Flux: select the full product/byproduct panel before running the sweep.'
+    )
+    points_status = (
+        'Sweep points: all required source-availability points returned results.'
+        if report_data.get('all_points_returned')
+        else 'Sweep points: missing result points.'
+    )
+    source_status = (
+        'Source uptake: selected source is consumed and decreases across the sweep.'
+        if report_data.get('source_consumed') and report_data.get('source_uptake_decreased')
+        else 'Source uptake: the selected source is not showing a clear uptake trend.'
+    )
+    growth_status = (
+        'Growth trend: viable at high source availability, then drops strongly.'
+        if report_data.get('first_growth_viable') and report_data.get('growth_decreased')
+        else 'Growth trend: the source does not show enough rescue/limitation yet.'
+    )
+    collapse_status = (
+        'Collapse zone: final point shows severe/no growth.'
+        if report_data.get('final_growth_low')
+        else 'Collapse zone: final point should show severe/no growth.'
+    )
+    profile_status = (
+        'Product profile: enough tracked products/byproducts changed.'
+        if report_data.get('profile_changed')
+        else 'Product profile: not enough tracked products/byproducts changed.'
+    )
+    final_status = (
+        'Alternative carbon-source sweep ready. Return to Dr. Luna and deliver it.'
+        if report_data.get('ready_to_deliver')
+        else 'Not ready yet. Use the Bound Sweep Report to identify a stronger carbon-source trend.'
+    )
+
+    selected_source = report_data.get('selected_source') or 'none'
+    changed_fluxes = report_data.get('changed_fluxes') or []
+    changed_text = ', '.join(changed_fluxes) if changed_fluxes else 'none'
+    unexpected = report_data.get('unexpected_environment_changes') or []
+    unexpected_text = ', '.join(unexpected) if unexpected else 'none'
+
+    return (
+        'Mission 28 Carbon Source Sweep Check\n\n'
+        f"Context: {report_data.get('target_context')}\n"
+        f"Blocked carbon source: {report_data.get('blocked_carbon_source')}\n"
+        f"Selected sweep source: {selected_source}\n"
+        f"Candidate sources: {', '.join(report_data.get('candidate_carbon_sources') or [])}\n"
+        f"Values tested: {', '.join(str(v).rstrip('0').rstrip('.') for v in report_data.get('sweep_values') or [])}\n"
+        f"Unexpected medium changes: {unexpected_text}\n"
+        f"Result points: {report_data.get('result_point_count')} / {report_data.get('minimum_result_points')}\n"
+        f"Decreasing growth steps: {report_data.get('decreasing_steps')} / {report_data.get('minimum_decreasing_steps')}\n\n"
+        f"Growth trend:\n"
+        f"- First point growth: {_format_sweep_number(report_data.get('first_growth'))}\n"
+        f"- Minimum first growth: {_format_sweep_number(report_data.get('minimum_first_growth'))}\n"
+        f"- Last point growth: {_format_sweep_number(report_data.get('last_growth'))}\n"
+        f"- Final growth must be <= {_format_sweep_number(report_data.get('maximum_final_growth'))}\n"
+        f"- Growth drop: {_format_sweep_number(report_data.get('growth_drop'))}\n"
+        f"- Required growth drop: {_format_sweep_number(report_data.get('minimum_growth_drop'))}\n\n"
+        f"Source uptake trend:\n"
+        f"- First source uptake: {_format_sweep_number(report_data.get('first_source_uptake'))}\n"
+        f"- Last source uptake: {_format_sweep_number(report_data.get('last_source_uptake'))}\n"
+        f"- Source uptake drop: {_format_sweep_number(report_data.get('source_uptake_drop'))}\n"
+        f"- Required uptake drop: {_format_sweep_number(report_data.get('minimum_source_uptake_drop'))}\n\n"
+        f"Changed tracked fluxes: {changed_text}\n"
+        f"Changed flux count: {report_data.get('changed_flux_count', 0)} / {report_data.get('minimum_changed_fluxes')}\n\n"
+        f"{base_status}\n"
+        f"{sweep_status}\n"
+        f"{tracking_status}\n"
+        f"{points_status}\n"
+        f"{source_status}\n"
+        f"{growth_status}\n"
+        f"{collapse_status}\n"
+        f"{profile_status}\n\n"
+        f"{final_status}"
+    )
 
 def _build_mission07_text(objective_data):
     if not objective_data:
@@ -2340,6 +2699,72 @@ class Window:
 
         
 
+        # MENU SUB (Bound Sweep)
+        menu_bound_sweep = pygame_menu.Menu(
+            height=720,
+            center_content=False,
+            onclose=pygame_menu.events.BACK,
+            theme=mytheme,
+            title='Bound Sweep Setup',
+            width=1280
+        )
+        menu_bound_sweep.add.vertical_margin(40)
+        menu_bound_sweep.add.label(
+            "Bound Sweep tests one environmental bound at several numeric values.\nUse it when you want to read a trend instead of comparing only two simulations.",
+            wordwrap=True,
+            padding=(20, 30, 20, 30),
+            background_color="white",
+            font_size=26
+        )
+        menu_bound_sweep.add.vertical_margin(20)
+        menu_bound_sweep.add.dropselect(
+            title='Sweep variable: ',
+            items=[
+                ('Oxygen lower bound (EX_o2_e)', 'EX_o2_e:lower'),
+                ('D-Glucose lower bound (EX_glc__D_e)', 'EX_glc__D_e:lower'),
+                ('Acetate lower bound (EX_ac_e)', 'EX_ac_e:lower'),
+                ('Pyruvate lower bound (EX_pyr_e)', 'EX_pyr_e:lower'),
+                ('L-Malate lower bound (EX_mal__L_e)', 'EX_mal__L_e:lower'),
+                ('Fumarate lower bound (EX_fum_e)', 'EX_fum_e:lower'),
+                ('2-Oxoglutarate lower bound (EX_akg_e)', 'EX_akg_e:lower'),
+                # Future Dr. Luna missions can add nutrient sweeps here.
+            ],
+            default=0,
+            selection_box_height=4,
+            selection_box_width=520,
+            dropselect_id='sweep_variable',
+            background_color='white',
+            font_color=(20, 0, 150)
+        )
+        menu_bound_sweep.add.vertical_margin(20)
+        menu_bound_sweep.add.dropselect(
+            title='Sweep values: ',
+            items=[
+                ('O2 transition: -20, -10, -5, 0', 'oxygen_transition'),
+                ('Glucose limitation: -1000, -500, -100, -50, -10, 0', 'glucose_limitation'),
+                ('Alternative carbon: -20, -10, -5, -1, 0', 'alternative_carbon_limitation'),
+                # Future presets can be added here without changing the report UI.
+            ],
+            default=0,
+            selection_box_height=4,
+            selection_box_width=520,
+            dropselect_id='sweep_values',
+            background_color='white',
+            font_color=(20, 0, 150)
+        )
+        menu_bound_sweep.add.vertical_margin(20)
+        menu_bound_sweep.add.label(
+            "Dr. Luna note: follow the active mission setup first, then select the requested sweep. Some missions need a clean base setup; harder missions may ask for one controlled medium change before the sweep.",
+            wordwrap=True,
+            padding=(20, 20, 20, 20),
+            background_color='white',
+            font_size=24
+        )
+        menu_bound_sweep.add.vertical_margin(20)
+        menu_bound_sweep.add.button('Back', pygame_menu.events.BACK, background_color=(70, 70, 70))
+        menu_bound_sweep.add.vertical_margin(20)
+
+
         def data_fun() -> None:
             """
             Print data of the menu.
@@ -2444,6 +2869,31 @@ class Window:
             if '25' in self.player.missions_activated and '25' not in self.player.missions_completed:
                 mission25_data = run_mission25_comparison_check(compare_runs)
 
+
+            bound_sweep_data = None
+            mission26_data = None
+            mission27_data = None
+            mission28_data = None
+            luna_sweep_active = (
+                ('26' in self.player.missions_activated and '26' not in self.player.missions_completed)
+                or ('27' in self.player.missions_activated and '27' not in self.player.missions_completed)
+                or ('28' in self.player.missions_activated and '28' not in self.player.missions_completed)
+            )
+            if luna_sweep_active:
+                if sys.platform == 'emscripten':
+                    bound_sweep_data = {
+                        'error': 'Bound Sweep is not available in this web build yet.'
+                    }
+                else:
+                    bound_sweep_data = run_bound_sweep(menu_bound_sweep.get_input_data())
+
+                if '26' in self.player.missions_activated and '26' not in self.player.missions_completed:
+                    mission26_data = run_mission26_bound_sweep_check(bound_sweep_data)
+                if '27' in self.player.missions_activated and '27' not in self.player.missions_completed:
+                    mission27_data = run_mission27_bound_sweep_check(bound_sweep_data)
+                if '28' in self.player.missions_activated and '28' not in self.player.missions_completed:
+                    mission28_data = run_mission28_bound_sweep_check(bound_sweep_data)
+
             menu_compare_runs = pygame_menu.Menu(
                 height=720,
                 center_content=False,
@@ -2487,6 +2937,31 @@ class Window:
             )
             menu_exchange_report.add.vertical_margin(20)
             menu_exchange_report.add.button(
+                'Back',
+                pygame_menu.events.BACK,
+                background_color=(70, 70, 70)
+            )
+
+
+            menu_bound_sweep_report = pygame_menu.Menu(
+                height=720,
+                center_content=False,
+                onclose=pygame_menu.events.BACK,
+                theme=mytheme,
+                title='Bound Sweep Report',
+                width=1280,
+                menu_id='menu_bound_sweep_report'
+            )
+            menu_bound_sweep_report.add.vertical_margin(20)
+            menu_bound_sweep_report.add.label(
+                _build_bound_sweep_report_text(bound_sweep_data),
+                wordwrap=True,
+                padding=(20, 20, 20, 20),
+                background_color='white',
+                font_size=22
+            )
+            menu_bound_sweep_report.add.vertical_margin(20)
+            menu_bound_sweep_report.add.button(
                 'Back',
                 pygame_menu.events.BACK,
                 background_color=(70, 70, 70)
@@ -2615,6 +3090,16 @@ class Window:
                 background_color=(20, 100, 100),
                 button_id='compare_runs'
             )
+
+            if bound_sweep_data is not None:
+                menu_simul.add.vertical_margin(10)
+                menu_simul.add.button(
+                    'Bound Sweep Report',
+                    menu_bound_sweep_report,
+                    font_color='white',
+                    background_color=(20, 100, 100),
+                    button_id='bound_sweep_report'
+                )
             menu_simul.add.vertical_margin(20)
 
             if mission21_data is not None:
@@ -2669,6 +3154,40 @@ class Window:
                     background_color='white',
                     font_size=24,
                     label_id='mission25_comparison_check'
+                )
+                menu_simul.add.vertical_margin(20)
+
+
+            if mission26_data is not None:
+                menu_simul.add.label(
+                    _build_mission26_text(mission26_data),
+                    wordwrap=True,
+                    padding=(20, 20, 20, 20),
+                    background_color='white',
+                    font_size=24,
+                    label_id='mission26_bound_sweep_check'
+                )
+                menu_simul.add.vertical_margin(20)
+
+            if mission27_data is not None:
+                menu_simul.add.label(
+                    _build_mission27_text(mission27_data),
+                    wordwrap=True,
+                    padding=(20, 20, 20, 20),
+                    background_color='white',
+                    font_size=24,
+                    label_id='mission27_bound_sweep_check'
+                )
+                menu_simul.add.vertical_margin(20)
+
+            if mission28_data is not None:
+                menu_simul.add.label(
+                    _build_mission28_text(mission28_data),
+                    wordwrap=True,
+                    padding=(20, 20, 20, 20),
+                    background_color='white',
+                    font_size=24,
+                    label_id='mission28_bound_sweep_check'
                 )
                 menu_simul.add.vertical_margin(20)
 
@@ -2905,6 +3424,7 @@ class Window:
         menu.add.button('Production Flux', menu_production_flux, font_color = (20,0,150), background_color="white")
         menu.add.button('Genes', menu_genes, font_color = (20,0,150), background_color="white")
         menu.add.button('Environmental Conditions', menu_reactions, font_color = (20,0,150), background_color="white")
+        menu.add.button('Bound Sweep Setup', menu_bound_sweep, font_color = (20,0,150), background_color="white")
         # menu.add.button('Environmental Conditions', menu_reactions_backup, font_color = (20,0,150), background_color="white")
         menu.add.vertical_margin(50)  # Adds margin
         # menu.add.button('Restore Data', restore_data, background_color=(100,0,0))

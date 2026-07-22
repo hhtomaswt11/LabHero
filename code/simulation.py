@@ -243,6 +243,56 @@ MISSION25_MIN_GROWTH_DROP = 1.0
 MISSION25_MIN_CHANGED_FLUXES = 2
 MISSION25_MIN_FLUX_CHANGE = 0.001
 
+MISSION26_METHOD = 'FBA'
+MISSION26_GROWTH_OBJECTIVE = 'BIOMASS_Ecoli_core_w_GAM'
+MISSION26_TARGET_CONTEXT = 'oxygen sensitivity sweep: aerobic to anaerobic transition'
+MISSION26_SWEEP_REACTION = 'EX_o2_e'
+MISSION26_SWEEP_REACTION_NAME = 'Oxygen exchange'
+MISSION26_SWEEP_BOUND = 'lower'
+MISSION26_SWEEP_BOUND_LABEL = 'lower bound'
+MISSION26_SWEEP_VALUES = [-20.0, -10.0, -5.0, 0.0]
+MISSION26_REQUIRED_TRACKED_FLUXES = ['EX_ac_e', 'EX_etoh_e', 'EX_for_e', 'EX_lac__D_e', 'EX_succ_e']
+MISSION26_MIN_GROWTH_DROP = 0.5
+MISSION26_MIN_PROFILE_CHANGE = 1.0
+MISSION26_MIN_CHANGED_FLUXES = 2
+MISSION26_MIN_VALID_POINTS = 4
+
+MISSION27_METHOD = 'FBA'
+MISSION27_GROWTH_OBJECTIVE = 'BIOMASS_Ecoli_core_w_GAM'
+MISSION27_TARGET_CONTEXT = 'glucose sensitivity sweep: carbon limitation threshold'
+MISSION27_SWEEP_REACTION = 'EX_glc__D_e'
+MISSION27_SWEEP_REACTION_NAME = 'D-Glucose exchange'
+MISSION27_SWEEP_BOUND = 'lower'
+MISSION27_SWEEP_BOUND_LABEL = 'lower bound'
+MISSION27_SWEEP_VALUES = [-1000.0, -500.0, -100.0, -50.0, -10.0, 0.0]
+MISSION27_REQUIRED_TRACKED_FLUXES = ['EX_ac_e', 'EX_etoh_e', 'EX_for_e', 'EX_lac__D_e', 'EX_succ_e']
+MISSION27_MIN_GROWTH_DROP = 10.0
+MISSION27_MIN_UPTAKE_DROP = 100.0
+MISSION27_MAX_FINAL_GROWTH = 1.0
+MISSION27_MIN_PROFILE_CHANGE = 10.0
+MISSION27_MIN_CHANGED_FLUXES = 3
+MISSION27_MIN_RESULT_POINTS = 6
+MISSION27_MIN_DECREASING_STEPS = 3
+
+MISSION28_METHOD = 'FBA'
+MISSION28_GROWTH_OBJECTIVE = 'BIOMASS_Ecoli_core_w_GAM'
+MISSION28_TARGET_CONTEXT = 'alternative carbon source sensitivity sweep under glucose removal'
+MISSION28_BLOCKED_CARBON_SOURCE = 'EX_glc__D_e'
+MISSION28_CANDIDATE_CARBON_SOURCES = ['EX_ac_e', 'EX_pyr_e', 'EX_mal__L_e', 'EX_fum_e', 'EX_akg_e']
+MISSION28_SWEEP_BOUND = 'lower'
+MISSION28_SWEEP_BOUND_LABEL = 'lower bound'
+MISSION28_SWEEP_VALUES = [-20.0, -10.0, -5.0, -1.0, 0.0]
+MISSION28_REQUIRED_TRACKED_FLUXES = ['EX_ac_e', 'EX_etoh_e', 'EX_for_e', 'EX_lac__D_e', 'EX_succ_e']
+MISSION28_MIN_FIRST_GROWTH = 5.0
+MISSION28_MAX_FINAL_GROWTH = 1.0
+MISSION28_MIN_GROWTH_DROP = 5.0
+MISSION28_MIN_SOURCE_UPTAKE_DROP = 5.0
+MISSION28_MIN_SOURCE_UPTAKE = 1.0
+MISSION28_MIN_PROFILE_CHANGE = 1.0
+MISSION28_MIN_CHANGED_FLUXES = 2
+MISSION28_MIN_RESULT_POINTS = 5
+MISSION28_MIN_DECREASING_STEPS = 2
+
 
 EXCHANGE_FLUX_REPORT_REACTION_IDS = [
     'EX_glc__D_e',   # D-Glucose
@@ -3895,6 +3945,663 @@ def run_mission25_comparison_check(compare_runs=None):
         return _build_mission25_data(compare_runs, error='Run two simulations before delivering Mission 25.')
     return _build_mission25_data(compare_runs)
 
+
+
+def _selected_sweep_value(menu_data, key, default_value):
+    """Return the internal value selected in a pygame_menu dropselect.
+
+    pygame_menu can return dropselect data as [(label, internal_value)].
+    Earlier code was reading index [0][0], which gives the visible label.
+    That broke Mission 27 because the visible label
+    "D-Glucose lower bound (EX_glc__D_e)" is not the internal id
+    "EX_glc__D_e:lower" used by the Bound Sweep validator.
+    """
+    try:
+        value = menu_data.get(key)
+        selected = value[0]
+    except Exception:
+        return default_value
+
+    candidates = list(selected) if isinstance(selected, (list, tuple)) else [selected]
+    preferred_values = {
+        'sweep_variable': {
+            f'{MISSION26_SWEEP_REACTION}:lower',
+            f'{MISSION27_SWEEP_REACTION}:lower',
+            *[f'{reaction_id}:lower' for reaction_id in MISSION28_CANDIDATE_CARBON_SOURCES],
+        },
+        'sweep_values': {
+            'oxygen_transition',
+            'glucose_limitation',
+            'alternative_carbon_limitation',
+        },
+    }
+
+    for candidate in candidates:
+        if candidate in preferred_values.get(key, set()):
+            return candidate
+
+    for candidate in reversed(candidates):
+        if isinstance(candidate, str):
+            return candidate
+
+    return default_value
+
+
+def _normalise_sweep_config(sweep_menu_data=None):
+    sweep_menu_data = sweep_menu_data or {}
+    variable = _selected_sweep_value(
+        sweep_menu_data,
+        'sweep_variable',
+        f'{MISSION26_SWEEP_REACTION}:lower'
+    )
+    preset = _selected_sweep_value(
+        sweep_menu_data,
+        'sweep_values',
+        'oxygen_transition'
+    )
+
+    # Keep this data-driven: each new Dr. Luna sweep adds one entry here and
+    # the generic sweep runner/report can stay unchanged.
+    sweep_options = {
+        f'{MISSION26_SWEEP_REACTION}:lower': {
+            'reaction_id': MISSION26_SWEEP_REACTION,
+            'reaction_name': MISSION26_SWEEP_REACTION_NAME,
+            'bound': MISSION26_SWEEP_BOUND,
+            'bound_label': MISSION26_SWEEP_BOUND_LABEL,
+            'default_preset': 'oxygen_transition',
+        },
+        f'{MISSION27_SWEEP_REACTION}:lower': {
+            'reaction_id': MISSION27_SWEEP_REACTION,
+            'reaction_name': MISSION27_SWEEP_REACTION_NAME,
+            'bound': MISSION27_SWEEP_BOUND,
+            'bound_label': MISSION27_SWEEP_BOUND_LABEL,
+            'default_preset': 'glucose_limitation',
+        },
+    }
+    for reaction_id in MISSION28_CANDIDATE_CARBON_SOURCES:
+        sweep_options[f'{reaction_id}:lower'] = {
+            'reaction_id': reaction_id,
+            'reaction_name': _reaction_display_label(reaction_id).split(' (')[0],
+            'bound': MISSION28_SWEEP_BOUND,
+            'bound_label': MISSION28_SWEEP_BOUND_LABEL,
+            'default_preset': 'alternative_carbon_limitation',
+        }
+    preset_values = {
+        'oxygen_transition': list(MISSION26_SWEEP_VALUES),
+        'glucose_limitation': list(MISSION27_SWEEP_VALUES),
+        'alternative_carbon_limitation': list(MISSION28_SWEEP_VALUES),
+    }
+
+    config = sweep_options.get(variable, sweep_options[f'{MISSION26_SWEEP_REACTION}:lower']).copy()
+
+    # If the preset and variable do not match, keep the variable selected by the
+    # player but use its matching default values. This avoids confusing results.
+    if preset not in preset_values:
+        preset = config['default_preset']
+    if variable == f'{MISSION26_SWEEP_REACTION}:lower' and preset != 'oxygen_transition':
+        preset = 'oxygen_transition'
+    if variable == f'{MISSION27_SWEEP_REACTION}:lower' and preset != 'glucose_limitation':
+        preset = 'glucose_limitation'
+    if variable in [f'{reaction_id}:lower' for reaction_id in MISSION28_CANDIDATE_CARBON_SOURCES] and preset != 'alternative_carbon_limitation':
+        preset = 'alternative_carbon_limitation'
+
+    return {
+        'variable': variable,
+        'preset': preset,
+        'reaction_id': config.get('reaction_id'),
+        'reaction_name': config.get('reaction_name'),
+        'bound': config.get('bound'),
+        'bound_label': config.get('bound_label'),
+        'values': preset_values[preset],
+    }
+
+def _apply_numeric_bound_to_constraints(constraints, reaction_id, bound, value):
+    current_lb, current_ub = constraints.get(reaction_id, (-1000, 1000))
+    if bound == 'upper':
+        constraints[reaction_id] = (current_lb, float(value))
+    else:
+        constraints[reaction_id] = (float(value), current_ub)
+    return constraints
+
+
+def _row_value(row, key, default=0.0):
+    try:
+        return float(row.get(key, default))
+    except Exception:
+        return float(default)
+
+
+def _bound_sweep_flux_values(production_fluxes):
+    values = {}
+    if not isinstance(production_fluxes, dict):
+        return values
+    for item in production_fluxes.get('items') or []:
+        reaction_id = item.get('reaction_id')
+        if reaction_id:
+            try:
+                values[reaction_id] = float(item.get('production_flux', 0.0))
+            except Exception:
+                values[reaction_id] = 0.0
+    return values
+
+
+def _bound_sweep_default_tracked_fluxes():
+    tracked = []
+    for reaction_id in list(MISSION26_REQUIRED_TRACKED_FLUXES) + list(MISSION27_REQUIRED_TRACKED_FLUXES) + list(MISSION28_REQUIRED_TRACKED_FLUXES):
+        if reaction_id in PRODUCTION_FLUX_REACTION_IDS and reaction_id not in tracked:
+            tracked.append(reaction_id)
+    return tracked
+
+
+def run_bound_sweep(sweep_menu_data=None):
+    """Run a one-variable bound sweep using the current simulator setup.
+
+    Dr. Luna missions use this to test sensitivity to medium bounds. The runner
+    is generic: the menu chooses the reaction/bound/preset, while each mission
+    validates whether the selected sweep is the correct experiment.
+    """
+    method_name, objective_name, genes, reactions = _read_simulation_file()
+    config = _normalise_sweep_config(sweep_menu_data)
+
+    selected_fluxes = _read_selected_production_fluxes()
+    tracked_fluxes = []
+    for reaction_id in list(selected_fluxes) + _bound_sweep_default_tracked_fluxes():
+        if reaction_id in PRODUCTION_FLUX_REACTION_IDS and reaction_id not in tracked_fluxes:
+            tracked_fluxes.append(reaction_id)
+
+    knocked_out_genes = _knocked_out_genes(genes)
+    environment_changed = _environment_has_changes(reactions)
+
+    data = {
+        'sweep_id': 'bound_sweep',
+        'check_version': 2,
+        'method': method_name,
+        'objective': objective_name,
+        'knocked_out_genes': knocked_out_genes,
+        'environment_changed': environment_changed,
+        'base_genes': genes,
+        'base_reactions': reactions,
+        'variable': config.get('variable'),
+        'preset': config.get('preset'),
+        'reaction_id': config.get('reaction_id'),
+        'reaction_name': config.get('reaction_name'),
+        'bound': config.get('bound'),
+        'bound_label': config.get('bound_label'),
+        'values': config.get('values'),
+        'tracked_fluxes': tracked_fluxes,
+        'selected_production_fluxes': selected_fluxes,
+        'rows': [],
+    }
+
+    try:
+        for bound_value in config.get('values') or []:
+            simul, constraints = _build_local_constraints(genes, reactions)
+            simul.objective = objective_name
+            constraints = _apply_numeric_bound_to_constraints(
+                constraints,
+                config.get('reaction_id'),
+                config.get('bound'),
+                bound_value,
+            )
+            result = simul.simulate(method=method_name, constraints=constraints)
+            objective_result = _normalise_result(result)
+
+            row = {
+                'bound_value': float(bound_value),
+                'objective_result': objective_result,
+                'growth_value': _numeric_result(objective_result),
+            }
+
+            if objective_result == 'Status: INFEASIBLE':
+                row['status'] = 'infeasible'
+                row['tested_reaction_raw_flux'] = 0.0
+                row['tested_reaction_uptake'] = 0.0
+                row['oxygen_uptake'] = 0.0
+                row['tracked_flux_values'] = {reaction_id: 0.0 for reaction_id in tracked_fluxes}
+            else:
+                row['status'] = 'ok'
+                flux_getter = lambda reaction_id: _extract_flux(result, reaction_id)
+
+                tested_flux = _as_float_or_none(flux_getter(config.get('reaction_id')))
+                row['tested_reaction_raw_flux'] = round(float(tested_flux), 6) if tested_flux is not None else None
+                row['tested_reaction_uptake'] = round(max(-float(tested_flux), 0.0), 3) if tested_flux is not None else 0.0
+
+                oxygen_flux = _as_float_or_none(flux_getter(MISSION26_SWEEP_REACTION))
+                row['oxygen_raw_flux'] = round(float(oxygen_flux), 6) if oxygen_flux is not None else None
+                row['oxygen_uptake'] = round(max(-float(oxygen_flux), 0.0), 3) if oxygen_flux is not None else 0.0
+
+                production_fluxes = _build_production_flux_data(tracked_fluxes, flux_getter=flux_getter)
+                row['tracked_flux_values'] = {
+                    reaction_id: round(float(value), 3)
+                    for reaction_id, value in _bound_sweep_flux_values(production_fluxes).items()
+                }
+
+            data['rows'].append(row)
+    except Exception as exc:
+        data['error'] = f'Bound Sweep failed: {exc}'
+
+    save_bound_sweep(data)
+    return data
+
+
+def _growth_values_from_rows(rows):
+    return [_row_value(row, 'growth_value') for row in rows]
+
+
+def _count_decreasing_steps(values, tolerance=0.001):
+    count = 0
+    for before, after in zip(values, values[1:]):
+        if after < before - tolerance:
+            count += 1
+    return count
+
+
+def _selected_fluxes_include(required_fluxes, selected_fluxes):
+    selected_fluxes = selected_fluxes or []
+    return all(reaction_id in selected_fluxes for reaction_id in required_fluxes)
+
+def _build_mission26_data(sweep_data=None, error=None):
+    sweep_data = sweep_data or load_bound_sweep() or {}
+    rows = sweep_data.get('rows') or []
+    valid_rows = [row for row in rows if row.get('status') == 'ok']
+
+    clean_base_setup = (
+        sweep_data.get('method') == MISSION26_METHOD
+        and sweep_data.get('objective') == MISSION26_GROWTH_OBJECTIVE
+        and not sweep_data.get('knocked_out_genes')
+        and not sweep_data.get('environment_changed')
+    )
+
+    expected_values = [float(value) for value in MISSION26_SWEEP_VALUES]
+    got_values = [float(value) for value in (sweep_data.get('values') or [])]
+    oxygen_sweep_selected = (
+        sweep_data.get('reaction_id') == MISSION26_SWEEP_REACTION
+        and sweep_data.get('bound') == MISSION26_SWEEP_BOUND
+        and got_values == expected_values
+    )
+
+    all_points_valid = len(valid_rows) >= MISSION26_MIN_VALID_POINTS
+
+    first_row = valid_rows[0] if valid_rows else None
+    last_row = valid_rows[-1] if valid_rows else None
+    first_growth = _row_value(first_row, 'growth_value') if first_row else 0.0
+    last_growth = _row_value(last_row, 'growth_value') if last_row else 0.0
+    growth_drop = round(first_growth - last_growth, 3) if valid_rows else 0.0
+    growth_decreased = growth_drop >= MISSION26_MIN_GROWTH_DROP
+
+    first_oxygen = _row_value(first_row, 'oxygen_uptake') if first_row else 0.0
+    last_oxygen = _row_value(last_row, 'oxygen_uptake') if last_row else 0.0
+    oxygen_uptake_drop = round(first_oxygen - last_oxygen, 3) if valid_rows else 0.0
+    oxygen_uptake_decreased = oxygen_uptake_drop > 0.001
+
+    profile_differences = {}
+    changed_fluxes = []
+    if first_row and last_row:
+        first_fluxes = first_row.get('tracked_flux_values') or {}
+        last_fluxes = last_row.get('tracked_flux_values') or {}
+        for reaction_id in MISSION26_REQUIRED_TRACKED_FLUXES:
+            difference = round(float(last_fluxes.get(reaction_id, 0.0)) - float(first_fluxes.get(reaction_id, 0.0)), 3)
+            profile_differences[reaction_id] = difference
+            if abs(difference) >= MISSION26_MIN_PROFILE_CHANGE:
+                changed_fluxes.append(reaction_id)
+
+    profile_changed = len(changed_fluxes) >= MISSION26_MIN_CHANGED_FLUXES
+
+    mission26_data = {
+        'mission_id': '26',
+        'check_version': 1,
+        'mission_title': 'Oxygen Sensitivity Sweep',
+        'target_context': MISSION26_TARGET_CONTEXT,
+        'target_method': MISSION26_METHOD,
+        'growth_objective': MISSION26_GROWTH_OBJECTIVE,
+        'sweep_reaction': MISSION26_SWEEP_REACTION,
+        'sweep_bound': MISSION26_SWEEP_BOUND,
+        'sweep_values': expected_values,
+        'required_tracked_fluxes': MISSION26_REQUIRED_TRACKED_FLUXES,
+        'minimum_growth_drop': MISSION26_MIN_GROWTH_DROP,
+        'minimum_profile_change': MISSION26_MIN_PROFILE_CHANGE,
+        'minimum_changed_fluxes': MISSION26_MIN_CHANGED_FLUXES,
+        'sweep_data': sweep_data,
+        'clean_base_setup': clean_base_setup,
+        'oxygen_sweep_selected': oxygen_sweep_selected,
+        'valid_point_count': len(valid_rows),
+        'all_points_valid': all_points_valid,
+        'first_growth': round(first_growth, 3),
+        'last_growth': round(last_growth, 3),
+        'growth_drop': growth_drop,
+        'growth_decreased': growth_decreased,
+        'first_oxygen_uptake': round(first_oxygen, 3),
+        'last_oxygen_uptake': round(last_oxygen, 3),
+        'oxygen_uptake_drop': oxygen_uptake_drop,
+        'oxygen_uptake_decreased': oxygen_uptake_decreased,
+        'profile_differences': profile_differences,
+        'changed_fluxes': changed_fluxes,
+        'changed_flux_count': len(changed_fluxes),
+        'profile_changed': profile_changed,
+        'ready_to_deliver': (
+            clean_base_setup
+            and oxygen_sweep_selected
+            and all_points_valid
+            and growth_decreased
+            and oxygen_uptake_decreased
+            and profile_changed
+        ),
+    }
+    if error or sweep_data.get('error'):
+        mission26_data['error'] = error or sweep_data.get('error')
+    save_mission26_bound_sweep_check(mission26_data)
+    return mission26_data
+
+
+def run_mission26_bound_sweep_check(sweep_data=None):
+    sweep_data = sweep_data or load_bound_sweep()
+    if not sweep_data or not sweep_data.get('rows'):
+        return _build_mission26_data(sweep_data, error='Run a Bound Sweep before delivering Mission 26.')
+    return _build_mission26_data(sweep_data)
+
+
+
+def _build_mission27_data(sweep_data=None, error=None):
+    sweep_data = sweep_data or load_bound_sweep() or {}
+    rows = sweep_data.get('rows') or []
+    result_rows = [row for row in rows if row.get('status') in ('ok', 'infeasible')]
+    ok_rows = [row for row in rows if row.get('status') == 'ok']
+
+    clean_base_setup = (
+        sweep_data.get('method') == MISSION27_METHOD
+        and sweep_data.get('objective') == MISSION27_GROWTH_OBJECTIVE
+        and not sweep_data.get('knocked_out_genes')
+        and not sweep_data.get('environment_changed')
+    )
+
+    expected_values = [float(value) for value in MISSION27_SWEEP_VALUES]
+    got_values = [float(value) for value in (sweep_data.get('values') or [])]
+    glucose_sweep_selected = (
+        sweep_data.get('reaction_id') == MISSION27_SWEEP_REACTION
+        and sweep_data.get('bound') == MISSION27_SWEEP_BOUND
+        and got_values == expected_values
+    )
+
+    tracking_ready = _selected_fluxes_include(
+        MISSION27_REQUIRED_TRACKED_FLUXES,
+        sweep_data.get('selected_production_fluxes') or []
+    )
+    all_points_returned = len(result_rows) >= MISSION27_MIN_RESULT_POINTS
+
+    first_row = result_rows[0] if result_rows else None
+    last_row = result_rows[-1] if result_rows else None
+    first_growth = _row_value(first_row, 'growth_value') if first_row else 0.0
+    last_growth = _row_value(last_row, 'growth_value') if last_row else 0.0
+    growth_drop = round(first_growth - last_growth, 3) if result_rows else 0.0
+    growth_decreased = growth_drop >= MISSION27_MIN_GROWTH_DROP
+    final_growth_low = last_growth <= MISSION27_MAX_FINAL_GROWTH if last_row else False
+
+    growth_values = _growth_values_from_rows(result_rows)
+    decreasing_steps = _count_decreasing_steps(growth_values)
+    trend_is_gradual = decreasing_steps >= MISSION27_MIN_DECREASING_STEPS
+
+    first_uptake = _row_value(first_row, 'tested_reaction_uptake') if first_row else 0.0
+    last_uptake = _row_value(last_row, 'tested_reaction_uptake') if last_row else 0.0
+    glucose_uptake_drop = round(first_uptake - last_uptake, 3) if result_rows else 0.0
+    glucose_uptake_decreased = glucose_uptake_drop >= MISSION27_MIN_UPTAKE_DROP
+
+    profile_differences = {}
+    decreased_fluxes = []
+    if first_row and last_row:
+        first_fluxes = first_row.get('tracked_flux_values') or {}
+        last_fluxes = last_row.get('tracked_flux_values') or {}
+        for reaction_id in MISSION27_REQUIRED_TRACKED_FLUXES:
+            difference = round(float(last_fluxes.get(reaction_id, 0.0)) - float(first_fluxes.get(reaction_id, 0.0)), 3)
+            profile_differences[reaction_id] = difference
+            if difference <= -MISSION27_MIN_PROFILE_CHANGE:
+                decreased_fluxes.append(reaction_id)
+
+    profile_decreased = len(decreased_fluxes) >= MISSION27_MIN_CHANGED_FLUXES
+
+    mission27_data = {
+        'mission_id': '27',
+        'check_version': 1,
+        'mission_title': 'Glucose Limitation Sweep',
+        'target_context': MISSION27_TARGET_CONTEXT,
+        'target_method': MISSION27_METHOD,
+        'growth_objective': MISSION27_GROWTH_OBJECTIVE,
+        'sweep_reaction': MISSION27_SWEEP_REACTION,
+        'sweep_bound': MISSION27_SWEEP_BOUND,
+        'sweep_values': expected_values,
+        'required_tracked_fluxes': MISSION27_REQUIRED_TRACKED_FLUXES,
+        'minimum_growth_drop': MISSION27_MIN_GROWTH_DROP,
+        'minimum_uptake_drop': MISSION27_MIN_UPTAKE_DROP,
+        'maximum_final_growth': MISSION27_MAX_FINAL_GROWTH,
+        'minimum_profile_change': MISSION27_MIN_PROFILE_CHANGE,
+        'minimum_changed_fluxes': MISSION27_MIN_CHANGED_FLUXES,
+        'minimum_result_points': MISSION27_MIN_RESULT_POINTS,
+        'minimum_decreasing_steps': MISSION27_MIN_DECREASING_STEPS,
+        'sweep_data': sweep_data,
+        'clean_base_setup': clean_base_setup,
+        'glucose_sweep_selected': glucose_sweep_selected,
+        'tracking_ready': tracking_ready,
+        'result_point_count': len(result_rows),
+        'valid_ok_point_count': len(ok_rows),
+        'all_points_returned': all_points_returned,
+        'first_growth': round(first_growth, 3),
+        'last_growth': round(last_growth, 3),
+        'growth_drop': growth_drop,
+        'growth_decreased': growth_decreased,
+        'final_growth_low': final_growth_low,
+        'decreasing_steps': decreasing_steps,
+        'trend_is_gradual': trend_is_gradual,
+        'first_glucose_uptake': round(first_uptake, 3),
+        'last_glucose_uptake': round(last_uptake, 3),
+        'glucose_uptake_drop': glucose_uptake_drop,
+        'glucose_uptake_decreased': glucose_uptake_decreased,
+        'profile_differences': profile_differences,
+        'decreased_fluxes': decreased_fluxes,
+        'decreased_flux_count': len(decreased_fluxes),
+        'profile_decreased': profile_decreased,
+        'ready_to_deliver': (
+            clean_base_setup
+            and glucose_sweep_selected
+            and tracking_ready
+            and all_points_returned
+            and growth_decreased
+            and final_growth_low
+            and trend_is_gradual
+            and glucose_uptake_decreased
+            and profile_decreased
+        ),
+    }
+    if error or sweep_data.get('error'):
+        mission27_data['error'] = error or sweep_data.get('error')
+    save_mission27_bound_sweep_check(mission27_data)
+    return mission27_data
+
+
+def run_mission27_bound_sweep_check(sweep_data=None):
+    sweep_data = sweep_data or load_bound_sweep()
+    if not sweep_data or not sweep_data.get('rows'):
+        return _build_mission27_data(sweep_data, error='Run a Bound Sweep before delivering Mission 27.')
+    return _build_mission27_data(sweep_data)
+
+
+
+def _mission28_environment_status(reactions):
+    """Mission 28 base medium: close only glucose lower bound.
+
+    The sweep itself supplies the alternative source numerically. Before the
+    sweep, the only manual medium change should be glucose removal.
+    """
+    reaction_values = list((reactions or {}).values())
+    glucose_lower_bound_closed = False
+    unexpected_changes = []
+
+    for i in range(len(REACTIONS.index)):
+        lb_index = i * 2
+        ub_index = lb_index + 1
+
+        if ub_index >= len(reaction_values):
+            break
+
+        reaction_id = REACTIONS.index[i]
+        lower_bound_open = bool(reaction_values[lb_index])
+        upper_bound_open = bool(reaction_values[ub_index])
+
+        default_lower_bound_open = REACTIONS.lb.iloc[i] != 0
+        default_upper_bound_open = REACTIONS.ub.iloc[i] != 0
+
+        lower_changed = lower_bound_open != default_lower_bound_open
+        upper_changed = upper_bound_open != default_upper_bound_open
+
+        if reaction_id == MISSION28_BLOCKED_CARBON_SOURCE:
+            glucose_lower_bound_closed = not lower_bound_open
+            if upper_changed:
+                unexpected_changes.append(f'{reaction_id} upper bound')
+            continue
+
+        if lower_changed:
+            unexpected_changes.append(f'{reaction_id} lower bound')
+        if upper_changed:
+            unexpected_changes.append(f'{reaction_id} upper bound')
+
+    return glucose_lower_bound_closed, unexpected_changes
+
+
+def _build_mission28_data(sweep_data=None, error=None):
+    sweep_data = sweep_data or load_bound_sweep() or {}
+    rows = sweep_data.get('rows') or []
+    result_rows = [row for row in rows if row.get('status') in ('ok', 'infeasible')]
+    ok_rows = [row for row in rows if row.get('status') == 'ok']
+
+    base_reactions = sweep_data.get('base_reactions') or {}
+    glucose_lower_bound_closed, unexpected_environment_changes = _mission28_environment_status(base_reactions)
+
+    base_medium_ready = (
+        sweep_data.get('method') == MISSION28_METHOD
+        and sweep_data.get('objective') == MISSION28_GROWTH_OBJECTIVE
+        and not sweep_data.get('knocked_out_genes')
+        and glucose_lower_bound_closed
+        and not unexpected_environment_changes
+    )
+
+    expected_values = [float(value) for value in MISSION28_SWEEP_VALUES]
+    got_values = [float(value) for value in (sweep_data.get('values') or [])]
+    selected_source = sweep_data.get('reaction_id')
+    candidate_sweep_selected = (
+        selected_source in MISSION28_CANDIDATE_CARBON_SOURCES
+        and sweep_data.get('bound') == MISSION28_SWEEP_BOUND
+        and got_values == expected_values
+    )
+
+    tracking_ready = _selected_fluxes_include(
+        MISSION28_REQUIRED_TRACKED_FLUXES,
+        sweep_data.get('selected_production_fluxes') or []
+    )
+    all_points_returned = len(result_rows) >= MISSION28_MIN_RESULT_POINTS
+
+    first_row = result_rows[0] if result_rows else None
+    last_row = result_rows[-1] if result_rows else None
+    first_growth = _row_value(first_row, 'growth_value') if first_row else 0.0
+    last_growth = _row_value(last_row, 'growth_value') if last_row else 0.0
+    growth_drop = round(first_growth - last_growth, 3) if result_rows else 0.0
+    first_growth_viable = first_growth >= MISSION28_MIN_FIRST_GROWTH
+    growth_decreased = growth_drop >= MISSION28_MIN_GROWTH_DROP
+    final_growth_low = last_growth <= MISSION28_MAX_FINAL_GROWTH if last_row else False
+
+    growth_values = _growth_values_from_rows(result_rows)
+    decreasing_steps = _count_decreasing_steps(growth_values)
+    trend_is_gradual = decreasing_steps >= MISSION28_MIN_DECREASING_STEPS
+
+    first_uptake = _row_value(first_row, 'tested_reaction_uptake') if first_row else 0.0
+    last_uptake = _row_value(last_row, 'tested_reaction_uptake') if last_row else 0.0
+    source_uptake_drop = round(first_uptake - last_uptake, 3) if result_rows else 0.0
+    source_consumed = first_uptake >= MISSION28_MIN_SOURCE_UPTAKE
+    source_uptake_decreased = source_uptake_drop >= MISSION28_MIN_SOURCE_UPTAKE_DROP
+
+    profile_differences = {}
+    changed_fluxes = []
+    if first_row and last_row:
+        first_fluxes = first_row.get('tracked_flux_values') or {}
+        last_fluxes = last_row.get('tracked_flux_values') or {}
+        for reaction_id in MISSION28_REQUIRED_TRACKED_FLUXES:
+            difference = round(float(last_fluxes.get(reaction_id, 0.0)) - float(first_fluxes.get(reaction_id, 0.0)), 3)
+            profile_differences[reaction_id] = difference
+            if abs(difference) >= MISSION28_MIN_PROFILE_CHANGE:
+                changed_fluxes.append(reaction_id)
+
+    profile_changed = len(changed_fluxes) >= MISSION28_MIN_CHANGED_FLUXES
+
+    mission28_data = {
+        'mission_id': '28',
+        'check_version': 1,
+        'mission_title': 'Alternative Carbon Source Sweep',
+        'target_context': MISSION28_TARGET_CONTEXT,
+        'target_method': MISSION28_METHOD,
+        'growth_objective': MISSION28_GROWTH_OBJECTIVE,
+        'blocked_carbon_source': MISSION28_BLOCKED_CARBON_SOURCE,
+        'candidate_carbon_sources': MISSION28_CANDIDATE_CARBON_SOURCES,
+        'selected_source': selected_source,
+        'sweep_bound': MISSION28_SWEEP_BOUND,
+        'sweep_values': expected_values,
+        'required_tracked_fluxes': MISSION28_REQUIRED_TRACKED_FLUXES,
+        'minimum_first_growth': MISSION28_MIN_FIRST_GROWTH,
+        'maximum_final_growth': MISSION28_MAX_FINAL_GROWTH,
+        'minimum_growth_drop': MISSION28_MIN_GROWTH_DROP,
+        'minimum_source_uptake': MISSION28_MIN_SOURCE_UPTAKE,
+        'minimum_source_uptake_drop': MISSION28_MIN_SOURCE_UPTAKE_DROP,
+        'minimum_profile_change': MISSION28_MIN_PROFILE_CHANGE,
+        'minimum_changed_fluxes': MISSION28_MIN_CHANGED_FLUXES,
+        'minimum_result_points': MISSION28_MIN_RESULT_POINTS,
+        'minimum_decreasing_steps': MISSION28_MIN_DECREASING_STEPS,
+        'sweep_data': sweep_data,
+        'glucose_lower_bound_closed': glucose_lower_bound_closed,
+        'unexpected_environment_changes': unexpected_environment_changes,
+        'base_medium_ready': base_medium_ready,
+        'candidate_sweep_selected': candidate_sweep_selected,
+        'tracking_ready': tracking_ready,
+        'result_point_count': len(result_rows),
+        'valid_ok_point_count': len(ok_rows),
+        'all_points_returned': all_points_returned,
+        'first_growth': round(first_growth, 3),
+        'last_growth': round(last_growth, 3),
+        'first_growth_viable': first_growth_viable,
+        'growth_drop': growth_drop,
+        'growth_decreased': growth_decreased,
+        'final_growth_low': final_growth_low,
+        'decreasing_steps': decreasing_steps,
+        'trend_is_gradual': trend_is_gradual,
+        'first_source_uptake': round(first_uptake, 3),
+        'last_source_uptake': round(last_uptake, 3),
+        'source_uptake_drop': source_uptake_drop,
+        'source_consumed': source_consumed,
+        'source_uptake_decreased': source_uptake_decreased,
+        'profile_differences': profile_differences,
+        'changed_fluxes': changed_fluxes,
+        'changed_flux_count': len(changed_fluxes),
+        'profile_changed': profile_changed,
+        'ready_to_deliver': (
+            base_medium_ready
+            and candidate_sweep_selected
+            and tracking_ready
+            and all_points_returned
+            and source_consumed
+            and source_uptake_decreased
+            and first_growth_viable
+            and growth_decreased
+            and final_growth_low
+            and trend_is_gradual
+            and profile_changed
+        ),
+    }
+    if error or sweep_data.get('error'):
+        mission28_data['error'] = error or sweep_data.get('error')
+    save_mission28_bound_sweep_check(mission28_data)
+    return mission28_data
+
+
+def run_mission28_bound_sweep_check(sweep_data=None):
+    sweep_data = sweep_data or load_bound_sweep()
+    if not sweep_data or not sweep_data.get('rows'):
+        return _build_mission28_data(sweep_data, error='Run a Bound Sweep before delivering Mission 28.')
+    return _build_mission28_data(sweep_data)
 
 def run_simul():
     method_name, objective_name, genes, reactions = _read_simulation_file()

@@ -18,6 +18,7 @@ from mission07 import Mission07
 from mission11 import Mission11
 from mission16 import Mission16
 from mission21 import Mission21
+from mission26 import Mission26
 from dialogues import Dialogues
 from save_load import save_file
 from functions import *
@@ -65,6 +66,8 @@ class Level:
 		self.talk_16 = Mission16(self.toggle_talk_16, self.player)
 		self.talk_21_active = False
 		self.talk_21 = Mission21(self.toggle_talk_21, self.player)
+		self.talk_26_active = False
+		self.talk_26 = Mission26(self.toggle_talk_26, self.player)
 		self.menu = Menu(self.player, self.toggle_shop)
 		self.window = Window(self.desk_menu, self.player)
 		self.books = Books(self.read_books)
@@ -152,6 +155,7 @@ class Level:
 					talk_11 = self.toggle_talk_11,
 					talk_16 = self.toggle_talk_16,
 					talk_21 = self.toggle_talk_21,
+					talk_26 = self.toggle_talk_26,
 					dialogues = self.toggle_dialogue,
 					skin_manager = self.skin_manager
 					# music = self.music_bg
@@ -176,6 +180,9 @@ class Level:
 				Interaction((obj.x, obj.y), (obj.width, obj.height), self.interaction_sprites, obj.name)
 
 			if obj.name == 'Mission21':
+				Interaction((obj.x, obj.y), (obj.width, obj.height), self.interaction_sprites, obj.name)
+
+			if obj.name == 'Mission26':
 				Interaction((obj.x, obj.y), (obj.width, obj.height), self.interaction_sprites, obj.name)
 			
 			if obj.name == 'Desk':
@@ -239,6 +246,9 @@ class Level:
 	def toggle_talk_21(self):
 		self.talk_21_active = not self.talk_21_active
 
+	def toggle_talk_26(self):
+		self.talk_26_active = not self.talk_26_active
+
 	def toggle_dialogue(self):
 		self.dialogues_active = not self.dialogues_active
 
@@ -264,6 +274,7 @@ class Level:
 			self.talk_11_active or
 			self.talk_16_active or
 			self.talk_21_active or
+			self.talk_26_active or
 			self.dialogues_active
 		)
 
@@ -348,6 +359,9 @@ class Level:
 
 		elif self.talk_21_active:
 			await self.talk_21.update()
+
+		elif self.talk_26_active:
+			await self.talk_26.update()
 
 		elif self.desk_active:
 			await self.window.update()

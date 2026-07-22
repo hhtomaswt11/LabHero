@@ -688,3 +688,101 @@ def load_mission25_comparison_check():
 def clear_mission25_comparison_check():
     _delete_save_artifact('mission25_comparison_check', 'mission25_comparison_check.txt')
 
+
+
+
+def save_bound_sweep(data):
+    if _IS_WEB:
+        _MEMSTORE['bound_sweep'] = data
+        return
+    with open(get_save_path('bound_sweep.txt'), 'w') as sweep_file:
+        json.dump(data, sweep_file)
+
+
+def load_bound_sweep():
+    if _IS_WEB:
+        return _MEMSTORE.get('bound_sweep')
+    try:
+        with open(get_save_path('bound_sweep.txt')) as sweep_file:
+            return json.load(sweep_file)
+    except FileNotFoundError:
+        return None
+    except Exception:
+        return None
+
+
+def clear_bound_sweep():
+    _delete_save_artifact('bound_sweep', 'bound_sweep.txt')
+
+
+def save_mission26_bound_sweep_check(data):
+    if _IS_WEB:
+        _MEMSTORE['mission26_bound_sweep_check'] = data
+        return
+    with open(get_save_path('mission26_bound_sweep_check.txt'), 'w') as report_file:
+        json.dump(data, report_file)
+
+
+def load_mission26_bound_sweep_check():
+    if _IS_WEB:
+        return _MEMSTORE.get('mission26_bound_sweep_check')
+    try:
+        with open(get_save_path('mission26_bound_sweep_check.txt')) as report_file:
+            return json.load(report_file)
+    except FileNotFoundError:
+        return None
+    except Exception:
+        return None
+
+
+def clear_mission26_bound_sweep_check():
+    _delete_save_artifact('mission26_bound_sweep_check', 'mission26_bound_sweep_check.txt')
+
+
+def save_mission27_bound_sweep_check(data):
+    if _IS_WEB:
+        _MEMSTORE['mission27_bound_sweep_check'] = data
+        return
+    with open(get_save_path('mission27_bound_sweep_check.txt'), 'w') as report_file:
+        json.dump(data, report_file)
+
+
+def load_mission27_bound_sweep_check():
+    if _IS_WEB:
+        return _MEMSTORE.get('mission27_bound_sweep_check')
+    try:
+        with open(get_save_path('mission27_bound_sweep_check.txt')) as report_file:
+            return json.load(report_file)
+    except FileNotFoundError:
+        return None
+    except Exception:
+        return None
+
+
+def clear_mission27_bound_sweep_check():
+    _delete_save_artifact('mission27_bound_sweep_check', 'mission27_bound_sweep_check.txt')
+
+
+
+def save_mission28_bound_sweep_check(data):
+    if _IS_WEB:
+        _MEMSTORE['mission28_bound_sweep_check'] = data
+        return
+    with open(get_save_path('mission28_bound_sweep_check.txt'), 'w') as report_file:
+        json.dump(data, report_file)
+
+
+def load_mission28_bound_sweep_check():
+    if _IS_WEB:
+        return _MEMSTORE.get('mission28_bound_sweep_check')
+    try:
+        with open(get_save_path('mission28_bound_sweep_check.txt')) as report_file:
+            return json.load(report_file)
+    except FileNotFoundError:
+        return None
+    except Exception:
+        return None
+
+
+def clear_mission28_bound_sweep_check():
+    _delete_save_artifact('mission28_bound_sweep_check', 'mission28_bound_sweep_check.txt')

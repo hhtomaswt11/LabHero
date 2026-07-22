@@ -117,7 +117,7 @@ class Mission21:
         completed25_dialogue = [
             f"Excellent work, {self.player.player_name}.",
             "You completed Dr. Vega's controlled-comparison sequence.",
-            "You are ready for Dr. Sato and sensitivity experiments."
+            "You are ready for Dr. Luna and sensitivity experiments."
         ]
 
         self.input()
