@@ -112,8 +112,12 @@ def _build_environmental_summary(reactions):
             reaction_id = REACTIONS.index[i]
             reaction_name = REACTIONS.name.iloc[i]
 
-            lower_bound_value = -1000 if lower_bound_open else 0
-            upper_bound_value = 1000 if upper_bound_open else 0
+            lower_bound_value = resolve_exchange_bound_value(
+                REACTIONS.lb.iloc[i], lower_bound_open, 'lower'
+            )
+            upper_bound_value = resolve_exchange_bound_value(
+                REACTIONS.ub.iloc[i], upper_bound_open, 'upper'
+            )
 
             changed_conditions.append(
                 f'- {reaction_name} ({reaction_id}): '
@@ -197,6 +201,14 @@ def _exchange_items_by_id(exchange_fluxes):
     return items
 
 
+def _clean_report_number(value, tolerance=0.0005):
+    """Prepare a value for three-decimal reports without displaying -0.000."""
+    numeric = float(value)
+    if abs(numeric) < tolerance:
+        numeric = 0.0
+    return numeric
+
+
 def _format_exchange_flux_line(reaction_id, items_by_id):
     item = items_by_id.get(reaction_id)
     if not item:
@@ -206,9 +218,9 @@ def _format_exchange_flux_line(reaction_id, items_by_id):
     if item.get('error'):
         return f'- {label}: not available'
 
-    raw_flux = float(item.get('raw_flux', 0.0))
-    uptake_flux = float(item.get('uptake_flux', 0.0))
-    secretion_flux = float(item.get('secretion_flux', 0.0))
+    raw_flux = _clean_report_number(item.get('raw_flux', 0.0))
+    uptake_flux = _clean_report_number(item.get('uptake_flux', 0.0))
+    secretion_flux = _clean_report_number(item.get('secretion_flux', 0.0))
 
     if uptake_flux > 0.001:
         status = f'consumed / uptake {uptake_flux:.3f}'
@@ -261,7 +273,11 @@ def _build_exchange_flux_report_text(exchange_fluxes):
             lines.append(_format_exchange_flux_line(reaction_id, items_by_id))
         lines.append('')
 
-    lines.append('Use this report to verify what the model consumes from the medium and what it secretes after the simulation.')
+    lines.extend([
+        'Use this report to verify what the model consumes from the medium and what it secretes after the simulation.',
+        '',
+        'FBA note: this is one optimal flux distribution returned by the solver. Alternative optimal solutions may preserve the same objective value while changing some individual byproduct fluxes.',
+    ])
     return '\n'.join(lines)
 
 
@@ -1683,85 +1699,16 @@ def _build_mission18_text(report_data):
     )
 
 def _build_mission04_text(production_data):
-    if not production_data:
-        return ''
+    return build_mission04_evidence_report_text(production_data)
 
-    if production_data.get('error'):
-        return f"Mission 04 Production Check\nError: {production_data.get('error')}"
-
-    environment_note = (
-        'Environmental conditions were changed. For Mission 04, keep them unchanged.'
-        if production_data.get('environment_changed')
-        else 'Environmental conditions unchanged.'
-    )
-    status = (
-        'Production improved. This knockout looks promising.'
-        if production_data.get('improved')
-        else 'No improvement yet. Try a different candidate knockout.'
-    )
-    change = float(production_data.get('production_change', 0))
-    change_prefix = '+' if change > 0 else ''
-
-    return (
-        'Mission 04 Production Check\n\n'
-        f"Target product: {production_data.get('product_name')} ({production_data.get('production_objective')})\n"
-        f"Baseline {production_data.get('product_name')} flux: {float(production_data.get('baseline_production', 0)):.3f}\n"
-        f"Current {production_data.get('product_name')} flux: {float(production_data.get('current_production', 0)):.3f}\n"
-        f"Production change: {change_prefix}{change:.3f}\n"
-        f"Current growth: {float(production_data.get('current_growth', 0)):.3f}\n\n"
-        f"{environment_note}\n"
-        f"{status}"
-    )
 
 
 def _build_mission05_text(production_data):
-    if not production_data:
-        return ''
-
-    if production_data.get('error'):
-        return f"Mission 05 Production Check\nError: {production_data.get('error')}"
-
-    oxygen_note = (
-        f"O2 lower bound closed ({production_data.get('oxygen_reaction')}): yes."
-        if production_data.get('oxygen_disabled')
-        else f"O2 is still available. Close the lower bound of {production_data.get('oxygen_reaction')}."
-    )
-    status = (
-        'Lactate production improved. This combination looks promising.'
-        if production_data.get('oxygen_disabled') and production_data.get('improved')
-        else 'Not enough yet. Combine anaerobiosis with the right knockout.'
-    )
-    change = float(production_data.get('production_change', 0))
-    change_prefix = '+' if change > 0 else ''
-
-    return (
-        'Mission 05 Production Check\n\n'
-        f"Target product: {production_data.get('product_name')} ({production_data.get('production_objective')})\n"
-        f"Anaerobic baseline flux: {float(production_data.get('baseline_production', 0)):.3f}\n"
-        f"Current {production_data.get('product_name')} flux: {float(production_data.get('current_production', 0)):.3f}\n"
-        f"Production change: {change_prefix}{change:.3f}\n"
-        f"Current growth: {float(production_data.get('current_growth', 0)):.3f}\n\n"
-        f"{oxygen_note}\n"
-        f"{status}"
-    )
+    return build_mission05_evidence_report_text(production_data)
 
 
 def _build_challenge_text(challenge_data):
-    if not challenge_data:
-        return ''
-
-    if challenge_data.get('error'):
-        return f"Mission 06 Challenge\nError: {challenge_data.get('error')}"
-
-    status = 'You win!' if challenge_data.get('win') else 'You need a better balance between growth and ethanol production.'
-    return (
-        'Mission 06 Challenge\n\n'
-        f"Growth ({challenge_data.get('growth_objective')}): {float(challenge_data.get('growth', 0)):.3f}\n"
-        f"Ethanol production flux ({challenge_data.get('production_objective')}): {float(challenge_data.get('production', 0)):.3f}\n"
-        f"Your score: {float(challenge_data.get('score', 0)):.3f}\n"
-        f"Villain score: {float(challenge_data.get('villain_score', 0)):.3f}\n\n"
-        f"{status}"
-    )
+    return build_mission06_challenge_report_text(challenge_data)
 
 def _add_summary_section(menu, title, text):
     menu.add.label(title, font_size=32, font_color=(20, 0, 150))
@@ -1960,6 +1907,70 @@ def _build_mission20_text(report_data):
         f"{final_status}"
     )
 
+
+
+def _build_mission01_text(compare_data):
+    if not compare_data:
+        return 'Mission 01 Anaerobic Growth\n\nRun two simulations to generate the controlled comparison.'
+
+    if compare_data.get('error') and not compare_data.get('run_a'):
+        return f"Mission 01 Anaerobic Growth\n\n{compare_data.get('error')}"
+
+    baseline_status = (
+        'Baseline: valid aerobic FBA run found.'
+        if compare_data.get('baseline_run_found')
+        else 'Baseline: missing. Run FBA with biomass objective and the unchanged default environment.'
+    )
+    anaerobic_status = (
+        'Anaerobic run: valid oxygen-blocked run found.'
+        if compare_data.get('anaerobic_run_found')
+        else 'Anaerobic run: missing. Keep the setup unchanged and close only the oxygen lower bound.'
+    )
+    viability_status = (
+        'Viability: the model still predicts growth without oxygen.'
+        if compare_data.get('anaerobic_growth_viable')
+        else 'Viability: anaerobic growth is not yet positive/viable.'
+    )
+    growth_status = (
+        'Comparison: anaerobic growth is lower than aerobic growth.'
+        if compare_data.get('growth_decreased')
+        else 'Comparison: a clear growth decrease has not been demonstrated yet.'
+    )
+    oxygen_status = (
+        'Oxygen evidence: baseline uptake is positive and anaerobic uptake is zero.'
+        if compare_data.get('baseline_uses_oxygen') and compare_data.get('anaerobic_oxygen_blocked')
+        else 'Oxygen evidence: inspect EX_o2_e in the Exchange Flux Report.'
+    )
+    final_status = (
+        'Mission comparison ready. Return to Dr. Martinez and deliver the results.'
+        if compare_data.get('ready_to_deliver')
+        else 'Not ready yet. Run the aerobic baseline first, then change only oxygen.'
+    )
+
+    def fmt(value):
+        return 'not available' if value is None else f'{_clean_report_number(value):.3f}'
+
+    return (
+        'Mission 01 Anaerobic Growth\n\n'
+        f"Method: {compare_data.get('target_method')}\n"
+        f"Objective: {compare_data.get('growth_objective')}\n"
+        f"Oxygen exchange: {compare_data.get('oxygen_reaction')}\n\n"
+        f"Growth comparison:\n"
+        f"- Aerobic baseline: {fmt(compare_data.get('baseline_growth'))}\n"
+        f"- Anaerobic growth: {fmt(compare_data.get('anaerobic_growth'))}\n"
+        f"- Growth decrease: {fmt(compare_data.get('growth_drop'))}\n\n"
+        f"Oxygen uptake magnitude:\n"
+        f"- Aerobic baseline: {fmt(compare_data.get('baseline_oxygen_uptake'))}\n"
+        f"- Anaerobic run: {fmt(compare_data.get('anaerobic_oxygen_uptake'))}\n"
+        f"  (Uptake is shown as a positive magnitude; raw EX_o2_e flux is negative when oxygen is consumed.)\n\n"
+        f"{baseline_status}\n"
+        f"{anaerobic_status}\n"
+        f"{viability_status}\n"
+        f"{growth_status}\n"
+        f"{oxygen_status}\n\n"
+        f"FBA interpretation: the mission validates growth and oxygen evidence, not one unique byproduct profile; alternative optimal flux distributions may exist.\n\n"
+        f"{final_status}"
+    )
 
 
 def _build_mission21_text(compare_data):
@@ -2371,14 +2382,26 @@ class Window:
 
         # MENU REACTIONS
         menu_reactions.add.vertical_margin(50)
-        menu_reactions.add.label("TIP for Mission 02:\nThe lower bound tells the cell if it can reverse the reaction and do it the opposite way (e.g., taking in nutrients).\nThe upper bound tells it how fast or how much of the reaction can happen in the forward direction (e.g., producing metabolites).",
-                                #  max_char=1,
-                                 wordwrap=True,
-                                #  align=pygame_menu.locals.ALIGN_CENTER,
-                                #  margin=(20, 0),
-                                 padding = (20,30,20,30),
-                                 background_color = "white",
-                                 font_size = 26)
+        if '02' in self.player.missions_activated and '02' not in self.player.missions_completed:
+            environment_help = (
+                'Mission 02 reflection:\n'
+                'Use exchange reactions to design a fair nutrient-replacement experiment. '
+                'Change the carbon source while keeping unrelated biological assumptions comparable. '
+                'Optional step-by-step hints are available from Dr. Martinez.'
+            )
+        else:
+            environment_help = (
+                'Environmental conditions:\n'
+                'Exchange-reaction bounds control whether compounds can enter or leave the model. '
+                'A negative exchange flux represents uptake and a positive flux represents secretion.'
+            )
+        menu_reactions.add.label(
+            environment_help,
+            wordwrap=True,
+            padding=(20, 30, 20, 30),
+            background_color='white',
+            font_size=26,
+        )
         menu_reactions.add.vertical_margin(20)
         # Reactions (Range slider) // pode-se alterar as bounds para text inputs de forma a alterar para 0,0 (com range slider não é possível)
         for i in range(len(REACTIONS.name)):
@@ -2437,14 +2460,40 @@ class Window:
         # MENU SUB (Genes)
         menu_genes.add.vertical_margin(50)
         # menu_genes.add.label('TIP')
-        menu_genes.add.label("TIP for Mission 03, Mission 04 and Mission 05: \nSome genes are essential for survival. Others can redirect metabolism toward useful products. Try one highlighted gene knockout at a time.",
-                                #  max_char=1,
-                                 wordwrap=True,
-                                #  align=pygame_menu.locals.ALIGN_CENTER,
-                                #  margin=(20, 0),
-                                 padding = (20,30,20,30),
-                                 background_color = "white",
-                                 font_size = 26)
+        active_gene_mission_candidates = set()
+        active_gene_mission_ids = []
+        gene_mission_candidates = [
+            ('03', MISSION03_CANDIDATE_GENES),
+            ('04', MISSION04_CANDIDATE_GENES),
+            ('05', MISSION05_CANDIDATE_GENES),
+            ('06', MISSION06_CANDIDATE_GENES),
+            ('09', MISSION09_CANDIDATE_GENES),
+            ('10', MISSION10_CANDIDATE_GENES),
+        ]
+        for mission_id, candidates in gene_mission_candidates:
+            if mission_id in self.player.missions_activated and mission_id not in self.player.missions_completed:
+                active_gene_mission_candidates.update(candidates)
+                active_gene_mission_ids.append(mission_id)
+
+        if active_gene_mission_candidates:
+            mission_names = ', '.join(active_gene_mission_ids)
+            gene_tip = (
+                f'Mission candidate genes currently highlighted: {mission_names}. '
+                'Use the mission evidence and isolate only the genetic changes required by the experiment.'
+            )
+        else:
+            gene_tip = (
+                'Gene knockouts can reveal conditional essentiality or redirect metabolism. '
+                'Activate a genetic mission to highlight its current candidate set.'
+            )
+
+        menu_genes.add.label(
+            gene_tip,
+            wordwrap=True,
+            padding=(20, 30, 20, 30),
+            background_color='white',
+            font_size=26,
+        )
         menu_genes.add.vertical_margin(20)
 
         menu_genes.add.label(
@@ -2532,16 +2581,10 @@ class Window:
         )
         menu_genes.add.vertical_margin(20)
 
-        genes_03 = ['b1241','b3115','b3736','b2975','b1524','b2278','b2926','b2297','b0728','b3919']
-        genes_04 = MISSION04_CANDIDATE_GENES
-        genes_05 = MISSION05_CANDIDATE_GENES
-        genes_09 = MISSION09_CANDIDATE_GENES
-        genes_10 = MISSION10_CANDIDATE_GENES
-
         for i, gene_id in enumerate(GENES):
             gene_label = GENE_LABELS.get(gene_id, gene_id)
 
-            if gene_id in genes_03 or gene_id in genes_04 or gene_id in genes_05 or gene_id in genes_09 or gene_id in genes_10:
+            if gene_id in active_gene_mission_candidates:
                 gene_toggle_widgets[gene_id] = menu_genes.add.toggle_switch(
                     gene_label,
                     True,
@@ -2849,6 +2892,23 @@ class Window:
                 exchange_flux_data = None
 
             compare_runs = capture_compare_run_snapshot(self.results)
+
+            mission01_data = None
+            if '01' in self.player.missions_activated and '01' not in self.player.missions_completed:
+                mission01_data = run_mission01_comparison_check(compare_runs)
+
+            mission02_data = None
+            if '02' in self.player.missions_activated and '02' not in self.player.missions_completed:
+                mission02_data = run_mission02_source_trial_check(self.results)
+
+            mission03_data = None
+            if '03' in self.player.missions_activated and '03' not in self.player.missions_completed:
+                mission03_data = run_mission03_gene_trial_check(self.results)
+
+            mission04_data = None
+            if '04' in self.player.missions_activated and '04' not in self.player.missions_completed:
+                mission04_data = run_mission04_production_trial_check(self.results)
+
             mission21_data = None
             if '21' in self.player.missions_activated and '21' not in self.player.missions_completed:
                 mission21_data = run_mission21_comparison_check(compare_runs)
@@ -3029,26 +3089,16 @@ class Window:
             if '20' in self.player.missions_activated and '20' not in self.player.missions_completed:
                 mission20_data = run_mission20_robustness_report_check(self.results)
 
-            mission04_data = None
-            if '04' in self.player.missions_activated and '04' not in self.player.missions_completed:
-                if sys.platform == 'emscripten':
-                    mission04_data = run_mission04_production_check_remote(BACKEND_URL)
-                else:
-                    mission04_data = run_mission04_production_check()
-
             mission05_data = None
             if '05' in self.player.missions_activated and '05' not in self.player.missions_completed:
-                if sys.platform == 'emscripten':
-                    mission05_data = run_mission05_production_check_remote(BACKEND_URL)
-                else:
-                    mission05_data = run_mission05_production_check()
+                mission05_data = run_mission05_production_trial_check(self.results)
 
             challenge_data = None
             if '06' in self.player.missions_activated and '06' not in self.player.missions_completed:
                 if sys.platform == 'emscripten':
-                    challenge_data = run_challenge_score_remote(BACKEND_URL)
+                    challenge_data = run_challenge_score_remote(BACKEND_URL, self.results)
                 else:
-                    challenge_data = run_challenge_score()
+                    challenge_data = run_challenge_score(self.results)
 
             self.player.results.insert(0,self.results)
             try:
@@ -3101,6 +3151,39 @@ class Window:
                     button_id='bound_sweep_report'
                 )
             menu_simul.add.vertical_margin(20)
+
+            if mission01_data is not None:
+                menu_simul.add.label(
+                    _build_mission01_text(mission01_data),
+                    wordwrap=True,
+                    padding=(20, 20, 20, 20),
+                    background_color='white',
+                    font_size=24,
+                    label_id='mission01_comparison_check'
+                )
+                menu_simul.add.vertical_margin(20)
+
+            if mission02_data is not None:
+                menu_simul.add.label(
+                    build_mission02_evidence_report_text(mission02_data),
+                    wordwrap=True,
+                    padding=(20, 20, 20, 20),
+                    background_color='white',
+                    font_size=24,
+                    label_id='mission02_source_comparison_check'
+                )
+                menu_simul.add.vertical_margin(20)
+
+            if mission03_data is not None:
+                menu_simul.add.label(
+                    build_mission03_evidence_report_text(mission03_data),
+                    wordwrap=True,
+                    padding=(20, 20, 20, 20),
+                    background_color='white',
+                    font_size=24,
+                    label_id='mission03_gene_screen_check'
+                )
+                menu_simul.add.vertical_margin(20)
 
             if mission21_data is not None:
                 menu_simul.add.label(

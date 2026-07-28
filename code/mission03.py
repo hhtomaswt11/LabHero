@@ -1,299 +1,333 @@
 import pygame
 import pygame_menu
-from settings import *
-from save_load import *
-from timers import Timer
-from options_values import *
-from functions import animation_text_save
-from button import Button
+
 from async_menu import run_menu
+from button import Button
+from functions import animation_text_save
+from options_values import mytheme
+from save_load import (
+    clear_mission03_gene_screen_check,
+    load_mission03_gene_screen_check,
+    save_file,
+)
+from settings import *
+from simulation import (
+    MISSION03_CANDIDATE_GENES,
+    MISSION03_GENE_NAMES,
+    build_mission03_evidence_report_text,
+    is_mission03_unlocked,
+    mission03_answer_matches,
+    normalise_mission03_answer,
+)
+from timers import Timer
+from utils import get_resource_path
 from mission04 import Mission04_info
 from mission05 import Mission05_info
 
 
-class Mission03: 
+class Mission03:
     def __init__(self, toggle_menu, player) -> None:
-        #general setup 
         self.player = player
         self.missions_activated = self.player.missions_activated
         self.missions_completed = self.player.missions_completed
-
         self.toggle_menu = toggle_menu
 
         font_path = get_resource_path('font/LycheeSoda.ttf')
-        self.font = pygame.font.Font(font_path,30)
-        self.font_nome = pygame.font.Font(font_path,24)
-        self.screen = pygame.display.get_surface() 
+        self.font = pygame.font.Font(font_path, 30)
+        self.font_nome = pygame.font.Font(font_path, 24)
+        self.screen = pygame.display.get_surface()
         self.timer = Timer(200)
-
-
         self.menu = Mission03_info(self.toggle_menu, self.player)
         self.pending = None
-
 
     def input(self):
         keys = pygame.key.get_pressed()
         self.timer.update()
-
         if keys[pygame.K_ESCAPE]:
             self.toggle_menu()
 
     async def update(self):
-
-        self.m03_step1 = [
+        locked = [
+            'Dr. Martinez is still guiding the environmental investigation.',
+            'Complete Mission 02 before moving from environmental changes to genetic perturbations.',
+        ]
+        step1 = [
             f"Greetings {self.player.player_name}! I'm Dr. Silva.",
-            "I have a small set of candidate genes from E. coli.",
-            "One of them seems critical for survival. Can you identify which one?"
+            'A genetic alteration has compromised predicted growth in one of our E. coli cultures.',
+            'Can you use the candidate evidence to identify the conditionally essential gene?',
         ]
-        
-        self.m03_step2 = [
-            "Have you tested the candidate knockouts?",
-            "Show me what the growth results revealed."
+        step2 = [
+            'Have you built a viable reference and isolated the effect of each candidate knockout?',
+            'Show me the evidence and the conclusion supported by the growth ratios.',
         ]
-
-        self.m03_step3 = [
-            "Very good! You learned how a knockout can reveal an essential gene.",
-            "But knockouts are not only used to test survival.",
-            "They can also redirect metabolism toward useful products. Let's go further."
+        step3 = [
+            'Very good! You identified conditional gene essentiality from controlled evidence.',
+            'Knockouts are not only used to study growth loss.',
+            'They can also redirect metabolism toward useful products. Let us go further.',
         ]
-
-        self.m03_step4 = [
-            "Did you already test the production knockout?",
-            "Keep the environmental conditions unchanged.",
-            "Focus only on the genetic change."
+        step4 = [
+            'Did you already test the production knockout?',
+            'Keep the environmental conditions unchanged and isolate the genetic change.',
         ]
-
-        self.m03_step5 = [
-            "Excellent! You redirected metabolism in aerobic conditions.",
-            "Now let's combine a knockout with an environmental change.",
-            "What can E. coli produce without oxygen?"
+        step5 = [
+            'Excellent! You redirected metabolism in aerobic conditions.',
+            'Now combine a knockout with an environmental change.',
+            'What can E. coli produce without oxygen?',
         ]
-
-        self.m03_step6 = [
-            "Did you manage to combine both variables?",
-            "Let me see what you got."
+        step6 = [
+            'Did you manage to combine both variables?',
+            'Let me see the evidence you obtained.',
         ]
-
-        self.m03_step7 = [
-            f"Excellent work, {self.player.player_name}!",
-            "You now understand essential genes, production knockouts,",
-            "and how environment can change metabolic engineering strategies."
+        step7 = [
+            f'Excellent work, {self.player.player_name}!',
+            'You now understand conditional essentiality, production knockouts,',
+            'and how environment changes metabolic-engineering strategies.',
         ]
 
         self.input()
-        if '03' in self.missions_completed and '04' in self.missions_completed and '05' in self.missions_completed:
-            self.menu_message(self.m03_step7, buttons=False)
-
+        if not is_mission03_unlocked(self.missions_completed):
+            self.menu_message(locked, buttons=False)
+        elif '03' in self.missions_completed and '04' in self.missions_completed and '05' in self.missions_completed:
+            self.menu_message(step7, buttons=False)
         elif '03' in self.missions_completed and '04' in self.missions_completed and '05' in self.missions_activated:
-            self.menu_message(self.m03_step6, target_mission='05')
-
+            self.menu_message(step6, target_mission='05')
         elif '03' in self.missions_completed and '04' in self.missions_completed:
-            self.menu_message(self.m03_step5, target_mission='05')
-
+            self.menu_message(step5, target_mission='05')
         elif '03' in self.missions_completed and '04' in self.missions_activated:
-            self.menu_message(self.m03_step4, target_mission='04')
-
+            self.menu_message(step4, target_mission='04')
         elif '03' in self.missions_completed:
-            self.menu_message(self.m03_step3, target_mission='04')
-
+            self.menu_message(step3, target_mission='04')
         elif '03' in self.missions_activated:
-            self.menu_message(self.m03_step2)
-
+            self.menu_message(step2)
         else:
-            self.menu_message(self.m03_step1)
+            self.menu_message(step1)
 
         if self.pending is not None:
             coro_factory = self.pending
             self.pending = None
             await coro_factory()
 
-
     def menu_message(self, message, buttons=True, target_mission='03'):
+        pygame.draw.rect(self.screen, (255, 215, 0), [0, 500, 1280, 220], width=5)
+        pygame.draw.rect(self.screen, (186, 214, 177), [5, 505, 1270, 210])
 
-        menu_border = pygame.draw.rect(self.screen, (255,215,0), [0,500,1280,220], width=5)
-        menu_bg = pygame.draw.rect(self.screen, (186,214,177), [5,505,1270,210])
+        image_path = get_resource_path('graphics/dialogues/silva.jpg')
+        image = pygame.image.load(image_path).convert()
+        self.screen.blit(image, (25, 520))
 
-        # pygame.display.set_caption('Cientista')
-        imagem_path = get_resource_path('graphics/dialogues/silva.jpg')
-        imagem = pygame.image.load(imagem_path).convert()
-        
-        x = 25; # x coordnate of image
-        y = 520; # y coordinate of image
-        self.screen.blit(imagem, ( x,y))
-
-        cientista_rect = pygame.draw.rect(self.screen, 'white', [25,675,150,25])
-
-        nome = self.font_nome.render('Dr. Silva', True, 'black')
-        self.screen.blit(nome,(55,677))
+        pygame.draw.rect(self.screen, 'white', [25, 675, 150, 25])
+        name = self.font_nome.render('Dr. Silva', True, 'black')
+        self.screen.blit(name, (55, 677))
 
         for line, msg in enumerate(message):
             surf = self.font.render(msg, True, 'black')
-            self.screen.blit(surf,(200,525+(line*20)+(15*line)))
+            self.screen.blit(surf, (200, 525 + (line * 20) + (15 * line)))
 
         if buttons:
             def click_yes():
                 if target_mission == '04':
-                    mission04_menu = Mission04_info(self.toggle_menu, self.player)
-                    self.pending = mission04_menu.update
+                    self.pending = Mission04_info(self.toggle_menu, self.player).update
                 elif target_mission == '05':
-                    mission05_menu = Mission05_info(self.toggle_menu, self.player)
-                    self.pending = mission05_menu.update
+                    self.pending = Mission05_info(self.toggle_menu, self.player).update
                 else:
                     self.pending = self.menu.update
 
-            botao_teste = Button(200,650,150,50,self.screen, 'Yes', click_yes)
-            botao_teste_2 = Button(370,650,220,50,self.screen, 'Not now', self.toggle_menu)
-            botao_teste.process()
-            botao_teste_2.process()
+            Button(200, 650, 150, 50, self.screen, 'Yes', click_yes).process()
+            Button(370, 650, 220, 50, self.screen, 'Not now', self.toggle_menu).process()
 
         pygame.display.flip()
 
 
-
-
 class Mission03_info:
     def __init__(self, toggle_menu, player) -> None:
-
-        # general setup
         self.player = player
         self.missions_activated = self.player.missions_activated
         self.missions_completed = self.player.missions_completed
-
         self.toggle_menu = toggle_menu
         self.display_surface = pygame.display.get_surface()
-        font_path = get_resource_path('font/LycheeSoda.ttf')
-        self.font = pygame.font.Font(font_path, 30)
-        
-        self.index = 0
         self.timer = Timer(200)
+        self.mission03 = '03' in self.missions_activated
 
-        if '03' in self.missions_activated:
-            self.mission03 = True
-        else:
-            self.mission03 = False
-
-        #sounds     
         success_path = get_resource_path('audio/success_3.ogg')
         self.success = pygame.mixer.Sound(success_path)
         self.success.set_volume(1.2)
-
         failed_path = get_resource_path('audio/failed.ogg')
         self.failed = pygame.mixer.Sound(failed_path)
         self.failed.set_volume(1.2)
 
-
     async def setup(self):
-
         menu = pygame_menu.Menu(
             height=720,
+            center_content=False,
             onclose=self.toggle_menu,
             theme=mytheme,
             title='Mission 03',
             width=1280,
         )
 
-        menu_text = pygame_menu.Menu(
+        if not is_mission03_unlocked(self.missions_completed):
+            menu.add.vertical_margin(40)
+            menu.add.label(
+                'Mission 03 is locked. Complete Mission 02 with Dr. Martinez before beginning the genetic investigation.',
+                wordwrap=True,
+                align=pygame_menu.locals.ALIGN_CENTER,
+                padding=(25, 25, 25, 25),
+                background_color='white',
+                font_size=30,
+            )
+            menu.add.button('Back', pygame_menu.events.BACK, background_color=(70, 70, 70))
+            await run_menu(menu, self.display_surface)
+            return
+
+        briefing = pygame_menu.Menu(
             height=720,
-            onclose=self.toggle_menu,
+            center_content=False,
+            onclose=pygame_menu.events.BACK,
             theme=mytheme,
             title='Mission 03 Briefing',
-            width=1280
+            width=1280,
         )
 
-        menu_text.add.label(
+        hint3 = pygame_menu.Menu(height=720, center_content=False, onclose=pygame_menu.events.BACK, theme=mytheme, title='Mission 03 Hint 3', width=1280)
+        hint3.add.label(
+            'Technical hint: use FBA with the biomass objective and the unchanged default medium. Record one run with every gene active, then switch off exactly one highlighted candidate per run.',
+            wordwrap=True, align=pygame_menu.locals.ALIGN_LEFT, padding=(20, 20, 20, 20)
+        )
+        hint3.add.button('Back', pygame_menu.events.BACK, background_color=(70, 70, 70))
+
+        hint2 = pygame_menu.Menu(height=720, center_content=False, onclose=pygame_menu.events.BACK, theme=mytheme, title='Mission 03 Hint 2', width=1280)
+        hint2.add.label(
+            'Experimental hint: isolate one genetic perturbation at a time. Several simultaneous knockouts cannot reveal which gene caused the observed change.',
+            wordwrap=True, align=pygame_menu.locals.ALIGN_LEFT, padding=(20, 20, 20, 20)
+        )
+        hint2.add.button('Reveal technical hint', hint3, background_color=(255, 215, 0), font_color='black')
+        hint2.add.button('Back', pygame_menu.events.BACK, background_color=(70, 70, 70))
+
+        hint1 = pygame_menu.Menu(height=720, center_content=False, onclose=pygame_menu.events.BACK, theme=mytheme, title='Mission 03 Hint 1', width=1280)
+        hint1.add.label(
+            'Conceptual hint: the impact of a knockout needs a viable all-genes-active reference. Keep the biological context comparable so the growth difference can be attributed to the gene.',
+            wordwrap=True, align=pygame_menu.locals.ALIGN_LEFT, padding=(20, 20, 20, 20)
+        )
+        hint1.add.button('Reveal next hint', hint2, background_color=(255, 215, 0), font_color='black')
+        hint1.add.button('Back', pygame_menu.events.BACK, background_color=(70, 70, 70))
+
+        briefing.add.label(
             """
-            An essential gene is a gene that the organism needs to maintain a viable metabolic state.
-            If that gene is removed, the model may lose the ability to support normal growth.
+            Gene essentiality in a constraint-based model is conditional: it depends on the model, medium, constraints and objective used in the experiment.
 
-            Gene knockout simulations are used to test this idea computationally: instead of changing
-            the environment, the model is perturbed genetically and the growth response is observed.
+            Build evidence that isolates the effect of each candidate gene. Begin from a viable reference, compare each perturbation under the same biological context and use relative predicted growth to distinguish redundant, growth-limiting and operationally essential genes.
 
-            Use the candidate list as the search space and compare the growth behaviour after each
-            genetic perturbation. The strongest loss of viability is the key evidence.
+            Gene-protein-reaction rules may represent alternative genes or multi-gene complexes. Removing one gene therefore disables a reaction only when the complete rule can no longer be satisfied.
+
+            For this mission, a knockout at or below 1% of the reference growth is treated as operationally essential. This is a mission criterion, not a universal biological definition.
             """,
-            max_char=-1,
-            wordwrap=True,
-            align=pygame_menu.locals.ALIGN_LEFT,
-            margin=(0, 0)
+            max_char=-1, wordwrap=True, align=pygame_menu.locals.ALIGN_LEFT, padding=(20, 20, 20, 20)
         )
+        briefing.add.button('Optional Hints', hint1, background_color=(230, 230, 180), font_color='black')
+        briefing.add.button('Back', pygame_menu.events.BACK, background_color=(70, 70, 70))
 
-        
-        menu_text.add.button('Back', pygame_menu.events.BACK, background_color=(70, 70, 70))
-        menu_text.add.vertical_margin(20)
-
-        menu.add.label("Mission 03 - Genetic Mystery"
-            ,wordwrap=False,
-            align=pygame_menu.locals.ALIGN_CENTER,
-            font_size=34)
-        
+        candidate_text = '   '.join(
+            f"{gene_id} ({MISSION03_GENE_NAMES.get(gene_id, '')})"
+            for gene_id in MISSION03_CANDIDATE_GENES
+        )
+        menu.add.vertical_margin(20)
+        menu.add.label('Mission 03: The Conditional Essentiality Screen', align=pygame_menu.locals.ALIGN_CENTER, font_size=34)
         menu.add.label(
-            """
-            Dr. Silva suspects that one candidate gene is essential for E. coli survival.
+            f"""
+            A genetic alteration has compromised predicted E. coli growth. Determine which candidate gene is indispensable for biomass formation in the laboratory's usual model conditions.
 
             Candidate genes:
-            b1241  b3115  b3736  b2975  b1524  b2278  b2926  b2297  b0728  b3919
+            {candidate_text}
 
-            Test the candidates through knockout simulations and compare the growth results.
-            The candidate genes will appear highlighted in the simulation menu.
-
+            Construct a defensible comparison, inspect the relative growth evidence and submit the candidate supported by the complete screen.
             """,
-            wordwrap=True,
-            align=pygame_menu.locals.ALIGN_CENTER,
-            font_size=30)
-        menu.add.button('Mission 03 Briefing', menu_text, font_color = 'black',background_color=(255,215,0, 255))
-        menu.add.vertical_margin(50)  
-        if self.mission03:
-            menu.add.text_input('Essential Gene: ', default='', input_underline='_', maxchar=5, onreturn=self.deliver_results)
-            menu.add.vertical_margin(50)
-            menu.add.label('Mission Activated', font_color=(150, 150, 150))
-            menu.add.vertical_margin(20)
-        else:
-            menu.add.button('Activate Mission', action=self.activate_mission03, background_color=(50,100,100))        
-        menu.add.vertical_margin(20)
+            wordwrap=True, align=pygame_menu.locals.ALIGN_CENTER, font_size=29
+        )
+        menu.add.button('Mission 03 Briefing', briefing, font_color='black', background_color=(255, 215, 0))
+        menu.add.button('Optional Hints', hint1, font_color='black', background_color=(230, 230, 180))
+        menu.add.vertical_margin(25)
 
+        if self.mission03:
+            report = load_mission03_gene_screen_check()
+            menu.add.label(
+                build_mission03_evidence_report_text(report),
+                wordwrap=True,
+                align=pygame_menu.locals.ALIGN_LEFT,
+                padding=(20, 20, 20, 20),
+                background_color='white',
+                font_size=23,
+            )
+            menu.add.vertical_margin(20)
+            menu.add.text_input(
+                'Conditionally essential gene: ',
+                default='',
+                input_underline='_',
+                maxchar=24,
+                onreturn=self.deliver_results,
+            )
+            menu.add.label('Mission Activated', font_color=(150, 150, 150))
+        else:
+            menu.add.button('Activate Mission', action=self.activate_mission03, background_color=(50, 100, 100))
+
+        menu.add.vertical_margin(20)
         await run_menu(menu, self.display_surface)
 
-
-
-    def toggle_menu(self):
-        self.toggle_talk = not self.toggle_talk
-
     def activate_mission03(self):
-        self.mission03 = True
-        self.missions_activated.insert(0, '03')
-        animation_text_save('Mission 03 Activated')
-
-
-    def deliver_results(self, ans):
-        # print(ans)
-        right = self.check_results(ans)
-
-        if right:
-            self.success.play()
-            self.missions_completed.insert(0, '03')
-            animation_text_save('Congratulations! Mission Completed!', time=2000)
-        else:
+        if not is_mission03_unlocked(self.missions_completed):
             self.failed.play()
-            animation_text_save('No ... Try again!', time=2000)
+            animation_text_save('Complete Mission 02 before starting Mission 03.', time=3000)
+            return
+        clear_mission03_gene_screen_check()
+        self.mission03 = True
+        if '03' not in self.missions_activated:
+            self.missions_activated.insert(0, '03')
+        animation_text_save('Mission 03 Activated')
+        save_file(self.player.get_save_data())
 
+    def deliver_results(self, answer):
+        report = load_mission03_gene_screen_check()
+        if not report or report.get('mission_id') != '03' or report.get('check_version') != 2:
+            self.failed.play()
+            animation_text_save('Build the controlled gene-knockout evidence before delivering.', time=3300)
+            return
+        if not report.get('evidence_ready'):
+            self.failed.play()
+            baseline = report.get('baseline_recorded')
+            missing = report.get('missing_candidates') or []
+            if not baseline:
+                animation_text_save('A viable all-genes-active reference is still missing.', time=3200)
+            elif missing:
+                animation_text_save(
+                    f"Gene screen incomplete: {report.get('valid_trial_count', 0)}/{report.get('required_trial_count', 0)} candidates recorded.",
+                    time=3400,
+                )
+            else:
+                animation_text_save('Review the controlled evidence before delivering.', time=3000)
+            return
+        if normalise_mission03_answer(answer) is None:
+            self.failed.play()
+            animation_text_save('Enter a candidate gene id or gene name from the mission list.', time=3000)
+            return
+        if not mission03_answer_matches(answer, report):
+            self.failed.play()
+            animation_text_save('That conclusion is not supported by the recorded growth ratios.', time=3200)
+            return
 
-    def check_results(self, ans):
-        if ans == 'b2926':
-            return True
-        else:
-            return False
+        self.success.play()
+        if '03' not in self.missions_completed:
+            self.missions_completed.insert(0, '03')
+        animation_text_save('Congratulations! Mission 03 completed!', time=2500)
+        save_file(self.player.get_save_data())
 
-
+    def check_results(self, answer):
+        return mission03_answer_matches(answer, load_mission03_gene_screen_check())
 
     def input(self):
         keys = pygame.key.get_pressed()
         self.timer.update()
-
         if keys[pygame.K_ESCAPE]:
-            pass  # ESC is handled by pygame-menu's onclose callback
-            
+            pass
 
     async def update(self):
         self.input()
         await self.setup()
-        

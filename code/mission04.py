@@ -1,28 +1,34 @@
 import pygame
 import pygame_menu
-from settings import *
-from save_load import *
-from timers import Timer
-from options_values import *
-from functions import animation_text_save
-from button import Button
+
 from async_menu import run_menu
-from simulation import (
-    MISSION04_PRODUCT_NAME,
-    MISSION04_PRODUCTION_OBJECTIVE,
-    MISSION04_TARGET_GENE,
-    MISSION04_TARGET_GENE_NAME,
-    MISSION04_CANDIDATE_GENES,
+from button import Button
+from functions import animation_text_save
+from options_values import mytheme
+from save_load import (
+    clear_mission04_production_check,
+    load_mission04_production_check,
+    save_file,
 )
+from settings import *
+from simulation import (
+    MISSION04_CANDIDATE_GENES,
+    MISSION04_GENE_NAMES,
+    MISSION04_PRODUCT_NAME,
+    build_mission04_evidence_report_text,
+    is_mission04_unlocked,
+    mission04_answer_matches,
+    normalise_mission04_answer,
+)
+from timers import Timer
+from utils import get_resource_path
 
 
 class Mission04:
     def __init__(self, toggle_menu, player) -> None:
-        # general setup
         self.player = player
         self.missions_activated = self.player.missions_activated
         self.missions_completed = self.player.missions_completed
-
         self.toggle_menu = toggle_menu
 
         font_path = get_resource_path('font/LycheeSoda.ttf')
@@ -30,44 +36,44 @@ class Mission04:
         self.font_nome = pygame.font.Font(font_path, 24)
         self.screen = pygame.display.get_surface()
         self.timer = Timer(200)
-
         self.menu = Mission04_info(self.toggle_menu, self.player)
         self.pending = None
 
     def input(self):
         keys = pygame.key.get_pressed()
         self.timer.update()
-
         if keys[pygame.K_ESCAPE]:
             self.toggle_menu()
 
     async def update(self):
-        self.m04_step1 = [
-            f"Excellent progress, {self.player.player_name}! I'm Dr. Silva, and I have a new knockout challenge.",
-            "Essential genes are only one side of knockout analysis.",
-            "Now look for a knockout that redirects metabolism toward a useful product."
+        locked = [
+            'First establish how individual gene knockouts affect predicted growth.',
+            'Complete Mission 03 before beginning the production-knockout investigation.',
         ]
-
-        self.m04_step2 = [
-            "Have you compared the candidate knockouts?",
-            "Use a controlled setup and show me which one improves the target product."
+        step1 = [
+            f'Excellent progress, {self.player.player_name}.',
+            'A knockout can do more than reduce growth: it may redirect metabolic flux.',
+            'Can you identify a viable genetic perturbation that forces ethanol secretion?',
         ]
-
-        self.m04_step3 = [
-            "Great work! You used a knockout as a production strategy, not only as a survival test.",
-            "This is the first step toward metabolic engineering.",
-            "Next time, we can combine genetic and environmental changes for even harder challenges."
+        step2 = [
+            'Have you built a no-knockout reference and compared every candidate?',
+            'A useful design must show product evidence, not only lower growth.',
+        ]
+        step3 = [
+            'Excellent. You identified growth-coupled product formation from controlled evidence.',
+            'The medium remained aerobic, but the genetic perturbation changed respiratory capacity.',
+            'Next we will combine genetic and environmental constraints.',
         ]
 
         self.input()
-        if '04' in self.missions_completed:
-            self.menu_message(self.m04_step3, buttons=False)
-
+        if not is_mission04_unlocked(self.missions_completed):
+            self.menu_message(locked, buttons=False)
+        elif '04' in self.missions_completed:
+            self.menu_message(step3, buttons=False)
         elif '04' in self.missions_activated:
-            self.menu_message(self.m04_step2)
-
+            self.menu_message(step2)
         else:
-            self.menu_message(self.m04_step1)
+            self.menu_message(step1)
 
         if self.pending is not None:
             coro_factory = self.pending
@@ -78,13 +84,13 @@ class Mission04:
         pygame.draw.rect(self.screen, (255, 215, 0), [0, 500, 1280, 220], width=5)
         pygame.draw.rect(self.screen, (186, 214, 177), [5, 505, 1270, 210])
 
-        imagem_path = get_resource_path('graphics/dialogues/silva.jpg')
-        imagem = pygame.image.load(imagem_path).convert()
-        self.screen.blit(imagem, (25, 520))
+        image_path = get_resource_path('graphics/dialogues/silva.jpg')
+        image = pygame.image.load(image_path).convert()
+        self.screen.blit(image, (25, 520))
 
         pygame.draw.rect(self.screen, 'white', [25, 675, 150, 25])
-        nome = self.font_nome.render('Dr. Silva', True, 'black')
-        self.screen.blit(nome, (55, 677))
+        name = self.font_nome.render('Dr. Silva', True, 'black')
+        self.screen.blit(name, (55, 677))
 
         for line, msg in enumerate(message):
             surf = self.font.render(msg, True, 'black')
@@ -94,39 +100,25 @@ class Mission04:
             def click_yes():
                 self.pending = self.menu.update
 
-            botao_teste = Button(200, 650, 150, 50, self.screen, 'Yes', click_yes)
-            botao_teste_2 = Button(370, 650, 220, 50, self.screen, 'Not now', self.toggle_menu)
-            botao_teste.process()
-            botao_teste_2.process()
+            Button(200, 650, 150, 50, self.screen, 'Yes', click_yes).process()
+            Button(370, 650, 220, 50, self.screen, 'Not now', self.toggle_menu).process()
 
         pygame.display.flip()
 
 
 class Mission04_info:
     def __init__(self, toggle_menu, player) -> None:
-        # general setup
         self.player = player
         self.missions_activated = self.player.missions_activated
         self.missions_completed = self.player.missions_completed
-
         self.toggle_menu = toggle_menu
         self.display_surface = pygame.display.get_surface()
-        font_path = get_resource_path('font/LycheeSoda.ttf')
-        self.font = pygame.font.Font(font_path, 30)
-
-        self.index = 0
         self.timer = Timer(200)
+        self.mission04 = '04' in self.missions_activated
 
-        if '04' in self.missions_activated:
-            self.mission04 = True
-        else:
-            self.mission04 = False
-
-        # sounds
         success_path = get_resource_path('audio/success_3.ogg')
         self.success = pygame.mixer.Sound(success_path)
         self.success.set_volume(1.2)
-
         failed_path = get_resource_path('audio/failed.ogg')
         self.failed = pygame.mixer.Sound(failed_path)
         self.failed.set_volume(1.2)
@@ -134,138 +126,191 @@ class Mission04_info:
     async def setup(self):
         menu = pygame_menu.Menu(
             height=720,
+            center_content=False,
             onclose=self.toggle_menu,
             theme=mytheme,
             title='Mission 04',
             width=1280,
         )
 
-        menu_text = pygame_menu.Menu(
+        if not is_mission04_unlocked(self.missions_completed):
+            menu.add.vertical_margin(40)
+            menu.add.label(
+                'Mission 04 is locked. Complete Mission 03 with Dr. Silva before investigating production knockouts.',
+                wordwrap=True,
+                align=pygame_menu.locals.ALIGN_CENTER,
+                padding=(25, 25, 25, 25),
+                background_color='white',
+                font_size=30,
+            )
+            menu.add.button('Back', pygame_menu.events.BACK, background_color=(70, 70, 70))
+            await run_menu(menu, self.display_surface)
+            return
+
+        hint3 = pygame_menu.Menu(
+            height=720, center_content=False, onclose=pygame_menu.events.BACK,
+            theme=mytheme, title='Mission 04 Hint 3', width=1280,
+        )
+        hint3.add.label(
+            'Technical hint: use FBA with biomass as the objective, keep the default environment unchanged, track EX_etoh_e in Production Flux, record a no-knockout reference and then test exactly one highlighted candidate per run.',
+            wordwrap=True, align=pygame_menu.locals.ALIGN_LEFT, padding=(20, 20, 20, 20),
+        )
+        hint3.add.button('Back', pygame_menu.events.BACK, background_color=(70, 70, 70))
+
+        hint2 = pygame_menu.Menu(
+            height=720, center_content=False, onclose=pygame_menu.events.BACK,
+            theme=mytheme, title='Mission 04 Hint 2', width=1280,
+        )
+        hint2.add.label(
+            'Experimental hint: compare each candidate with the same viable reference. A lower growth value alone is not proof that carbon was redirected to ethanol; inspect the product flux directly.',
+            wordwrap=True, align=pygame_menu.locals.ALIGN_LEFT, padding=(20, 20, 20, 20),
+        )
+        hint2.add.button('Reveal technical hint', hint3, background_color=(255, 215, 0), font_color='black')
+        hint2.add.button('Back', pygame_menu.events.BACK, background_color=(70, 70, 70))
+
+        hint1 = pygame_menu.Menu(
+            height=720, center_content=False, onclose=pygame_menu.events.BACK,
+            theme=mytheme, title='Mission 04 Hint 1', width=1280,
+        )
+        hint1.add.label(
+            'Conceptual hint: look for growth-coupled production—a perturbation that causes ethanol secretion while the model still predicts viable growth in the same environment.',
+            wordwrap=True, align=pygame_menu.locals.ALIGN_LEFT, padding=(20, 20, 20, 20),
+        )
+        hint1.add.button('Reveal next hint', hint2, background_color=(255, 215, 0), font_color='black')
+        hint1.add.button('Back', pygame_menu.events.BACK, background_color=(70, 70, 70))
+
+        briefing = pygame_menu.Menu(
             height=720,
-            onclose=self.toggle_menu,
+            center_content=False,
+            onclose=pygame_menu.events.BACK,
             theme=mytheme,
             title='Mission 04 Briefing',
-            width=1280
+            width=1280,
         )
-
-        candidate_text = '  '.join(MISSION04_CANDIDATE_GENES)
-
-        menu_text.add.label(
+        briefing.add.label(
             f"""
-            Knockouts do not always mean cell death.
+            Knockouts do not automatically create a useful production strain. A perturbation may have no apparent effect, may reduce growth without redirecting flux, or may force secretion of a target product while preserving some predicted growth.
 
-            In metabolic engineering, disabling a gene can sometimes redirect flux away from a competing pathway and toward a product of interest.
+            Investigate {MISSION04_PRODUCT_NAME} formation in the laboratory's usual aerobic model conditions. Build a controlled comparison that separates the effect of each candidate gene from environmental or objective changes.
 
-            Target product: {MISSION04_PRODUCT_NAME}
-
-            Candidate genes:
-            {candidate_text}
+            This mission evaluates product secretion in a biomass-optimal solution. It does not ask for the theoretical maximum ethanol yield. The useful design must therefore combine product evidence with continued predicted growth.
             """,
             max_char=-1,
             wordwrap=True,
             align=pygame_menu.locals.ALIGN_LEFT,
-            margin=(0, 0)
+            padding=(20, 20, 20, 20),
         )
-        menu_text.add.label(
-            """What to observe:""",
-            max_char=-1,
-            wordwrap=True,
-            align=pygame_menu.locals.ALIGN_LEFT,
-            margin=(100, 0),
-            background_color='gold',
-            font_color='black',
-            font_size=30,
-            padding=(25, 25, 25, 25)
+        briefing.add.button('Optional Hints', hint1, background_color=(230, 230, 180), font_color='black')
+        briefing.add.button('Back', pygame_menu.events.BACK, background_color=(70, 70, 70))
+
+        candidate_text = '   '.join(
+            f"{gene_id} ({MISSION04_GENE_NAMES.get(gene_id, '')})"
+            for gene_id in MISSION04_CANDIDATE_GENES
         )
-        menu_text.add.label(
-            f"""
-            A useful production knockout should increase the target product while keeping the model viable.
-
-            Compare candidate genes under the same default environment, so the effect you observe comes from the genetic change and not from a second variable.
-
-            Use the simulation results to decide which candidate redirects metabolism most effectively toward {MISSION04_PRODUCT_NAME}.
-            """,
-            max_char=-1,
-            wordwrap=True,
-            align=pygame_menu.locals.ALIGN_LEFT,
-            margin=(0, 0)
-        )
-
-        menu_text.add.button('Back', pygame_menu.events.BACK, background_color=(70, 70, 70))
-        menu_text.add.vertical_margin(20)
 
         menu.add.vertical_margin(20)
         menu.add.label(
-            'Mission 04: Knockout for Production',
-            wordwrap=False,
+            'Mission 04: Growth-Coupled Ethanol Production',
             align=pygame_menu.locals.ALIGN_CENTER,
-            font_size=34
+            font_size=34,
         )
-
         menu.add.label(
             f"""
-            Investigate whether disabling one gene can redirect E. coli metabolism toward a useful product.
-
-            Target product: {MISSION04_PRODUCT_NAME}
-
-            Keep the comparison controlled: use the same default environment for every test.
-            Test the candidate genes and identify which knockout improves production.
+            The culture retains its usual aerobic medium, but we want to know whether one genetic perturbation can redirect growth-optimal metabolism toward ethanol secretion.
 
             Candidate genes:
             {candidate_text}
+
+            Construct a defensible comparison and identify the candidate that increases ethanol secretion without eliminating predicted growth.
             """,
             wordwrap=True,
             align=pygame_menu.locals.ALIGN_CENTER,
-            font_size=30
+            font_size=29,
         )
-
-        menu.add.button('Mission 04 Briefing', menu_text, font_color='black', background_color=(255, 215, 0, 255))
-        menu.add.vertical_margin(50)
+        menu.add.button('Mission 04 Briefing', briefing, font_color='black', background_color=(255, 215, 0))
+        menu.add.button('Optional Hints', hint1, font_color='black', background_color=(230, 230, 180))
+        menu.add.vertical_margin(25)
 
         if self.mission04:
-            menu.add.text_input('Production Gene: ', default='', input_underline='_', maxchar=5, onreturn=self.deliver_results)
-            menu.add.vertical_margin(50)
-            menu.add.label('Mission Activated', font_color=(150, 150, 150))
+            report = load_mission04_production_check()
+            menu.add.label(
+                build_mission04_evidence_report_text(report),
+                wordwrap=True,
+                align=pygame_menu.locals.ALIGN_LEFT,
+                padding=(20, 20, 20, 20),
+                background_color='white',
+                font_size=23,
+            )
             menu.add.vertical_margin(20)
+            menu.add.text_input(
+                'Production knockout: ',
+                default='',
+                input_underline='_',
+                maxchar=24,
+                onreturn=self.deliver_results,
+            )
+            menu.add.label('Mission Activated', font_color=(150, 150, 150))
         else:
             menu.add.button('Activate Mission', action=self.activate_mission04, background_color=(50, 100, 100))
 
         menu.add.vertical_margin(20)
-
         await run_menu(menu, self.display_surface)
 
-    def toggle_menu(self):
-        self.toggle_talk = not self.toggle_talk
-
     def activate_mission04(self):
+        if not is_mission04_unlocked(self.missions_completed):
+            self.failed.play()
+            animation_text_save('Complete Mission 03 before starting Mission 04.', time=3000)
+            return
+        clear_mission04_production_check()
         self.mission04 = True
         if '04' not in self.missions_activated:
             self.missions_activated.insert(0, '04')
         animation_text_save('Mission 04 Activated')
+        save_file(self.player.get_save_data())
 
-    def deliver_results(self, ans):
-        right = self.check_results(ans)
-
-        if right:
-            self.success.play()
-            if '04' not in self.missions_completed:
-                self.missions_completed.insert(0, '04')
-            animation_text_save('Congratulations! Mission Completed!', time=2000)
-            save_file(self.player.get_save_data())
-        else:
+    def deliver_results(self, answer):
+        report = load_mission04_production_check()
+        if not report or report.get('mission_id') != '04' or report.get('check_version') != 2:
             self.failed.play()
-            animation_text_save('No ... Try again!', time=2000)
+            animation_text_save('Build the controlled production-knockout evidence before delivering.', time=3300)
+            return
+        if not report.get('evidence_ready'):
+            self.failed.play()
+            if not report.get('baseline_recorded'):
+                animation_text_save('A viable no-knockout production reference is still missing.', time=3200)
+            elif report.get('missing_candidates'):
+                animation_text_save(
+                    f"Production screen incomplete: {report.get('valid_trial_count', 0)}/{report.get('required_trial_count', 0)} candidates recorded.",
+                    time=3400,
+                )
+            elif not report.get('winner_unique'):
+                animation_text_save('The recorded evidence does not identify one unique viable production design.', time=3300)
+            else:
+                animation_text_save('Review the growth and ethanol evidence before delivering.', time=3000)
+            return
+        if normalise_mission04_answer(answer) is None:
+            self.failed.play()
+            animation_text_save('Enter a candidate gene id or gene name from the mission list.', time=3000)
+            return
+        if not mission04_answer_matches(answer, report):
+            self.failed.play()
+            animation_text_save('That conclusion is not supported by the recorded growth and ethanol evidence.', time=3300)
+            return
 
-    def check_results(self, ans):
-        answer = str(ans).strip().lower()
-        return answer in {MISSION04_TARGET_GENE.lower(), MISSION04_TARGET_GENE_NAME.lower()}
+        self.success.play()
+        if '04' not in self.missions_completed:
+            self.missions_completed.insert(0, '04')
+        animation_text_save('Congratulations! Mission 04 completed!', time=2500)
+        save_file(self.player.get_save_data())
+
+    def check_results(self, answer):
+        return mission04_answer_matches(answer, load_mission04_production_check())
 
     def input(self):
         keys = pygame.key.get_pressed()
         self.timer.update()
-
         if keys[pygame.K_ESCAPE]:
-            pass  # ESC is handled by pygame-menu's onclose callback
+            pass
 
     async def update(self):
         self.input()

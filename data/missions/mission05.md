@@ -1,37 +1,52 @@
-# Mission 05 — Anaerobic Production Knockout
+# Mission 05 — Context-Dependent Anaerobic Ethanol Design
 
 ## Objective
 
-Discover which candidate gene knockout improves lactate production when *E. coli* is tested under a respiration-limited condition.
+Determine which viable candidate knockout produces the strongest additional ethanol secretion when the model is evaluated in an anaerobic environment.
 
 ## Concept
 
-Mission 04 showed that a genetic change can redirect metabolic flux under normal conditions.
+A genetic strategy is conditional on its environment. Mission 04 identified a knockout that forced ethanol secretion while oxygen remained available. In anaerobiosis, the no-knockout model already ferments, so the previous winner may become neutral and a different perturbation may perform better.
 
-This mission adds a second layer: the environment. When respiration is limited, *E. coli* may rely more on fermentation and alternative pathways to keep metabolism balanced.
+This mission compares ethanol secretion in biomass-optimal FBA solutions. It does not directly maximise theoretical ethanol yield.
 
-A good design should improve the target product without destroying growth.
+## Target flux
 
-## Target product
-
-- Product: lactate
+- Product: ethanol
+- Exchange flux: `EX_etoh_e`
+- Mathematical objective: `BIOMASS_Ecoli_core_w_GAM`
 
 ## Candidate genes
 
-- `b0903` (`pflB`)
-- `b2297` (`pta`)
-- `b0723` (`sdhA`)
-- `b3115` (`tdcD`)
+- `b2278` (`nuoL`)
 - `b0728` (`sucC`)
-- `b1241` (`adhE`)
+- `b1602` (`pntB`)
+- `b3736` (`atpF`)
 
-## Briefing
+## Controlled experiment
 
-Use the candidate genes as your search space and compare how each knockout changes the model under the mission condition.
+1. Establish a viable anaerobic reference with all genes active.
+2. Keep FBA, the biomass objective and the anaerobic medium unchanged.
+3. Track `EX_etoh_e` in Production Flux.
+4. Test exactly one candidate knockout per run.
+5. Compare retained growth and additional ethanol relative to the anaerobic reference.
 
-Focus on two things:
+## Operational mission criteria
 
-1. whether lactate production improves;
-2. whether the model remains viable.
+- Growth retention: at least 90% of the anaerobic reference.
+- Additional ethanol: at least `1.0` above the anaerobic reference.
+- Winner: the eligible candidate with the highest ethanol secretion.
 
-Use New Results to interpret each attempt, then return to Dr. Silva with the gene you identify.
+These thresholds are mission criteria, not universal biological definitions.
+
+## Expected evidence with the included `e_coli_core` model
+
+| Condition | Growth | Ethanol |
+|---|---:|---:|
+| Anaerobic baseline | ~0.212 | ~8.279 |
+| `b2278` / `nuoL` | ~0.212 | ~8.279 |
+| `b0728` / `sucC` | ~0.212 | ~8.279 |
+| `b1602` / `pntB` | ~0.208 | ~9.796 |
+| `b3736` / `atpF` | ~0.196 | ~13.893 |
+
+The evidence identifies `b3736` / `atpF` as the strongest eligible design in this model, medium and objective.

@@ -1,42 +1,41 @@
-# Mission 03: Genetic Mystery - The Essential Gene
+# Mission 03: The Conditional Essentiality Screen
 
-Dr. Silva has selected a small set of candidate genes from *E. coli*.
-One of them appears to be critical for survival.
+Dr. Silva asks the player to identify which candidate gene is operationally
+essential for predicted biomass formation in the standard aerobic
+`e_coli_core` experiment.
 
-Your goal is to use knockout simulations to identify which candidate gene has the strongest impact on growth.
+## Scientific protocol
 
-## Dialogue with Dr. Silva
+The evidence consists of:
 
-**Dr. Silva:** "Greetings! I have a small set of candidate genes from *E. coli*. One of them seems critical for survival. Can you identify which one?"
+1. one viable reference run with all genes active;
+2. six single-gene knockout runs;
+3. FBA with the biomass objective in every run;
+4. the unchanged default medium in every run;
+5. comparison through growth relative to the reference.
 
-*After activating the mission:*
+Candidates:
 
-**Dr. Silva:** "Have you tested the candidate knockouts? Show me what the growth results revealed."
+- `b1241 / adhE` — no apparent growth effect in this context;
+- `b0728 / sucC` — small growth reduction;
+- `b3919 / tpiA` — moderate growth reduction;
+- `b3736 / atpF` — strong growth reduction;
+- `b2278 / nuoL` — very strong growth reduction;
+- `b2926 / pgk` — no predicted biomass growth.
 
-*After completing the mission:*
+The mission treats growth at or below 1% of the reference as operationally
+essential. This threshold is explicitly presented as a mission criterion, not
+a universal biological definition.
 
-**Dr. Silva:** "Very good! You learned how a knockout can reveal an essential gene. But knockouts are not only used to test survival. They can also redirect metabolism toward useful products."
+## Expected conclusion
 
-## Mission Description
+`b2926 / pgk` is the unique candidate that meets the operational essentiality
+criterion under the model, objective and medium used by the mission.
 
-Candidate genes:
-- b1241
-- b3115
-- b3736
-- b2975
-- b1524
-- b2278
-- b2926
-- b2297
-- b0728
-- b3919
+## Pedagogical approach
 
-Run simulations, compare growth behaviour, and deliver the gene that best explains the loss of viability.
-
-## Mission Briefing
-
-An essential gene is a gene that the organism needs to maintain a viable metabolic state. If that gene is removed, the model may lose the ability to support normal growth.
-
-Gene knockout simulations are used to test this idea computationally: instead of changing the environment, the model is perturbed genetically and the growth response is observed.
-
-Use the candidate list as the search space and compare the growth behaviour after each genetic perturbation. The strongest loss of viability is the key evidence.
+The initial task describes the biological problem without listing every UI
+step. Three optional hints progressively reveal the conceptual, experimental
+and technical setup. Invalid runs with environmental changes, multiple
+knockouts, non-candidate genes, the wrong method or the wrong objective are not
+recorded as evidence.

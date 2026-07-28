@@ -1,1 +1,1 @@
-15.713
+"Deprecated: Mission 01 now validates a controlled aerobic/anaerobic comparison; no fixed growth value is used."

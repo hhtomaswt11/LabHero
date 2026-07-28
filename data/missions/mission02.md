@@ -1,10 +1,10 @@
 # Mission 02: Sweet as Glucose
 
-After studying how *E. coli* responds to oxygen availability, the next environmental challenge is carbon source availability.
+After studying how *E. coli* responds to oxygen availability, the next environmental challenge is carbon-source availability.
 
-Glucose is usually a strong carbon source for *E. coli*. The goal of this mission is to compare possible alternatives and identify which one best supports growth.
+The culture has lost access to its usual glucose supply. Several alternative carbon sources are available, but they may not support the same predicted growth.
 
-Candidate carbon sources:
+Your task is to design a fair comparison, use the simulation evidence and identify the strongest replacement among:
 
 - malate
 - lactate
@@ -17,40 +17,35 @@ Candidate carbon sources:
 - acetaldehyde
 - acetate
 
-Use simulations to compare the candidates. The best answer should be supported by the growth result, not by guessing.
-
+The conclusion must come from the model results rather than from guessing.
 
 ## Dialogue with the Scientist
 
-**Scientist:** "I'm studying how *E. coli* behaves when its usual carbon source is unavailable. I prepared a set of possible alternative nutrients for you to compare. Can you find which one supports growth best?"
-
+**Scientist:** "The culture can no longer use its usual carbon source. I prepared several alternatives, but I need a controlled comparison before choosing one. Which candidate best restores predicted growth?"
 
 *After activating the mission:*
 
-**Scientist:** "Have you compared the candidate carbon sources? Show me the evidence behind your choice."
-
+**Scientist:** "Have you built enough evidence to defend one candidate? Show me how the growth results support your conclusion."
 
 *After completing the mission:*
 
-**Scientist:** "Excellent work! You showed that nutrient availability can redirect microbial growth. Choosing the right carbon source matters in biotechnology and environmental applications."
-
+**Scientist:** "Excellent work! You showed that nutrient availability changes predicted growth and that a valid conclusion depends on a controlled experiment."
 
 ## Mission Briefing
 
-Carbon sources are nutrients that cells can use to obtain material and energy.
+Carbon sources provide material and energy for cellular metabolism. In a constraint-based model, their availability is represented through exchange-reaction bounds.
 
-Glucose usually supports strong *E. coli* growth, but metabolic models can help compare how the cell behaves when other carbon sources are available instead.
+Determine which candidate best supports predicted *E. coli* growth when the usual source is unavailable. The trials must be comparable, but deciding how to construct that comparison is part of the challenge.
 
-In this mission, use the candidate list as your search space. Compare the growth response for each alternative under equivalent conditions and use the results to justify your choice.
+Think about:
 
-Do not look for a gene solution here. This is a nutrient-availability challenge.
+- the difference between replacing a nutrient and supplementing it;
+- which experimental factor should change between trials;
+- which assumptions should remain comparable;
+- which simulation result provides evidence for growth.
 
+## Optional hints
 
-### Concepts to observe
-
-- Nutrient availability can change microbial growth.
-- Exchange reactions represent how compounds enter or leave the model.
-- A fair comparison tests one alternative at a time.
-- Biomass/growth helps you compare which condition better supports *E. coli*.
-
-The correct answer should come from repeated simulations and result interpretation, not from guessing.
+1. A fair experiment changes the factor under study while keeping unrelated assumptions comparable.
+2. A true replacement is tested without leaving the usual carbon source available, and alternatives should be examined separately.
+3. Use FBA with the biomass objective, keep genes and oxygen unchanged, test one candidate uptake at a time, and give every candidate the same molar uptake allowance (`-10`).

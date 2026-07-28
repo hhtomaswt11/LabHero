@@ -6,7 +6,6 @@ from timers import Timer
 from options_values import *
 from functions import animation_text_save
 from button import Button
-from math import isclose
 from utils import *
 from async_menu import run_menu
 from mission02 import Mission02_info
@@ -199,14 +198,11 @@ class Mission_info:
 
         menu_text.add.label(
             "\n"
-            "Flux Balance Analysis (FBA) predicts how a metabolic network can behave "
-            "when nutrients, environmental conditions and reaction limits are defined.\n\n"
-            "In this mission, the important idea is that oxygen availability changes "
-            "the metabolic strategy of E. coli. When oxygen is limited, the cell cannot "
-            "rely on the same respiratory behaviour as in normal aerobic growth.\n\n"
-            "Use this mission to compare how the model behaves when the environment changes. "
-            "Focus on the relationship between oxygen availability, growth and metabolic adaptation.\n\n"
-            "Do not look for a genetic solution here. This is an environmental challenge."
+            "Flux Balance Analysis (FBA) predicts feasible metabolic behaviour under a defined objective and a set of reaction bounds.\n\n"
+            "Run a controlled comparison. First, use FBA with the biomass objective, no gene knockouts and the unchanged default environment. This is the aerobic baseline.\n\n"
+            "Then run the same setup again and change only the lower bound of EX_o2_e from open to closed. Do not change any other environmental bound.\n\n"
+            "Open Compare Runs and the Exchange Flux Report. A correct result shows that oxygen uptake becomes zero, E. coli still has positive growth, and anaerobic growth is lower than aerobic growth. Uptake is displayed as a positive magnitude, while its raw exchange flux is negative during consumption.\n\n"
+            "The mission validates this relationship; it does not expect one exact rounded growth value or one unique byproduct profile, because FBA can have alternative optimal flux distributions."
             ,
             max_char=33,
             wordwrap=True
@@ -220,9 +216,9 @@ class Mission_info:
             font_size=34)
         
         menu.add.label(
-            "Dr. Martinez wants to study how E. coli behaves when oxygen is no longer freely available.\n"
-            "Your goal is to run an FBA simulation under a condition compatible with anaerobic growth and observe how the model responds.\n"
-            "Use the simulation results to decide whether E. coli can still grow under this environmental constraint.",
+            "Dr. Martinez wants a controlled comparison between normal aerobic growth and growth without oxygen.\n"
+            "Run the default FBA/biomass setup first. Then close only the lower bound of EX_o2_e and run it again.\n"
+            "Use Compare Runs to verify that oxygen uptake is zero, growth remains positive, and growth decreases under anaerobic conditions.",
             wordwrap=True,
             align=pygame_menu.locals.ALIGN_CENTER,
             font_size=30)
@@ -246,40 +242,46 @@ class Mission_info:
 
 
     def activate_mission01(self):
+        clear_compare_runs()
+        clear_mission01_comparison_check()
         self.mission01 = True
-        self.missions_activated.insert(0, '01')
+        if '01' not in self.missions_activated:
+            self.missions_activated.insert(0, '01')
         animation_text_save('Mission 01 Activated')
+        save_file(self.player.get_save_data())
 
 
     def deliver_results(self):
-        right = self.check_results()
+        report_data = load_mission01_comparison_check()
 
-        if right:
-            self.success.play()
-            self.missions_completed.insert(0, '01')
-            animation_text_save('Congratulations! Mission Completed!', time=2000)
-        else:
+        if (not report_data
+                or report_data.get('mission_id') != '01'
+                or report_data.get('check_version') != 2):
             self.failed.play()
-            animation_text_save('No ... Try again!', time=2000)
+            animation_text_save('Run the aerobic and anaerobic comparison first!', time=3000)
+            return
 
+        if report_data.get('ready_to_deliver'):
+            self.success.play()
+            if '01' not in self.missions_completed:
+                self.missions_completed.insert(0, '01')
+            animation_text_save('Congratulations! Mission 01 completed!', time=2500)
+            save_file(self.player.get_save_data())
+            return
 
-    def check_results(self):
-        m01_path = get_resource_path('code/player_history/mission01')
-        m01_results = load_file(m01_path)
-        
-        try:
-            data_path = get_save_path('data')
-            name, *data = load_file(data_path)
-            results = data[0][0]
-            value = results[1]
-
-            right_value = float(m01_results)
-            if value == right_value:
-                return True
-            else:
-                return False
-        except:
-            return False
+        self.failed.play()
+        if not report_data.get('baseline_run_found'):
+            animation_text_save('Missing baseline: run default FBA with biomass objective first.', time=3200)
+        elif not report_data.get('anaerobic_run_found'):
+            animation_text_save('Close only the lower bound of EX_o2_e and run again.', time=3200)
+        elif not report_data.get('anaerobic_growth_viable'):
+            animation_text_save('The anaerobic run must still show positive viable growth.', time=3000)
+        elif not report_data.get('growth_decreased'):
+            animation_text_save('Anaerobic growth must be lower than the aerobic baseline.', time=3000)
+        elif not report_data.get('anaerobic_oxygen_blocked'):
+            animation_text_save('EX_o2_e uptake is not zero. Check the oxygen lower bound.', time=3000)
+        else:
+            animation_text_save('Open Compare Runs and check the controlled comparison.', time=3000)
 
 
     def input(self):

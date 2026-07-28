@@ -153,6 +153,33 @@ def load_challenge_score():
         return None
 
 
+
+
+def save_mission03_gene_screen_check(data):
+    """Persist Mission 03 baseline and controlled knockout evidence."""
+    if _IS_WEB:
+        _MEMSTORE['mission03_gene_screen_check'] = data
+        return
+    with open(get_save_path('mission03_gene_screen_check.txt'), 'w') as report_file:
+        json.dump(data, report_file)
+
+
+def load_mission03_gene_screen_check():
+    if _IS_WEB:
+        return _MEMSTORE.get('mission03_gene_screen_check')
+    try:
+        with open(get_save_path('mission03_gene_screen_check.txt')) as report_file:
+            return json.load(report_file)
+    except FileNotFoundError:
+        return None
+    except Exception:
+        return None
+
+
+def clear_mission03_gene_screen_check():
+    _delete_save_artifact('mission03_gene_screen_check', 'mission03_gene_screen_check.txt')
+
+
 def save_mission04_production_check(data):
     if _IS_WEB:
         _MEMSTORE['mission04_production_check'] = data
@@ -173,6 +200,10 @@ def load_mission04_production_check():
         return None
 
 
+def clear_mission04_production_check():
+    _delete_save_artifact('mission04_production_check', 'mission04_production_check.txt')
+
+
 def save_mission05_production_check(data):
     if _IS_WEB:
         _MEMSTORE['mission05_production_check'] = data
@@ -191,6 +222,10 @@ def load_mission05_production_check():
         return None
     except Exception:
         return None
+
+def clear_mission05_production_check():
+    _delete_save_artifact('mission05_production_check', 'mission05_production_check.txt')
+
 
 def save_mission07_objective_check(data):
     if _IS_WEB:
@@ -533,6 +568,58 @@ def load_mission20_robustness_report_check():
 
 def clear_mission20_robustness_report_check():
     _delete_save_artifact('mission20_robustness_report_check', 'mission20_robustness_report_check.txt')
+
+
+def save_mission02_source_comparison_check(data):
+    """Persist Mission 02 controlled carbon-source trial evidence."""
+    if _IS_WEB:
+        _MEMSTORE['mission02_source_comparison_check'] = data
+        return
+    with open(get_save_path('mission02_source_comparison_check.txt'), 'w') as report_file:
+        json.dump(data, report_file)
+
+
+def load_mission02_source_comparison_check():
+    if _IS_WEB:
+        return _MEMSTORE.get('mission02_source_comparison_check')
+    try:
+        with open(get_save_path('mission02_source_comparison_check.txt')) as report_file:
+            return json.load(report_file)
+    except FileNotFoundError:
+        return None
+    except Exception:
+        return None
+
+
+def clear_mission02_source_comparison_check():
+    _delete_save_artifact(
+        'mission02_source_comparison_check',
+        'mission02_source_comparison_check.txt',
+    )
+
+
+def save_mission01_comparison_check(data):
+    if _IS_WEB:
+        _MEMSTORE['mission01_comparison_check'] = data
+        return
+    with open(get_save_path('mission01_comparison_check.txt'), 'w') as report_file:
+        json.dump(data, report_file)
+
+
+def load_mission01_comparison_check():
+    if _IS_WEB:
+        return _MEMSTORE.get('mission01_comparison_check')
+    try:
+        with open(get_save_path('mission01_comparison_check.txt')) as report_file:
+            return json.load(report_file)
+    except FileNotFoundError:
+        return None
+    except Exception:
+        return None
+
+
+def clear_mission01_comparison_check():
+    _delete_save_artifact('mission01_comparison_check', 'mission01_comparison_check.txt')
 
 
 def save_compare_runs(data):

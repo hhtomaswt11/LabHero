@@ -4,6 +4,7 @@ from cobra.io import read_sbml_model
 from mewpy.simulation import get_simulator
 
 from app.schemas import SimulateRequest, SimulateResponse
+from app.gpr import disabled_reaction_ids
 
 _MODEL_PATH = Path(__file__).resolve().parent.parent / "models" / "e_coli_core.xml.gz"
 _model = read_sbml_model(str(_MODEL_PATH))
@@ -49,11 +50,12 @@ def simulate(req: SimulateRequest) -> SimulateResponse:
 
         constraints = {k: tuple(v) for k, v in req.env_conditions.items()}
 
-        for gene_id in req.gene_knockouts:
-            if gene_id not in _genes.index:
-                continue
-            for reaction_id in _genes.loc[gene_id, "reactions"]:
-                constraints[reaction_id] = (0, 0)
+        known_knockouts = [
+            gene_id for gene_id in req.gene_knockouts
+            if gene_id in _genes.index
+        ]
+        for reaction_id in disabled_reaction_ids(_model, known_knockouts):
+            constraints[reaction_id] = (0.0, 0.0)
 
         result = _simul.simulate(method=req.method, constraints=constraints)
 
