@@ -1,132 +1,130 @@
 import pygame
 import pygame_menu
 
-from settings import *
-from save_load import *
-from timers import Timer
-from options_values import mytheme
-from functions import animation_text_save
 from async_menu import run_menu
-from utils import *
+from functions import animation_text_save
+from options_values import mytheme
+from save_load import clear_mission10_robust_design_check, load_mission10_robust_design_check, save_file
+from settings import *
 from simulation import (
-    MISSION10_TARGET_PRODUCT,
     MISSION10_CANDIDATE_GENES,
-    MISSION10_MIN_GROWTH,
-    MISSION10_MIN_PRODUCTION_CHANGE,
+    MISSION10_CHECK_VERSION,
+    MISSION10_COMPETING_FLUX,
+    MISSION10_GENE_NAMES,
+    MISSION10_GROWTH_OBJECTIVE,
+    MISSION10_METHOD,
+    MISSION10_OXYGEN_REACTION,
+    MISSION10_REQUIRED_PAIRS,
+    MISSION10_TARGET_FLUX,
+    build_mission10_evidence_report_text,
+    is_mission10_unlocked,
+    mission10_answer_matches,
+    normalise_mission10_answer,
 )
+from timers import Timer
+from utils import get_resource_path
 
 
 class Mission10_info:
-    """Mission 10 — Multi-Knockout Robust Design.
-
-    Final Dr. Nova mission. The player must combine objective selection,
-    environmental constraints, production-flux evidence, and two knockouts.
-    The exact objective, environmental reaction, and knockout pair are not
-    shown in the prompt; the player must iterate using New Results feedback.
-    """
+    """Mission 10 — Two-Gene Redundancy and Flux Redirection."""
 
     def __init__(self, toggle_menu, player) -> None:
         self.player = player
         self.missions_activated = self.player.missions_activated
         self.missions_completed = self.player.missions_completed
-
         self.toggle_menu = toggle_menu
         self.display_surface = pygame.display.get_surface()
-        font_path = get_resource_path('font/LycheeSoda.ttf')
-        self.font = pygame.font.Font(font_path, 30)
         self.timer = Timer(200)
-
         self.mission10 = '10' in self.missions_activated
 
-        success_path = get_resource_path('audio/success_3.ogg')
-        self.success = pygame.mixer.Sound(success_path)
+        self.success = pygame.mixer.Sound(get_resource_path('audio/success_3.ogg'))
         self.success.set_volume(1.2)
-
-        failed_path = get_resource_path('audio/failed.ogg')
-        self.failed = pygame.mixer.Sound(failed_path)
+        self.failed = pygame.mixer.Sound(get_resource_path('audio/failed.ogg'))
         self.failed.set_volume(1.2)
 
     async def setup(self):
         menu = pygame_menu.Menu(
-            height=720,
-            onclose=self.toggle_menu,
-            theme=mytheme,
-            title='Mission 10',
-            width=1280,
+            height=720, center_content=False, onclose=self.toggle_menu,
+            theme=mytheme, title='Mission 10', width=1280,
         )
 
-        menu_text = pygame_menu.Menu(
-            height=720,
-            onclose=self.toggle_menu,
-            theme=mytheme,
-            title='Mission 10 Briefing',
-            width=1280,
+        if not is_mission10_unlocked(self.missions_completed):
+            menu.add.vertical_margin(40)
+            menu.add.label(
+                'Mission 10 is locked. Complete Mission 09 before beginning the two-gene redundancy investigation.',
+                wordwrap=True, align=pygame_menu.locals.ALIGN_CENTER,
+                padding=(25, 25, 25, 25), background_color='white', font_size=30,
+            )
+            menu.add.button('Back', pygame_menu.events.BACK, background_color=(70, 70, 70))
+            await run_menu(menu, self.display_surface)
+            return
+
+        hint3 = pygame_menu.Menu(height=720, center_content=False, onclose=pygame_menu.events.BACK, theme=mytheme, title='Mission 10 Hint 3', width=1280)
+        hint3.add.label(
+            f'Technical hint: use {MISSION10_METHOD} with {MISSION10_GROWTH_OBJECTIVE}, keep the default glucose supply, close only the lower bound of {MISSION10_OXYGEN_REACTION}, track {MISSION10_TARGET_FLUX} and {MISSION10_COMPETING_FLUX}, record a no-knockout reference, then test every listed two-gene pair.',
+            wordwrap=True, align=pygame_menu.locals.ALIGN_LEFT, padding=(20, 20, 20, 20),
         )
+        hint3.add.button('Back', pygame_menu.events.BACK, background_color=(70, 70, 70))
 
-        menu_text.add.label(
-            f"""
-            Welcome to Mission 10: Multi-Knockout Robust Design.
+        hint2 = pygame_menu.Menu(height=720, center_content=False, onclose=pygame_menu.events.BACK, theme=mytheme, title='Mission 10 Hint 2', width=1280)
+        hint2.add.label(
+            'Experimental hint: keep the objective, environment and tracked fluxes identical. Reset all genes between runs, then disable exactly two highlighted candidates so each pair is isolated.',
+            wordwrap=True, align=pygame_menu.locals.ALIGN_LEFT, padding=(20, 20, 20, 20),
+        )
+        hint2.add.button('Reveal technical hint', hint3, background_color=(255, 215, 0), font_color='black')
+        hint2.add.button('Back', pygame_menu.events.BACK, background_color=(70, 70, 70))
 
-            This is Dr. Nova's final challenge. Mission 09 showed how one knockout can improve a design.
-            Now the problem becomes harder: two knockouts can interact,
-            redirect flux, or damage growth.
+        hint1 = pygame_menu.Menu(height=720, center_content=False, onclose=pygame_menu.events.BACK, theme=mytheme, title='Mission 10 Hint 1', width=1280)
+        hint1.add.label(
+            'Conceptual hint: in an OR-type GPR, eliminating one gene may leave the reaction functional through an alternative gene. A carefully chosen pair can reveal a phenotype that neither single knockout would produce.',
+            wordwrap=True, align=pygame_menu.locals.ALIGN_LEFT, padding=(20, 20, 20, 20),
+        )
+        hint1.add.button('Reveal next hint', hint2, background_color=(255, 215, 0), font_color='black')
+        hint1.add.button('Back', pygame_menu.events.BACK, background_color=(70, 70, 70))
 
-            Target product: {MISSION10_TARGET_PRODUCT}
+        briefing = pygame_menu.Menu(height=720, center_content=False, onclose=pygame_menu.events.BACK, theme=mytheme, title='Mission 10 Briefing', width=1280)
+        briefing.add.label(
+            """
+            Dr. Nova's final challenge investigates genetic redundancy. Some reactions remain active after one knockout because an alternative gene satisfies the same OR-type GPR.
 
-            Candidate genes:
-            {'  '.join(MISSION10_CANDIDATE_GENES)}
-
-            Robust strain design is not only about finding high production.
-            The model must also remain viable, and the result should be
-            supported by production-flux evidence.
-
-            Use simulations to compare knockout pairs, environmental constraints
-            and product fluxes. Avoid random extra changes and refine your
-            design using New Results.
+            Build a controlled anaerobic reference, compare all listed two-gene pairs, and determine which pair redirects flux from acetate toward ethanol while preserving sufficient predicted growth. Growth, ethanol and acetate must all come from the same visible biomass-optimal solution.
             """,
-            max_char=-1,
-            wordwrap=True,
-            align=pygame_menu.locals.ALIGN_LEFT,
-            margin=(0, 0),
+            max_char=-1, wordwrap=True, align=pygame_menu.locals.ALIGN_LEFT, padding=(20, 20, 20, 20),
         )
-        menu_text.add.button('Back', pygame_menu.events.BACK, background_color=(70, 70, 70))
-        menu_text.add.vertical_margin(20)
+        briefing.add.button('Optional Hints', hint1, background_color=(230, 230, 180), font_color='black')
+        briefing.add.button('Back', pygame_menu.events.BACK, background_color=(70, 70, 70))
 
+        candidate_text = '   '.join(
+            f"{gene_id} ({MISSION10_GENE_NAMES.get(gene_id, '')})" for gene_id in MISSION10_CANDIDATE_GENES
+        )
+        pair_text = '\n'.join(
+            '- ' + ' + '.join(f"{gene_id} ({MISSION10_GENE_NAMES.get(gene_id, '')})" for gene_id in pair)
+            for pair in MISSION10_REQUIRED_PAIRS
+        )
         menu.add.vertical_margin(20)
+        menu.add.label('Mission 10: Two-Gene Redundancy and Flux Redirection', align=pygame_menu.locals.ALIGN_CENTER, font_size=34)
         menu.add.label(
-            'Mission 10: Multi-Knockout Robust Design',
-            wordwrap=False,
-            align=pygame_menu.locals.ALIGN_CENTER,
-            font_size=34,
+            'Establish a no-knockout anaerobic reference and compare every controlled pair. Identify the pair that most effectively increases ethanol while retaining enough reference growth.',
+            wordwrap=True, align=pygame_menu.locals.ALIGN_CENTER, font_size=27,
         )
-
         menu.add.label(
-            f"""
-            Final Dr. Nova challenge.
-
-            Build a robust E. coli design for {MISSION10_TARGET_PRODUCT} production.
-            Combine objective choice, environmental constraints,
-            exactly two knockouts, and production-flux evidence.
-
-            Candidate genes:
-            {'  '.join(MISSION10_CANDIDATE_GENES)}
-
-            You are not given the exact objective, environmental reaction,
-            fluxes to track, or knockout pair. Find them by testing.
-            """,
-            wordwrap=True,
-            align=pygame_menu.locals.ALIGN_CENTER,
-            font_size=30,
+            f"Candidate genes:\n{candidate_text}\n\nRequired pairs:\n{pair_text}",
+            wordwrap=True, align=pygame_menu.locals.ALIGN_LEFT, font_size=27,
+            padding=(5, 0, 0, 40),
         )
-
-        menu.add.button('Mission 10 Briefing', menu_text, font_color='black', background_color=(255, 215, 0, 255))
-        menu.add.vertical_margin(50)
+        menu.add.button('Mission 10 Briefing', briefing, font_color='black', background_color=(255, 215, 0))
+        menu.add.button('Optional Hints', hint1, font_color='black', background_color=(230, 230, 180))
+        menu.add.vertical_margin(25)
 
         if self.mission10:
-            menu.add.button('Deliver Robust Design', action=self.deliver_results, background_color=(50, 100, 100))
-            menu.add.vertical_margin(50)
-            menu.add.label('Mission Activated', font_color=(150, 150, 150))
+            menu.add.label(
+                build_mission10_evidence_report_text(load_mission10_robust_design_check()),
+                wordwrap=True, align=pygame_menu.locals.ALIGN_LEFT,
+                padding=(20, 20, 20, 20), background_color='white', font_size=21,
+            )
             menu.add.vertical_margin(20)
+            menu.add.text_input('Winning gene pair: ', default='', input_underline='_', maxchar=40, onreturn=self.deliver_results)
+            menu.add.label('Mission Activated', font_color=(150, 150, 150))
         else:
             menu.add.button('Activate Mission', action=self.activate_mission10, background_color=(50, 100, 100))
 
@@ -134,6 +132,10 @@ class Mission10_info:
         await run_menu(menu, self.display_surface)
 
     def activate_mission10(self):
+        if not is_mission10_unlocked(self.missions_completed):
+            self.failed.play()
+            animation_text_save('Complete Mission 09 before starting Mission 10.', time=3000)
+            return
         clear_mission10_robust_design_check()
         self.mission10 = True
         if '10' not in self.missions_activated:
@@ -141,50 +143,42 @@ class Mission10_info:
         animation_text_save('Mission 10 Activated')
         save_file(self.player.get_save_data())
 
-    def deliver_results(self):
-        design_data = load_mission10_robust_design_check()
-
-        if (not design_data
-                or design_data.get('mission_id') != '10'
-                or design_data.get('check_version') != 2):
+    def deliver_results(self, answer):
+        if not is_mission10_unlocked(self.missions_completed):
             self.failed.play()
-            animation_text_save('Run a Mission 10 simulation first!', time=2500)
+            animation_text_save('Complete Mission 09 first!', time=2500)
+            return
+        report = load_mission10_robust_design_check()
+        if not report or report.get('mission_id') != '10' or report.get('check_version') != MISSION10_CHECK_VERSION:
+            self.failed.play()
+            animation_text_save('Build the controlled Mission 10 evidence first.', time=3000)
+            return
+        if not report.get('evidence_ready'):
+            self.failed.play()
+            if not report.get('baseline_recorded'):
+                animation_text_save('The no-knockout anaerobic reference is still missing.', time=3200)
+            elif report.get('missing_pairs'):
+                animation_text_save(f"Pair screen incomplete: {report.get('valid_trial_count', 0)}/{report.get('required_trial_count', 0)} recorded.", time=3300)
+            else:
+                animation_text_save('The evidence does not identify one unique eligible two-gene design.', time=3300)
+            return
+        if normalise_mission10_answer(answer) is None:
+            self.failed.play()
+            animation_text_save('Enter two candidate gene ids or gene names from the mission list.', time=3000)
+            return
+        if not mission10_answer_matches(answer, report):
+            self.failed.play()
+            animation_text_save('That pair is not supported by the recorded growth, ethanol and acetate evidence.', time=3300)
             return
 
-        if design_data.get('ready_to_deliver'):
-            self.success.play()
-            if '10' not in self.missions_completed:
-                self.missions_completed.insert(0, '10')
-            animation_text_save('Congratulations! Dr. Nova arc completed!', time=3000)
-            save_file(self.player.get_save_data())
-            return
-
-        self.failed.play()
-        if not design_data.get('objective_correct'):
-            animation_text_save('The objective is not targeting the requested product yet.', time=3000)
-        elif not design_data.get('oxygen_lower_bound_closed'):
-            animation_text_save('The environment is not fermentation-compatible yet.', time=3000)
-        elif design_data.get('unexpected_environment_changes'):
-            animation_text_save('Too many environmental changes. Keep only the key constraint.', time=3000)
-        elif not design_data.get('tracking_ready'):
-            animation_text_save('Evidence is incomplete. Track the target and a competing product flux.', time=3000)
-        elif not design_data.get('exactly_two_knockouts'):
-            animation_text_save('Use exactly two candidate gene knockouts.', time=3000)
-        elif not design_data.get('target_pair_found'):
-            animation_text_save('This knockout pair is not robust enough. Test another pair.', time=3000)
-        elif not design_data.get('production_improved'):
-            animation_text_save('Production did not improve enough. Refine the design.', time=3000)
-        elif not design_data.get('growth_ok'):
-            animation_text_save('Growth is too low. The strain is not viable enough.', time=3000)
-        else:
-            animation_text_save('Almost there. Use the Mission 10 Robust Design Check to refine it.', time=3000)
+        self.success.play()
+        if '10' not in self.missions_completed:
+            self.missions_completed.insert(0, '10')
+        animation_text_save('Congratulations! Dr. Nova arc completed!', time=2800)
+        save_file(self.player.get_save_data())
 
     def input(self):
-        keys = pygame.key.get_pressed()
         self.timer.update()
-
-        if keys[pygame.K_ESCAPE]:
-            pass
 
     async def update(self):
         self.input()

@@ -1,24 +1,39 @@
 # Mission 07 — Objective Matters
 
 ## Theme
-Advanced strain design: understanding the role of the FBA objective function.
+Controlled comparison of FBA objective functions.
 
 ## Learning goal
-The player learns that the objective function changes the biological question being asked by the simulation.
+The player learns that changing the objective function changes the mathematical question asked of the same constrained metabolic model. It does not alter the strain or the medium.
 
-A biomass objective asks the model to prioritize growth. Other objectives can be used to explore production-oriented scenarios, but the setup must be interpreted carefully.
+The mission also distinguishes a positive product objective from predicted viability: direct ethanol maximisation can produce a high theoretical secretion flux while the biomass flux is zero.
 
 ## Target product
-- Ethanol
+- Ethanol (`EX_etoh_e`)
 
 ## Mission rules
-- Keep the strain unchanged.
-- Keep environmental conditions unchanged.
-- Compare simulation goals and interpret the output.
-- Use the Mission 07 Objective Check in New Results as feedback.
+- Complete Mission 06 first.
+- Use FBA in both runs.
+- Keep all genes active.
+- Keep the default environment unchanged.
+- Track `EX_etoh_e` in both runs.
+- Record one run with `BIOMASS_Ecoli_core_w_GAM` as objective.
+- Record one run with `EX_etoh_e` as objective.
+- Use only the visible solution; no hidden or auxiliary simulation is used.
 
-## Player task
-Design a controlled simulation where the only meaningful change is the model's optimization goal. Run different tests, compare the results, and decide when the model is prioritizing the requested product.
+## Expected controlled evidence
 
-## Briefing focus
-This mission introduces a key idea for later strain-design challenges: the objective function is not neutral. It defines what the model tries to optimize, so changing it can change the simulated metabolic behaviour even when the strain and environment remain the same.
+### Biomass-objective run
+- Biomass flux: approximately `0.874`
+- Ethanol secretion: approximately `0.000`
+- Oxygen uptake: approximately `21.799`
+
+### Ethanol-objective run
+- Biomass flux: approximately `0.000`
+- Ethanol secretion: approximately `20.000`
+- Oxygen uptake: approximately `0.000`
+
+## Interpretation
+The objective values belong to different reactions and must not be directly subtracted or ranked as though they represented the same quantity.
+
+The ethanol result is a theoretical maximum predicted by this model, medium and uptake bounds. It is not a universal biological constant and it does not describe a growing production strain because the corresponding biomass flux is zero.

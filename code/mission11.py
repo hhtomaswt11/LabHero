@@ -10,10 +10,18 @@ from button import Button
 from async_menu import run_menu
 from utils import *
 from simulation import (
+    MISSION11_CHECK_VERSION,
+    MISSION11_EXPECTED_DOMINANT_FLUX,
+    MISSION11_GROWTH_OBJECTIVE,
+    MISSION11_METHOD,
+    MISSION11_OXYGEN_REACTION,
+    MISSION11_PRODUCT_NAMES,
     MISSION11_REQUIRED_TRACKED_FLUXES,
     MISSION11_TARGET_CONTEXT,
-    MISSION11_GROWTH_OBJECTIVE,
-    MISSION11_MIN_POSITIVE_PRODUCTS,
+    build_mission11_fingerprint_report_text,
+    is_mission11_unlocked,
+    mission11_answer_matches,
+    normalise_mission11_answer,
     MISSION12_TARGET_PRODUCT,
     MISSION13_TARGET_PRODUCT,
     MISSION13_TARGET_METHOD,
@@ -29,7 +37,7 @@ from mission15 import Mission15_info
 
 
 class Mission11:
-    """Mission 11 — Flux Fingerprint.
+    """Mission 11 — Anaerobic Secretion Fingerprint.
 
     First mission for Dr. Almeida. This professor focuses on flux diagnostics:
     using production-flux evidence to interpret what a simulation is doing,
@@ -60,22 +68,27 @@ class Mission11:
             self.toggle_menu()
 
     async def update(self):
+        locked = [
+            'The Flux Diagnostics Lab is still locked.',
+            "Complete Dr. Nova's Mission 10 before beginning this laboratory.",
+            'Return after finishing the controlled two-gene comparison.',
+        ]
         self.m11_step1 = [
             f"Hello {self.player.player_name}. I'm Dr. Almeida, and I study flux diagnostics.",
-            "Dr. Nova taught you how to design strains.",
-            "Now I want you to prove what the model is actually secreting."
+            "Dr. Nova taught you how to design strains; now you must diagnose their predicted phenotypes.",
+            "Start by building and interpreting a complete anaerobic secretion fingerprint.",
         ]
 
         self.m11_step2 = [
-            "Mission 11 is active. Build a flux fingerprint for the simulation.",
-            "Use Production Flux evidence, not only the objective value.",
-            "Keep the setup controlled and let New Results guide your diagnosis."
+            "Mission 11 is active. Build one controlled anaerobic biomass-optimal fingerprint.",
+            "Measure the full product panel in the same visible solution.",
+            "Then identify the dominant tracked product from the recorded evidence.",
         ]
 
         self.m11_step3 = [
             "Excellent diagnostic work.",
-            "A single objective value never tells the full metabolic story.",
-            "Now let's use flux evidence to compare a target product with byproducts."
+            "You distinguished predicted growth from the secretion fingerprint and interpreted the dominant product.",
+            "Now use the same evidence discipline to compare a target product with competing byproducts.",
         ]
 
         self.m12_step1 = [
@@ -127,7 +140,9 @@ class Mission11:
         ]
 
         self.input()
-        if '15' in self.missions_completed:
+        if not is_mission11_unlocked(self.missions_completed):
+            self.menu_message(locked, buttons=False)
+        elif '15' in self.missions_completed:
             self.menu_message(self.m15_step2, buttons=False)
         elif '14' in self.missions_completed and '15' in self.missions_activated:
             self.menu_message(self.m15_step1, target_mission='15')
@@ -199,104 +214,109 @@ class Mission11:
 
 
 class Mission11_info:
+    """Mission 11 — Anaerobic Secretion Fingerprint."""
+
     def __init__(self, toggle_menu, player) -> None:
         self.player = player
         self.missions_activated = self.player.missions_activated
         self.missions_completed = self.player.missions_completed
-
         self.toggle_menu = toggle_menu
         self.display_surface = pygame.display.get_surface()
-        font_path = get_resource_path('font/LycheeSoda.ttf')
-        self.font = pygame.font.Font(font_path, 30)
+        self.font = pygame.font.Font(get_resource_path('font/LycheeSoda.ttf'), 30)
         self.timer = Timer(200)
-
         self.mission11 = '11' in self.missions_activated
 
-        success_path = get_resource_path('audio/success_3.ogg')
-        self.success = pygame.mixer.Sound(success_path)
+        self.success = pygame.mixer.Sound(get_resource_path('audio/success_3.ogg'))
         self.success.set_volume(1.2)
-
-        failed_path = get_resource_path('audio/failed.ogg')
-        self.failed = pygame.mixer.Sound(failed_path)
+        self.failed = pygame.mixer.Sound(get_resource_path('audio/failed.ogg'))
         self.failed.set_volume(1.2)
 
     async def setup(self):
         menu = pygame_menu.Menu(
-            height=720,
-            onclose=self.toggle_menu,
-            theme=mytheme,
-            title='Mission 11',
-            width=1280,
+            height=720, center_content=False, onclose=self.toggle_menu,
+            theme=mytheme, title='Mission 11', width=1280,
         )
 
-        menu_text = pygame_menu.Menu(
-            height=720,
-            onclose=self.toggle_menu,
-            theme=mytheme,
-            title='Mission 11 Briefing',
-            width=1280,
+        if not is_mission11_unlocked(self.missions_completed):
+            menu.add.vertical_margin(40)
+            menu.add.label(
+                'Mission 11 is locked. Complete Mission 10 before beginning Dr. Almeida\'s flux-diagnostics training.',
+                wordwrap=True, align=pygame_menu.locals.ALIGN_CENTER,
+                padding=(25, 25, 25, 25), background_color='white', font_size=30,
+            )
+            menu.add.button('Back', pygame_menu.events.BACK, background_color=(70, 70, 70))
+            await run_menu(menu, self.display_surface)
+            return
+
+        hint3 = pygame_menu.Menu(height=720, center_content=False, onclose=pygame_menu.events.BACK, theme=mytheme, title='Mission 11 Hint 3', width=1280)
+        hint3.add.label(
+            f'Technical hint: use {MISSION11_METHOD} with {MISSION11_GROWTH_OBJECTIVE}, keep all genes active and the default glucose supply unchanged, close only the lower bound of {MISSION11_OXYGEN_REACTION}, and track ' + ', '.join(MISSION11_REQUIRED_TRACKED_FLUXES) + '.',
+            wordwrap=True, align=pygame_menu.locals.ALIGN_LEFT, padding=(20, 20, 20, 20),
         )
+        hint3.add.button('Back', pygame_menu.events.BACK, background_color=(70, 70, 70))
 
-        menu_text.add.label(
-            f"""
-            Welcome to Mission 11: Flux Fingerprint.
+        hint2 = pygame_menu.Menu(height=720, center_content=False, onclose=pygame_menu.events.BACK, theme=mytheme, title='Mission 11 Hint 2', width=1280)
+        hint2.add.label(
+            'Experimental hint: keep the strain, objective and default carbon supply fixed. Introduce only the anaerobic constraint, then make sure every requested exchange flux is numerically present in the visible result.',
+            wordwrap=True, align=pygame_menu.locals.ALIGN_LEFT, padding=(20, 20, 20, 20),
+        )
+        hint2.add.button('Reveal technical hint', hint3, background_color=(255, 215, 0), font_color='black')
+        hint2.add.button('Back', pygame_menu.events.BACK, background_color=(70, 70, 70))
 
-            Dr. Nova's missions focused on choosing and changing the simulation setup.
-            This mission focuses on reading the evidence produced by the model.
+        hint1 = pygame_menu.Menu(height=720, center_content=False, onclose=pygame_menu.events.BACK, theme=mytheme, title='Mission 11 Hint 1', width=1280)
+        hint1.add.label(
+            'Conceptual hint: the biomass objective tells you about the predicted growth optimum. Exchange fluxes answer a separate question: which compounds this particular solution predicts are secreted.',
+            wordwrap=True, align=pygame_menu.locals.ALIGN_LEFT, padding=(20, 20, 20, 20),
+        )
+        hint1.add.button('Reveal next hint', hint2, background_color=(255, 215, 0), font_color='black')
+        hint1.add.button('Back', pygame_menu.events.BACK, background_color=(70, 70, 70))
 
-            A growth value tells you if the strain is viable.
-            A production-flux panel tells you what the strain is secreting.
+        briefing = pygame_menu.Menu(height=720, center_content=False, onclose=pygame_menu.events.BACK, theme=mytheme, title='Mission 11 Briefing', width=1280)
+        briefing.add.label(
+            """
+            Dr. Almeida wants a diagnostic fingerprint rather than another strain design. Build one controlled anaerobic solution that still maximises biomass, measure a defined panel of exchange reactions, and distinguish positive predicted secretion from zero flux.
 
-            Diagnostic context: {MISSION11_TARGET_CONTEXT}
+            A positive exchange flux is evidence of secretion in this specific model solution. A zero value does not prove that the organism can never produce the compound; it only describes this objective and these constraints.
 
-            Keep the genetic background unchanged and use the standard biomass objective.
-            Build a secretion fingerprint using several production fluxes, then compare the output.
+            After recording the complete fingerprint, interpret the evidence and submit the dominant tracked product.
             """,
-            max_char=-1,
-            wordwrap=True,
-            align=pygame_menu.locals.ALIGN_LEFT,
-            margin=(0, 0),
+            max_char=-1, wordwrap=True, align=pygame_menu.locals.ALIGN_LEFT, padding=(20, 20, 20, 20),
         )
-        menu_text.add.button('Back', pygame_menu.events.BACK, background_color=(70, 70, 70))
-        menu_text.add.vertical_margin(20)
+        briefing.add.button('Optional Hints', hint1, background_color=(230, 230, 180), font_color='black')
+        briefing.add.button('Back', pygame_menu.events.BACK, background_color=(70, 70, 70))
 
+        panel_text = '   '.join(
+            f"{MISSION11_PRODUCT_NAMES.get(reaction_id, reaction_id)} ({reaction_id})"
+            for reaction_id in MISSION11_REQUIRED_TRACKED_FLUXES
+        )
         menu.add.vertical_margin(20)
+        menu.add.label('Mission 11: Anaerobic Secretion Fingerprint', align=pygame_menu.locals.ALIGN_CENTER, font_size=34)
         menu.add.label(
-            'Mission 11: Flux Fingerprint',
-            wordwrap=False,
-            align=pygame_menu.locals.ALIGN_CENTER,
-            font_size=34,
+            'Generate one complete anaerobic secretion fingerprint from the visible biomass-optimal solution, then identify the dominant tracked product.',
+            wordwrap=True, align=pygame_menu.locals.ALIGN_CENTER, font_size=27,
         )
-
         menu.add.label(
-            f"""
-            Flux diagnostics challenge.
-
-            Build a secretion fingerprint for E. coli under {MISSION11_TARGET_CONTEXT}.
-
-            Keep the biomass objective active.
-            Do not use gene knockouts.
-            Use one meaningful environmental constraint.
-
-            Production flux panel:
-            {'  '.join(MISSION11_REQUIRED_TRACKED_FLUXES)}
-
-            The design is ready when New Results confirms that enough products are being tracked
-            and the simulation still represents a viable strain.
-            """,
-            wordwrap=True,
-            align=pygame_menu.locals.ALIGN_CENTER,
-            font_size=30,
+            f'Fingerprint panel:\n{panel_text}',
+            wordwrap=True, align=pygame_menu.locals.ALIGN_LEFT, font_size=25,
+            padding=(5, 0, 0, 40),
         )
-
-        menu.add.button('Mission 11 Briefing', menu_text, font_color='black', background_color=(255, 215, 0, 255))
-        menu.add.vertical_margin(50)
+        menu.add.button('Mission 11 Briefing', briefing, font_color='black', background_color=(255, 215, 0))
+        menu.add.button('Optional Hints', hint1, font_color='black', background_color=(230, 230, 180))
+        menu.add.vertical_margin(25)
 
         if self.mission11:
-            menu.add.button('Deliver Flux Fingerprint', action=self.deliver_results, background_color=(50, 100, 100))
-            menu.add.vertical_margin(50)
-            menu.add.label('Mission Activated', font_color=(150, 150, 150))
+            report = load_mission11_flux_fingerprint_check()
+            menu.add.label(
+                build_mission11_fingerprint_report_text(report),
+                wordwrap=True, align=pygame_menu.locals.ALIGN_LEFT,
+                padding=(20, 20, 20, 20), background_color='white', font_size=22,
+            )
             menu.add.vertical_margin(20)
+            menu.add.text_input(
+                'Dominant tracked product: ', default='', input_underline='_',
+                maxchar=30, onreturn=self.deliver_results,
+            )
+            menu.add.label('Mission Activated', font_color=(150, 150, 150))
         else:
             menu.add.button('Activate Mission', action=self.activate_mission11, background_color=(50, 100, 100))
 
@@ -304,6 +324,10 @@ class Mission11_info:
         await run_menu(menu, self.display_surface)
 
     def activate_mission11(self):
+        if not is_mission11_unlocked(self.missions_completed):
+            self.failed.play()
+            animation_text_save('Complete Mission 10 before starting Mission 11.', time=3000)
+            return
         clear_mission11_flux_fingerprint_check()
         self.mission11 = True
         if '11' not in self.missions_activated:
@@ -311,51 +335,43 @@ class Mission11_info:
         animation_text_save('Mission 11 Activated')
         save_file(self.player.get_save_data())
 
-    def deliver_results(self):
-        fingerprint_data = load_mission11_flux_fingerprint_check()
-
-        if (not fingerprint_data
-                or fingerprint_data.get('mission_id') != '11'
-                or fingerprint_data.get('check_version') != 1):
+    def deliver_results(self, answer):
+        if not is_mission11_unlocked(self.missions_completed):
             self.failed.play()
-            animation_text_save('Run a Mission 11 simulation first!', time=2500)
+            animation_text_save('Complete Mission 10 first!', time=2500)
             return
 
-        if fingerprint_data.get('ready_to_deliver'):
-            self.success.play()
-            if '11' not in self.missions_completed:
-                self.missions_completed.insert(0, '11')
-            animation_text_save('Congratulations! Mission 11 completed!', time=2500)
-            save_file(self.player.get_save_data())
+        report = load_mission11_flux_fingerprint_check()
+        if not report or report.get('mission_id') != '11' or report.get('check_version') != MISSION11_CHECK_VERSION:
+            self.failed.play()
+            animation_text_save('Build the controlled Mission 11 fingerprint first.', time=3000)
+            return
+        if not report.get('evidence_ready'):
+            self.failed.play()
+            if report.get('current_issues'):
+                animation_text_save('The complete visible fingerprint has not been recorded yet.', time=3200)
+            else:
+                animation_text_save('Run the controlled fingerprint before submitting an interpretation.', time=3200)
+            return
+        if normalise_mission11_answer(answer) is None:
+            self.failed.play()
+            animation_text_save('Enter the dominant product name or its exchange-reaction id.', time=3000)
+            return
+        if not mission11_answer_matches(answer, report):
+            self.failed.play()
+            animation_text_save('That product is not supported as dominant by the recorded fingerprint.', time=3200)
             return
 
-        self.failed.play()
-        if not fingerprint_data.get('method_correct'):
-            animation_text_save('Use the standard FBA method for this diagnostic baseline.', time=3000)
-        elif not fingerprint_data.get('objective_correct'):
-            animation_text_save('Keep the biomass objective active for this fingerprint.', time=3000)
-        elif fingerprint_data.get('knocked_out_genes'):
-            animation_text_save('Do not use knockouts yet. Keep the strain unchanged.', time=3000)
-        elif not fingerprint_data.get('oxygen_lower_bound_closed'):
-            animation_text_save('The environment is not respiration-limited yet.', time=3000)
-        elif fingerprint_data.get('unexpected_environment_changes'):
-            animation_text_save('Too many environmental changes. Keep only the key constraint.', time=3000)
-        elif not fingerprint_data.get('tracking_ready'):
-            animation_text_save('Production Flux evidence is incomplete. Track the full product panel.', time=3000)
-        elif not fingerprint_data.get('positive_products_ready'):
-            animation_text_save('The fingerprint is not informative yet. Compare the product fluxes.', time=3000)
-        elif not fingerprint_data.get('growth_ok'):
-            animation_text_save('Growth is too low. The strain is not viable enough.', time=3000)
-        else:
-            animation_text_save('Almost there. Use the Mission 11 Flux Fingerprint Check to refine it.', time=3000)
+        self.success.play()
+        if '11' not in self.missions_completed:
+            self.missions_completed.insert(0, '11')
+        animation_text_save('Congratulations! Mission 11 completed!', time=2500)
+        save_file(self.player.get_save_data())
 
     def input(self):
-        keys = pygame.key.get_pressed()
         self.timer.update()
-
-        if keys[pygame.K_ESCAPE]:
-            pass
 
     async def update(self):
         self.input()
         await self.setup()
+

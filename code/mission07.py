@@ -13,28 +13,25 @@ from mission09 import Mission09_info
 from mission10 import Mission10_info
 from utils import *
 from simulation import (
+    MISSION07_METHOD,
+    MISSION07_BIOMASS_OBJECTIVE,
     MISSION07_TARGET_OBJECTIVE,
     MISSION07_TARGET_PRODUCT,
-    MISSION07_DEFAULT_OBJECTIVE,
-    MISSION08_TARGET_PRODUCT,
+    MISSION07_TARGET_FLUX,
     MISSION09_TARGET_PRODUCT,
     MISSION10_TARGET_PRODUCT,
+    build_mission07_objective_comparison_report_text,
+    is_mission07_unlocked,
 )
 
 
 class Mission07:
-    """Mission 07 — Objective Matters.
-
-    This is the first mission of the new Advanced Strain Design laboratory.
-    It teaches that the objective function selected in FBA changes what the
-    model tries to optimise.
-    """
+    """Mission 07 — controlled comparison of FBA objective functions."""
 
     def __init__(self, toggle_menu, player) -> None:
         self.player = player
         self.missions_activated = self.player.missions_activated
         self.missions_completed = self.player.missions_completed
-
         self.toggle_menu = toggle_menu
 
         font_path = get_resource_path('font/LycheeSoda.ttf')
@@ -42,74 +39,71 @@ class Mission07:
         self.font_nome = pygame.font.Font(font_path, 24)
         self.screen = pygame.display.get_surface()
         self.timer = Timer(200)
-
         self.menu = Mission07_info(self.toggle_menu, self.player)
         self.pending = None
 
     def input(self):
         keys = pygame.key.get_pressed()
         self.timer.update()
-
         if keys[pygame.K_ESCAPE]:
             self.toggle_menu()
 
     async def update(self):
+        locked = [
+            "Complete Dr. Carter's controlled multi-knockout challenge first.",
+            'Mission 07 builds directly on the difference between observing ethanol in a growth-optimal solution and maximising ethanol itself.',
+        ]
         self.m07_step1 = [
             f"Hello {self.player.player_name}! Welcome to the Advanced Strain Design Lab.",
-            "Until now, you changed nutrients, genes and environmental conditions.",
-            "Now you will learn why the objective function matters in FBA."
+            'In the previous challenge, ethanol was measured while biomass remained the objective.',
+            'Now compare that question with a simulation that directly prioritises ethanol.',
         ]
-
         self.m07_step2 = [
-            "Mission 07 is active. Go to the simulation computer.",
-            f"Redirect the model toward {MISSION07_TARGET_PRODUCT} production without changing the strain.",
-            "Keep the environment controlled and use the results to guide your conclusion."
+            'Mission 07 is active. Keep the strain, medium and method unchanged.',
+            'Build a controlled comparison in which only the objective function changes.',
+            'Use the visible biomass, ethanol and oxygen evidence to interpret both solutions.',
         ]
-
         self.m07_step3 = [
-            "Excellent. You saw that changing the objective changes what the model optimizes.",
-            "But objective choice is only one part of strain design.",
-            "Now let's add environmental constraints to the problem."
+            'Excellent. You showed that a goal changes the mathematical question, not the strain itself.',
+            'Direct product maximisation can find a theoretical optimum with no predicted growth.',
+            'Test whether adding an environmental restriction necessarily changes such an optimum.',
         ]
 
         self.m08_step1 = [
-            "Mission 08 is active. This time, the objective is only part of the answer.",
-            f"Make {MISSION08_TARGET_PRODUCT} production work under a biologically meaningful constraint.",
-            "Keep the strain unchanged and let the simulations guide your reasoning."
+            'Mission 08 is active. Compare the same direct D-lactate objective before and after one oxygen constraint.',
+            'Do not assume that adding a restriction must change the optimum.',
+            'Use the visible production, growth and oxygen fluxes to decide whether the restriction changes the optimum.',
         ]
-
         self.m08_step2 = [
-            f"Excellent work, {self.player.player_name}.",
-            "You now understand that objectives and constraints must work together.",
-            "Now combine objective, environment and one knockout in a single design."
+            f'Excellent work, {self.player.player_name}.',
+            'You showed that closing oxygen did not change the optimum because the previous optimum already used no oxygen.',
+            'Now integrate a controlled carbon-source change with one genetic perturbation.',
         ]
-
         self.m09_step1 = [
-            "Mission 09 is active. This integrated design needs three decisions.",
-            f"Target {MISSION09_TARGET_PRODUCT} using objective, environment and exactly one knockout.",
-            "Use New Results as feedback until the integrated design is ready."
+            'Mission 09 is active. Build an L-malate reference and compare the highlighted single knockouts.',
+            f'Track {MISSION09_TARGET_PRODUCT} in the same biomass-optimal solutions used to assess growth.',
+            'Use New Results to identify the best balanced integrated design.',
         ]
-
         self.m09_step2 = [
-            f"Outstanding, {self.player.player_name}.",
-            "You combined objective choice, environmental constraints and a useful knockout.",
-            "One final Nova challenge remains: robust design with a knockout pair."
+            f'Great job, {self.player.player_name}.',
+            'You combined environmental context, biomass-optimal evidence, and a helpful knockout.',
+            'One final Nova challenge remains: two-gene redundancy and flux redirection.',
         ]
-
         self.m10_step1 = [
-            "Mission 10 is active. This is my hardest challenge yet.",
-            f"Target {MISSION10_TARGET_PRODUCT} using objective choice, environment and exactly two knockouts.",
-            "Use production-flux evidence and New Results until the robust design is ready."
+            'Mission 10 is active. This is my hardest challenge yet.',
+            f'Use two-gene redundancy to redirect anaerobic flux toward {MISSION10_TARGET_PRODUCT}.',
+            'Record the reference and every controlled pair, then justify the winner using growth, ethanol and acetate evidence.',
         ]
-
         self.m10_step2 = [
-            f"Excellent work, {self.player.player_name}.",
-            "You completed objective choice, constraints, single knockout and double knockout design.",
-            "The Advanced Strain Design Lab is complete."
+            f'Excellent work, {self.player.player_name}.',
+            'You completed objective choice, constraints, single knockout and double knockout design.',
+            "The Advanced Strain Design Lab is complete. Proceed to Dr. Almeida's Flux Diagnostics Lab.",
         ]
 
         self.input()
-        if '10' in self.missions_completed:
+        if not is_mission07_unlocked(self.missions_completed):
+            self.menu_message(locked, buttons=False)
+        elif '10' in self.missions_completed:
             self.menu_message(self.m10_step2, buttons=False)
         elif '09' in self.missions_completed and '10' in self.missions_activated:
             self.menu_message(self.m10_step1, target_mission='10')
@@ -137,15 +131,15 @@ class Mission07:
         pygame.draw.rect(self.screen, (255, 215, 0), [0, 500, 1280, 220], width=5)
         pygame.draw.rect(self.screen, (186, 214, 177), [5, 505, 1270, 210])
 
-        imagem_path = get_resource_path('graphics/dialogues/nova.jpg')
-        imagem = pygame.image.load(imagem_path).convert()
-        if imagem.get_size() != (150, 150):
-            imagem = pygame.transform.smoothscale(imagem, (150, 150))
-        self.screen.blit(imagem, (25, 520))
+        image_path = get_resource_path('graphics/dialogues/nova.jpg')
+        image = pygame.image.load(image_path).convert()
+        if image.get_size() != (150, 150):
+            image = pygame.transform.smoothscale(image, (150, 150))
+        self.screen.blit(image, (25, 520))
 
         pygame.draw.rect(self.screen, 'white', [25, 675, 150, 25])
-        nome = self.font_nome.render('Dr. Nova', True, 'black')
-        self.screen.blit(nome, (55, 677))
+        name = self.font_nome.render('Dr. Nova', True, 'black')
+        self.screen.blit(name, (55, 677))
 
         for line, msg in enumerate(message):
             surf = self.font.render(msg, True, 'black')
@@ -154,21 +148,16 @@ class Mission07:
         if buttons:
             def click_yes():
                 if target_mission == '10':
-                    mission10_menu = Mission10_info(self.toggle_menu, self.player)
-                    self.pending = mission10_menu.update
+                    self.pending = Mission10_info(self.toggle_menu, self.player).update
                 elif target_mission == '09':
-                    mission09_menu = Mission09_info(self.toggle_menu, self.player)
-                    self.pending = mission09_menu.update
+                    self.pending = Mission09_info(self.toggle_menu, self.player).update
                 elif target_mission == '08':
-                    mission08_menu = Mission08_info(self.toggle_menu, self.player)
-                    self.pending = mission08_menu.update
+                    self.pending = Mission08_info(self.toggle_menu, self.player).update
                 else:
                     self.pending = self.menu.update
 
-            botao_teste = Button(200, 650, 150, 50, self.screen, 'Yes', click_yes)
-            botao_teste_2 = Button(370, 650, 220, 50, self.screen, 'Not now', self.toggle_menu)
-            botao_teste.process()
-            botao_teste_2.process()
+            Button(200, 650, 150, 50, self.screen, 'Yes', click_yes).process()
+            Button(370, 650, 220, 50, self.screen, 'Not now', self.toggle_menu).process()
 
         pygame.display.flip()
 
@@ -178,19 +167,14 @@ class Mission07_info:
         self.player = player
         self.missions_activated = self.player.missions_activated
         self.missions_completed = self.player.missions_completed
-
         self.toggle_menu = toggle_menu
         self.display_surface = pygame.display.get_surface()
-        font_path = get_resource_path('font/LycheeSoda.ttf')
-        self.font = pygame.font.Font(font_path, 30)
         self.timer = Timer(200)
-
         self.mission07 = '07' in self.missions_activated
 
         success_path = get_resource_path('audio/success_3.ogg')
         self.success = pygame.mixer.Sound(success_path)
         self.success.set_volume(1.2)
-
         failed_path = get_resource_path('audio/failed.ogg')
         self.failed = pygame.mixer.Sound(failed_path)
         self.failed.set_volume(1.2)
@@ -198,101 +182,131 @@ class Mission07_info:
     async def setup(self):
         menu = pygame_menu.Menu(
             height=720,
+            center_content=False,
             onclose=self.toggle_menu,
             theme=mytheme,
             title='Mission 07',
             width=1280,
         )
 
-        menu_text = pygame_menu.Menu(
+        if not is_mission07_unlocked(self.missions_completed):
+            menu.add.vertical_margin(40)
+            menu.add.label(
+                "Mission 07 is locked. Complete Mission 06 with Dr. Carter before entering Dr. Nova's objective-comparison investigation.",
+                wordwrap=True,
+                align=pygame_menu.locals.ALIGN_CENTER,
+                padding=(25, 25, 25, 25),
+                background_color='white',
+                font_size=30,
+            )
+            menu.add.button('Back', pygame_menu.events.BACK, background_color=(70, 70, 70))
+            await run_menu(menu, self.display_surface)
+            return
+
+        hint3 = pygame_menu.Menu(
+            height=720, center_content=False, onclose=pygame_menu.events.BACK,
+            theme=mytheme, title='Mission 07 Hint 3', width=1280,
+        )
+        hint3.add.label(
+            f'Technical hint: use {MISSION07_METHOD}, keep the default medium and all genes unchanged, track {MISSION07_TARGET_FLUX}, and compare {MISSION07_BIOMASS_OBJECTIVE} with {MISSION07_TARGET_OBJECTIVE} as objectives.',
+            wordwrap=True, align=pygame_menu.locals.ALIGN_LEFT, padding=(20, 20, 20, 20),
+        )
+        hint3.add.button('Back', pygame_menu.events.BACK, background_color=(70, 70, 70))
+
+        hint2 = pygame_menu.Menu(
+            height=720, center_content=False, onclose=pygame_menu.events.BACK,
+            theme=mytheme, title='Mission 07 Hint 2', width=1280,
+        )
+        hint2.add.label(
+            'Experimental hint: record one run that asks the model to maximise growth and another that asks it to maximise ethanol. Method, genes, medium and tracked fluxes must remain identical.',
+            wordwrap=True, align=pygame_menu.locals.ALIGN_LEFT, padding=(20, 20, 20, 20),
+        )
+        hint2.add.button('Reveal technical hint', hint3, background_color=(255, 215, 0), font_color='black')
+        hint2.add.button('Back', pygame_menu.events.BACK, background_color=(70, 70, 70))
+
+        hint1 = pygame_menu.Menu(
+            height=720, center_content=False, onclose=pygame_menu.events.BACK,
+            theme=mytheme, title='Mission 07 Hint 1', width=1280,
+        )
+        hint1.add.label(
+            'Conceptual hint: an objective function is a modelling assumption that selects which feasible solution the algorithm seeks. It is not itself a biological intervention.',
+            wordwrap=True, align=pygame_menu.locals.ALIGN_LEFT, padding=(20, 20, 20, 20),
+        )
+        hint1.add.button('Reveal next hint', hint2, background_color=(255, 215, 0), font_color='black')
+        hint1.add.button('Back', pygame_menu.events.BACK, background_color=(70, 70, 70))
+
+        briefing = pygame_menu.Menu(
             height=720,
-            onclose=self.toggle_menu,
+            center_content=False,
+            onclose=pygame_menu.events.BACK,
             theme=mytheme,
             title='Mission 07 Briefing',
             width=1280,
         )
-
-        menu_text.add.label(
+        briefing.add.label(
             f"""
-            Mission 07 Briefing
+            In the previous challenge, ethanol secretion was observed while the model still maximised biomass. Dr. Nova now wants to compare that question with direct {MISSION07_TARGET_PRODUCT} maximisation.
 
-            In Flux Balance Analysis, the objective function represents the goal that the model is trying to optimize.
-            A biomass objective asks a growth question. A product-oriented objective asks a production question.
+            Build a controlled objective comparison. Do not change the strain or the medium, and do not treat a positive product objective as proof of viable growth. Use the biomass, ethanol and oxygen fluxes returned by the same visible solution to interpret each run.
 
-            Target product: {MISSION07_TARGET_PRODUCT}
-
-            Keep this experiment controlled: do not use gene knockouts or environmental changes.
-            Your task is to compare simulation goals and decide when the model is prioritizing the requested product.
+            Objective values from different reactions are different quantities. Compare the metabolic behaviour of the two solutions rather than subtracting their objective values.
             """,
             max_char=-1,
             wordwrap=True,
             align=pygame_menu.locals.ALIGN_LEFT,
-            margin=(0, 0),
+            padding=(20, 20, 20, 20),
         )
-        menu_text.add.label(
-            """Study focus:""",
-            max_char=-1,
-            wordwrap=True,
-            align=pygame_menu.locals.ALIGN_LEFT,
-            margin=(100, 0),
-            background_color='gold',
-            font_color='black',
-            font_size=30,
-            padding=(25, 25, 25, 25)
-        )
-        menu_text.add.label(
-            """
-            - What biological question is the simulation answering?
-            - Is the model still optimizing growth, or has the goal changed?
-            - Did the strain and environment remain unchanged?
-            - Does the output support your conclusion?
-            """,
-            max_char=-1,
-            wordwrap=True,
-            align=pygame_menu.locals.ALIGN_LEFT,
-            margin=(0, 0),
-        )
-        menu_text.add.button('Back', pygame_menu.events.BACK, background_color=(70, 70, 70))
-        menu_text.add.vertical_margin(20)
+        briefing.add.button('Optional Hints', hint1, background_color=(230, 230, 180), font_color='black')
+        briefing.add.button('Back', pygame_menu.events.BACK, background_color=(70, 70, 70))
 
         menu.add.vertical_margin(20)
         menu.add.label(
             'Mission 07: Objective Matters',
-            wordwrap=False,
             align=pygame_menu.locals.ALIGN_CENTER,
             font_size=34,
         )
-
         menu.add.label(
             f"""
-            The goal is to prove that changing the simulation goal changes the result.
+            Compare two modelling questions while keeping the strain, environment and simulation method controlled.
 
             Target product: {MISSION07_TARGET_PRODUCT}
 
-            Keep the strain and environment unchanged.
-            Run controlled tests with different simulation goals, compare the results, and deliver your conclusion.
+            Record both objective conditions and use the resulting growth and production evidence to explain what changed.
             """,
             wordwrap=True,
             align=pygame_menu.locals.ALIGN_CENTER,
             font_size=30,
         )
+        menu.add.button('Mission 07 Briefing', briefing, font_color='black', background_color=(255, 215, 0, 255))
+        menu.add.vertical_margin(30)
 
-        menu.add.button('Mission 07 Briefing', menu_text, font_color='black', background_color=(255, 215, 0, 255))
-        menu.add.vertical_margin(50)
+        report = load_mission07_objective_check()
+        if report and report.get('mission_id') == '07' and report.get('check_version') == 3:
+            menu.add.label(
+                build_mission07_objective_comparison_report_text(report),
+                wordwrap=True,
+                align=pygame_menu.locals.ALIGN_LEFT,
+                padding=(20, 20, 20, 20),
+                background_color='white',
+                font_size=22,
+            )
+            menu.add.vertical_margin(20)
 
         if self.mission07:
-            menu.add.button('Deliver Objective Results', action=self.deliver_results, background_color=(50, 100, 100))
-            menu.add.vertical_margin(50)
+            menu.add.button('Deliver Objective Comparison', action=self.deliver_results, background_color=(50, 100, 100))
+            menu.add.vertical_margin(30)
             menu.add.label('Mission Activated', font_color=(150, 150, 150))
-            menu.add.vertical_margin(20)
         else:
             menu.add.button('Activate Mission', action=self.activate_mission07, background_color=(50, 100, 100))
 
         menu.add.vertical_margin(20)
-
         await run_menu(menu, self.display_surface)
 
     def activate_mission07(self):
+        if not is_mission07_unlocked(self.missions_completed):
+            self.failed.play()
+            animation_text_save('Complete Mission 06 first!', time=2500)
+            return
         clear_mission07_objective_check()
         self.mission07 = True
         if '07' not in self.missions_activated:
@@ -301,39 +315,47 @@ class Mission07_info:
         save_file(self.player.get_save_data())
 
     def deliver_results(self):
-        objective_data = load_mission07_objective_check()
-
-        if (not objective_data
-                or objective_data.get('mission_id') != '07'
-                or objective_data.get('check_version') != 2):
+        if not is_mission07_unlocked(self.missions_completed):
             self.failed.play()
-            animation_text_save('Run a Mission 07 simulation first!', time=2500)
+            animation_text_save('Complete Mission 06 first!', time=2500)
             return
 
-        if objective_data.get('ready_to_deliver'):
+        objective_data = load_mission07_objective_check()
+        if (
+            not objective_data
+            or objective_data.get('mission_id') != '07'
+            or objective_data.get('check_version') != 3
+        ):
+            self.failed.play()
+            animation_text_save('Record both Mission 07 objective runs first!', time=2800)
+            return
+
+        if objective_data.get('evidence_ready'):
             self.success.play()
             if '07' not in self.missions_completed:
                 self.missions_completed.insert(0, '07')
-            animation_text_save('Congratulations! Mission Completed!', time=2500)
+            animation_text_save('Congratulations! Mission 07 completed!', time=2500)
             save_file(self.player.get_save_data())
             return
 
         self.failed.play()
-        if not objective_data.get('objective_correct'):
-            animation_text_save(f'The selected objective is not targeting {MISSION07_TARGET_PRODUCT} yet.', time=3000)
-        elif objective_data.get('environment_changed'):
-            animation_text_save('Keep environmental conditions unchanged for this mission!', time=3000)
-        elif objective_data.get('knocked_out_genes'):
-            animation_text_save('Do not use gene knockouts in Mission 07!', time=3000)
+        missing = []
+        if not objective_data.get('reference_recorded'):
+            missing.append('biomass-objective run')
+        if not objective_data.get('target_recorded'):
+            missing.append('ethanol-objective run')
+        if missing:
+            animation_text_save('Missing: ' + ', '.join(missing), time=3200)
+        elif objective_data.get('current_issues'):
+            animation_text_save(objective_data['current_issues'][0], time=3500)
         else:
-            animation_text_save('Run the objective simulation again and check the result!', time=3000)
+            animation_text_save('Complete the controlled objective comparison first!', time=3000)
 
     def input(self):
         keys = pygame.key.get_pressed()
         self.timer.update()
-
         if keys[pygame.K_ESCAPE]:
-            pass  # ESC is handled by pygame-menu's onclose callback
+            pass
 
     async def update(self):
         self.input()

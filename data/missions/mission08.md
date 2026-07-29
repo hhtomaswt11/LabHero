@@ -1,22 +1,36 @@
-# Mission 08 — Objective Under Constraints
+# Mission 08 — Constraint Impact on the Optimal Solution
 
-## Theme
-Advanced strain design: objective functions and environmental constraints.
+## Concept
+Constraint-based optimisation: determining whether an added environmental bound changes an optimum.
 
-## Learning goal
-The player learns that an objective function does not act alone. In constraint-based modelling, the predicted behaviour also depends on the environmental limits imposed on the model.
+## Learning objective
+The player learns that adding a constraint does not necessarily change the optimal solution. A new bound may reduce the feasible space while leaving the previous optimum and its flux profile unchanged when that optimum already satisfies the new condition.
 
-## Scenario
-Dr. Nova asks the player to configure *E. coli* so lactate becomes the target product in a biologically meaningful constraint context.
+## Challenge
+Dr. Nova asks whether removing oxygen availability necessarily increases the direct theoretical maximum of D-lactate represented by `EX_lac__D_e`.
 
-## Player-facing rules
-- Target product: lactate.
-- Keep the strain unchanged.
-- Use simulations to explore how objective choice and environmental constraints interact.
-- Do not use gene knockouts in this mission.
+The player must record two visible FBA runs with the same objective, genes and medium bounds except for oxygen availability:
 
-## Briefing focus
-This briefing should support the biological reasoning behind the mission without giving the exact configuration. It connects lactate with fermentative metabolism and encourages the player to compare simulation results under different environmental setups.
+1. default medium;
+2. the same medium with only the lower bound of `EX_o2_e` closed.
 
-## Pedagogical explanation
-Mission 07 introduced the idea that the objective determines what FBA tries to optimize. Mission 08 adds a second layer: the feasible behaviour of the model also depends on constraints. The player should infer, through testing, which objective and environmental condition make sense for lactate production.
+Both runs must keep all genes active and track `EX_lac__D_e` in Production Flux. Biomass, D-lactate and oxygen uptake must be read from the same visible solution; no hidden simulation is allowed.
+
+## Expected evidence
+Both controlled runs produce approximately:
+
+- D-lactate secretion: `20.000`;
+- biomass flux: `0.000`;
+- oxygen uptake: `0.000`.
+
+Closing oxygen therefore does not change the optimum for this objective. The default-medium direct D-lactate optimum already uses zero oxygen. In the constrained run, the oxygen lower bound is satisfied at equality, but the added bound does not alter the optimal product, biomass or oxygen fluxes.
+
+## Interpretation
+The mission must not claim that anaerobiosis caused or increased D-lactate production. It demonstrates that the effect of a constraint depends on the objective and on which capabilities the previous optimum actually used.
+
+The direct product maximum also has no predicted growth, so it represents a theoretical optimum under this model and these bounds, not a viable production strain.
+
+Use **D-lactate**, not generic “lactate”, because `EX_lac__D_e` represents the D stereoisomer in this model.
+
+## Progression
+Mission 08 is unlocked only after Mission 07. The initial challenge remains conceptual; progressively more explicit optional hints describe the controlled protocol.

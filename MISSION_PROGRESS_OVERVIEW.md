@@ -41,31 +41,31 @@ Resumo curto das missões implementadas até agora, organizado por laboratório.
 ## Lab 4 — Dr. Nova
 
 ### Mission 07 — Objective Matters
-**Tema:** função objetivo.  
-**Explica:** mudar a objective muda o alvo da simulação.  
-**Como passar:** objective `EX_etoh_e`, sem knockouts e sem alterações ambientais.
+**Tema:** comparação controlada de funções objetivo em FBA.  
+**Explica:** alterar a função objetivo muda a pergunta matemática feita ao mesmo espaço de soluções; não altera biologicamente a estirpe nem o meio. Maximizar diretamente etanol pode encontrar um máximo teórico com biomassa igual a zero.  
+**Como passar:** depois da Missão 06, registar dois runs visíveis com FBA, genes todos ativos, ambiente default e `EX_etoh_e` acompanhado. No primeiro, usar `BIOMASS_Ecoli_core_w_GAM` como objetivo; no segundo, usar `EX_etoh_e`. O relatório deve confirmar aproximadamente biomassa `0.874`, etanol `0` e captação de O2 `21.799` no primeiro run, e biomassa `0`, etanol `20` e captação de O2 `0` no segundo.
 
-### Mission 08 — Objective Under Constraints
-**Tema:** objective + restrição ambiental.  
-**Explica:** uma objective de produção pode precisar de um contexto ambiental coerente.  
-**Como passar:** objective `EX_lac__D_e`, fechar lower bound do O2, sem knockouts.
+### Mission 08 — Constraint Impact on the Optimal Solution
+**Tema:** comparação controlada do impacto de uma restrição ambiental no ótimo.  
+**Explica:** adicionar uma restrição só altera o ótimo quando exclui ou limita soluções necessárias para atingir o ótimo anterior. No ótimo direto de D-lactato, o meio default já apresenta captação de O2 igual a zero; fechar O2 reduz o espaço admissível, mas não altera D-lactato, biomassa ou oxigénio. No run restringido, o bound de oxigénio é atingido em igualdade, sem alterar o ótimo relativamente ao run default.  
+**Como passar:** depois da Missão 07, registar dois runs visíveis com FBA, objetivo `EX_lac__D_e`, todos os genes ativos e `EX_lac__D_e` acompanhado. No primeiro usar o meio completamente default; no segundo fechar apenas o lower bound de `EX_o2_e`. Ambos devem apresentar aproximadamente D-lactato `20`, biomassa `0` e captação de O2 `0`, permitindo concluir que o fecho do oxigénio não aumentou o produto.
 
-### Mission 09 — Integrated Strain Design
-**Tema:** objective + ambiente + 1 knockout.  
-**Explica:** desenho de estirpes combina várias decisões de modelação.  
-**Como passar:** objective `EX_lac__D_e`, fechar lower bound do O2, desligar `b1241` / `adhE`.
+### Mission 09 — Integrated Environment-and-Gene Design
+**Tema:** integração de meio, objetivo de biomassa, produção acompanhada e um knockout.  
+**Explica:** uma estratégia de engenharia metabólica deve ser comparada com um baseline no mesmo meio e avaliada pela produção e pela retenção de crescimento na mesma solução visível.  
+**Como passar:** depois da Missão 08, fechar a captação de glicose, abrir L-malato como fonte substituta, manter oxigénio e restantes bounds inalterados, usar FBA com biomassa, acompanhar `EX_for_e`, registar um baseline sem knockout e testar individualmente `b1479`, `b0721`, `b0116` e `b0115`. A evidência identifica `b0115 / aceF` como o único design que retém pelo menos 80% do crescimento e aumenta formate em pelo menos 1.0.
 
-### Mission 10 — Multi-Knockout Robust Design
-**Tema:** design robusto com evidência de fluxos.  
-**Explica:** um design mais robusto precisa de vários knockouts e fluxos acompanhados.  
-**Como passar:** objective `EX_lac__D_e`, fechar lower bound do O2, desligar `b1241` + `b2297`, acompanhar `EX_lac__D_e` + `EX_etoh_e`.
+### Mission 10 — Two-Gene Redundancy and Flux Redirection
+**Tema:** redundância genética em regras GPR `OR`, pares de knockouts e redirecionamento de fluxos.  
+**Explica:** um knockout isolado pode deixar uma reação funcional através de um gene alternativo. Um par adequado pode desativar a rota, aumentar etanol e reduzir acetato, mas deve manter crescimento suficiente. Todos os valores são lidos da mesma solução FBA que maximiza biomassa.  
+**Como passar:** depois da Missão 09, manter a glicose default, fechar apenas o lower bound de `EX_o2_e`, usar FBA com objetivo `BIOMASS_Ecoli_core_w_GAM`, acompanhar `EX_etoh_e` e `EX_ac_e`, registar um baseline sem knockouts e testar os seis pares formados por `b2297`, `b2458`, `b1241` e `b0351`. A evidência identifica `b2297 + b2458` (`pta + eutD`) como o único par que retém pelo menos 80% do crescimento e aumenta etanol em pelo menos 5.0.
 
-## Lab 4 — Dr. Almeida
+## Lab 5 — Dr. Almeida
 
-### Mission 11 — Flux Fingerprint
-**Tema:** diagnóstico por Production Flux.  
-**Explica:** o valor da objective não chega; é preciso ver o que a célula secreta.  
-**Como passar:** FBA, objective de biomassa, fechar lower bound do O2, sem knockouts, acompanhar `EX_ac_e`, `EX_for_e`, `EX_etoh_e`, `EX_lac__D_e`, `EX_succ_e`.
+### Mission 11 — Anaerobic Secretion Fingerprint
+**Tema:** diagnóstico de uma solução através da biomassa e de um painel completo de fluxos de troca.  
+**Explica:** o valor da função objetivo não descreve sozinho o fenótipo previsto. Um fluxo de troca positivo indica secreção nesta solução; um fluxo zero descreve apenas este modelo, objetivo e conjunto de restrições, não uma incapacidade biológica universal.  
+**Como passar:** depois da Missão 10, usar FBA com objetivo `BIOMASS_Ecoli_core_w_GAM`, todos os genes ativos, glicose default, apenas o lower bound de `EX_o2_e` fechado e restantes bounds inalterados. Acompanhar numericamente `EX_for_e`, `EX_ac_e`, `EX_etoh_e`, `EX_lac__D_e` e `EX_succ_e` na mesma solução visível. O fingerprint deve apresentar aproximadamente crescimento `0.212`, formate `17.805`, acetato `8.504`, etanol `8.279`, D-lactato `0` e succinato `0`. Entregar `formate` / `EX_for_e` como produto dominante.
 
 ### Mission 12 — Competing Byproducts
 **Tema:** produto alvo vs subprodutos.  

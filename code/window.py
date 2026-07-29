@@ -449,6 +449,25 @@ def _build_mission26_text(report_data):
         f"{final_status}"
     )
 
+def _visible_biomass_flux(results):
+    """Read predicted biomass from the same visible simulation solution."""
+    try:
+        production_data = results[2]
+        if isinstance(production_data, dict):
+            value = production_data.get('biomass_raw')
+            if value is not None:
+                return max(float(value), 0.0)
+    except Exception:
+        pass
+
+    try:
+        if results[0] == MISSION07_BIOMASS_OBJECTIVE:
+            return max(float(results[1]), 0.0)
+    except Exception:
+        pass
+    return None
+
+
 def _build_simulation_results_text(results):
     try:
         objective_name = results[0]
@@ -461,6 +480,13 @@ def _build_simulation_results_text(results):
         f'{objective_name}: {objective_result}'
     )
 
+    biomass_flux = _visible_biomass_flux(results)
+    if objective_name != MISSION07_BIOMASS_OBJECTIVE and biomass_flux is not None:
+        biomass_flux = _clean_report_number(biomass_flux)
+        text += f'\n\nPredicted biomass flux: {biomass_flux:.3f}'
+        if biomass_flux <= MISSION07_FLUX_TOLERANCE:
+            text += '\nGrowth interpretation: no predicted growth in this solution.'
+
     production_text = ''
     try:
         production_text = _build_production_fluxes_text(results[2])
@@ -471,8 +497,6 @@ def _build_simulation_results_text(results):
         text += '\n\n' + production_text
 
     return text
-
-
 
 
 
@@ -668,347 +692,26 @@ def _build_mission28_text(report_data):
     )
 
 def _build_mission07_text(objective_data):
-    if not objective_data:
-        return ''
-
-    if objective_data.get('error') and objective_data.get('objective_result') in (None, 'None'):
-        return f"Mission 07 Objective Check\nError: {objective_data.get('error')}"
-
-    target_product = objective_data.get('target_product')
-    selected_objective = objective_data.get('selected_objective')
-    objective_result = objective_data.get('objective_result')
-
-    objective_status = (
-        f'The selected objective is targeting {target_product} production.'
-        if objective_data.get('objective_correct')
-        else f'The selected objective is not targeting {target_product} production yet.'
-    )
-    environment_status = (
-        'Environmental conditions unchanged.'
-        if not objective_data.get('environment_changed')
-        else 'Environmental conditions changed. This first objective mission should keep the environment unchanged.'
-    )
-    knockout_status = (
-        'No gene knockouts.'
-        if not objective_data.get('knocked_out_genes')
-        else 'Gene knockouts detected. This first objective mission should keep all genes active.'
-    )
-    final_status = (
-        'Objective test completed. Return to Dr. Nova and deliver the results.'
-        if objective_data.get('ready_to_deliver')
-        else 'Not ready yet. Keep testing objectives while leaving genes and environment unchanged.'
-    )
-
-    matched_objective = ''
-    if objective_data.get('objective_correct'):
-        matched_objective = f"\nMatched objective: {objective_data.get('target_objective')}"
-
-    return (
-        'Mission 07 Objective Check\n\n'
-        f"Target product: {target_product}\n"
-        f"Selected objective: {selected_objective}\n"
-        f"Objective flux: {objective_result}"
-        f"{matched_objective}\n\n"
-        f"{objective_status}\n"
-        f"{environment_status}\n"
-        f"{knockout_status}\n\n"
-        f"{final_status}"
-    )
+    return build_mission07_objective_comparison_report_text(objective_data)
 
 
 def _build_mission08_text(objective_data):
-    if not objective_data:
-        return ''
+    return build_mission08_constraint_comparison_report_text(objective_data)
 
-    if objective_data.get('error') and objective_data.get('objective_result') in (None, 'None'):
-        return f"Mission 08 Constraint Check\nError: {objective_data.get('error')}"
-
-    objective_status = (
-        'The objective is targeting the requested product.'
-        if objective_data.get('objective_correct')
-        else 'The selected objective is not targeting the requested product yet.'
-    )
-    oxygen_status = (
-        'A fermentation-compatible oxygen constraint was detected.'
-        if objective_data.get('oxygen_lower_bound_closed')
-        else 'The environment is still aerobic. Think about oxygen uptake.'
-    )
-    environment_status = (
-        'No unnecessary environmental changes.'
-        if not objective_data.get('unexpected_environment_changes')
-        else 'Too many environmental changes. Keep the constraint simple.'
-    )
-    knockout_status = (
-        'No gene knockouts.'
-        if not objective_data.get('knocked_out_genes')
-        else 'Gene knockouts detected. This mission does not need knockouts.'
-    )
-    final_status = (
-        'Constrained production setup found. Return to Dr. Nova and deliver the results.'
-        if objective_data.get('ready_to_deliver')
-        else 'Not ready yet. Use the objective and environment menus to keep testing.'
-    )
-
-    return (
-        'Mission 08 Constraint Check\n\n'
-        f"Target product: {objective_data.get('target_product')}\n"
-        f"Selected objective: {objective_data.get('selected_objective')}\n"
-        f"Objective flux: {objective_data.get('objective_result')}\n\n"
-        f"{objective_status}\n"
-        f"{oxygen_status}\n"
-        f"{environment_status}\n"
-        f"{knockout_status}\n\n"
-        f"{final_status}"
-    )
 
 
 def _build_mission09_text(design_data):
-    if not design_data:
-        return ''
-
-    if design_data.get('error') and design_data.get('objective_result') in (None, 'None'):
-        return f"Mission 09 Design Check\nError: {design_data.get('error')}"
-
-    objective_status = (
-        'Objective: product target found.'
-        if design_data.get('objective_correct')
-        else 'Objective: not targeting the requested product yet.'
-    )
-    oxygen_status = (
-        'Environment: fermentation-compatible oxygen constraint detected.'
-        if design_data.get('oxygen_lower_bound_closed')
-        else 'Environment: still aerobic. Think about uptake of oxygen.'
-    )
-    environment_status = (
-        'Extra constraints: none.'
-        if not design_data.get('unexpected_environment_changes')
-        else 'Extra constraints: too many environmental changes. Keep only the key constraint.'
-    )
-
-    knocked_out_genes = design_data.get('knocked_out_genes') or []
-    if not knocked_out_genes:
-        knockout_status = 'Knockout: none selected yet. Test exactly one candidate gene.'
-    elif len(knocked_out_genes) > 1:
-        knockout_status = 'Knockout: too many genes disabled. Use exactly one candidate.'
-    elif design_data.get('target_gene_found'):
-        knockout_status = 'Knockout: single productive candidate found.'
-    else:
-        knockout_status = 'Knockout: single candidate tested, but production is not improved enough yet.'
-
-    production_change = float(design_data.get('production_change', 0.0))
-    production_prefix = '+' if production_change > 0 else ''
-    production_status = (
-        'Production: improvement target reached.'
-        if design_data.get('production_improved')
-        else f"Production: improvement is still below {float(design_data.get('minimum_production_change', 0.0)):.0f}."
-    )
-    growth_status = (
-        'Growth: viable.'
-        if design_data.get('growth_ok')
-        else f"Growth: too low. Keep it above {float(design_data.get('minimum_growth', 0.0)):.1f}."
-    )
-    final_status = (
-        'Integrated design ready. Return to Dr. Nova and deliver the results.'
-        if design_data.get('ready_to_deliver')
-        else 'Not ready yet. Keep iterating with objective, environment and one knockout.'
-    )
-
-    return (
-        'Mission 09 Design Check\n\n'
-        f"Target product: {design_data.get('target_product')}\n"
-        f"Selected objective: {design_data.get('selected_objective')}\n"
-        f"Objective flux: {design_data.get('objective_result')}\n\n"
-        f"Baseline production: {float(design_data.get('baseline_production', 0.0)):.3f}\n"
-        f"Current production: {float(design_data.get('current_production', 0.0)):.3f}\n"
-        f"Production change: {production_prefix}{production_change:.3f}\n"
-        f"Current growth: {float(design_data.get('current_growth', 0.0)):.3f}\n\n"
-        f"{objective_status}\n"
-        f"{oxygen_status}\n"
-        f"{environment_status}\n"
-        f"{knockout_status}\n"
-        f"{production_status}\n"
-        f"{growth_status}\n\n"
-        f"{final_status}"
-    )
+    return build_mission09_evidence_report_text(design_data)
 
 
 
 def _build_mission10_text(design_data):
-    if not design_data:
-        return ''
-
-    if design_data.get('error') and design_data.get('objective_result') in (None, 'None'):
-        return f"Mission 10 Robust Design Check\nError: {design_data.get('error')}"
-
-    objective_status = (
-        'Objective: product target found.'
-        if design_data.get('objective_correct')
-        else 'Objective: not targeting the requested product yet.'
-    )
-    oxygen_status = (
-        'Environment: fermentation-compatible oxygen constraint detected.'
-        if design_data.get('oxygen_lower_bound_closed')
-        else 'Environment: still aerobic. Think about oxygen uptake.'
-    )
-    environment_status = (
-        'Extra constraints: none.'
-        if not design_data.get('unexpected_environment_changes')
-        else 'Extra constraints: too many environmental changes. Keep only the key constraint.'
-    )
-
-    knocked_out_genes = design_data.get('knocked_out_genes') or []
-    if not knocked_out_genes:
-        knockout_status = 'Knockout pair: none selected yet. Test two candidate genes.'
-    elif not design_data.get('exactly_two_knockouts'):
-        knockout_status = f"Knockout pair: {len(knocked_out_genes)} selected. Use exactly two candidates."
-    elif design_data.get('target_pair_found'):
-        knockout_status = 'Knockout pair: robust two-gene design found.'
-    elif not design_data.get('only_candidate_knockouts'):
-        knockout_status = 'Knockout pair: use only genes from the candidate list.'
-    else:
-        knockout_status = 'Knockout pair: two candidates tested, but this pair is not robust enough.'
-
-    selected_fluxes = design_data.get('selected_fluxes') or []
-    required_fluxes = design_data.get('required_tracked_fluxes') or []
-    tracking_status = (
-        'Evidence: target and competing product fluxes are being tracked.'
-        if design_data.get('tracking_ready')
-        else 'Evidence: incomplete. Use Production Flux to track the target and a competing fermentation product.'
-    )
-
-    production_change = float(design_data.get('production_change', 0.0))
-    production_prefix = '+' if production_change > 0 else ''
-    production_status = (
-        'Production: improvement target reached.'
-        if design_data.get('production_improved')
-        else f"Production: improvement is still below {float(design_data.get('minimum_production_change', 0.0)):.0f}."
-    )
-    growth_status = (
-        'Growth: viable.'
-        if design_data.get('growth_ok')
-        else f"Growth: too low. Keep it above {float(design_data.get('minimum_growth', 0.0)):.1f}."
-    )
-    final_status = (
-        'Robust design ready. Return to Dr. Nova and deliver the results.'
-        if design_data.get('ready_to_deliver')
-        else 'Not ready yet. Keep iterating with objective, environment, tracking and the knockout pair.'
-    )
-
-    return (
-        'Mission 10 Robust Design Check\n\n'
-        f"Target product: {design_data.get('target_product')}\n"
-        f"Selected objective: {design_data.get('selected_objective')}\n"
-        f"Objective flux: {design_data.get('objective_result')}\n\n"
-        f"Baseline production: {float(design_data.get('baseline_production', 0.0)):.3f}\n"
-        f"Current production: {float(design_data.get('current_production', 0.0)):.3f}\n"
-        f"Production change: {production_prefix}{production_change:.3f}\n"
-        f"Current growth: {float(design_data.get('current_growth', 0.0)):.3f}\n\n"
-        f"Tracked fluxes: {', '.join(selected_fluxes) if selected_fluxes else 'none'}\n"
-        f"Required evidence count: {len(required_fluxes)} product fluxes\n\n"
-        f"{objective_status}\n"
-        f"{oxygen_status}\n"
-        f"{environment_status}\n"
-        f"{tracking_status}\n"
-        f"{knockout_status}\n"
-        f"{production_status}\n"
-        f"{growth_status}\n\n"
-        f"{final_status}"
-    )
+    return build_mission10_evidence_report_text(design_data)
 
 
 
 def _build_mission11_text(fingerprint_data):
-    if not fingerprint_data:
-        return ''
-
-    if fingerprint_data.get('error') and fingerprint_data.get('objective_result') in (None, 'None'):
-        return f"Mission 11 Flux Fingerprint Check\nError: {fingerprint_data.get('error')}"
-
-    method_status = (
-        'Method: standard FBA baseline.'
-        if fingerprint_data.get('method_correct')
-        else 'Method: use FBA for this first diagnostic baseline.'
-    )
-    objective_status = (
-        'Objective: biomass objective kept as the growth baseline.'
-        if fingerprint_data.get('objective_correct')
-        else 'Objective: keep the biomass objective for this diagnostic profile.'
-    )
-    oxygen_status = (
-        'Environment: respiration-limited constraint detected.'
-        if fingerprint_data.get('oxygen_lower_bound_closed')
-        else 'Environment: respiration is not limited yet. Think about oxygen availability.'
-    )
-    environment_status = (
-        'Extra constraints: none.'
-        if not fingerprint_data.get('unexpected_environment_changes')
-        else 'Extra constraints: too many environmental changes. Keep only the key constraint.'
-    )
-    knockout_status = (
-        'Gene knockouts: none.'
-        if not fingerprint_data.get('knocked_out_genes')
-        else 'Gene knockouts detected. This diagnostic mission should keep the strain unchanged.'
-    )
-
-    selected_fluxes = fingerprint_data.get('selected_fluxes') or []
-    missing_fluxes = fingerprint_data.get('missing_fluxes') or []
-    positive_fluxes = fingerprint_data.get('positive_fluxes') or []
-    flux_values = fingerprint_data.get('tracked_flux_values') or {}
-
-    tracking_status = (
-        'Production Flux: full fingerprint panel selected.'
-        if fingerprint_data.get('tracking_ready')
-        else 'Production Flux: incomplete panel. Select all requested fingerprint products.'
-    )
-    positive_status = (
-        'Fingerprint: informative secretion profile detected.'
-        if fingerprint_data.get('positive_products_ready')
-        else f"Fingerprint: fewer than {fingerprint_data.get('minimum_positive_products')} products show secretion."
-    )
-    growth_status = (
-        'Growth: viable.'
-        if fingerprint_data.get('growth_ok')
-        else f"Growth: too low. Keep it above {float(fingerprint_data.get('minimum_growth', 0.0)):.1f}."
-    )
-    final_status = (
-        'Flux fingerprint ready. Return to Dr. Almeida and deliver the results.'
-        if fingerprint_data.get('ready_to_deliver')
-        else 'Not ready yet. Keep refining the setup and production-flux evidence.'
-    )
-
-    flux_lines = []
-    for reaction_id in selected_fluxes:
-        value = flux_values.get(reaction_id)
-        if value is None:
-            flux_lines.append(f'- {reaction_id}: not measured')
-        else:
-            flux_lines.append(f'- {reaction_id}: {float(value):.3f}')
-    flux_text = '\n'.join(flux_lines) if flux_lines else 'none'
-
-    missing_text = ', '.join(missing_fluxes) if missing_fluxes else 'none'
-    positive_text = ', '.join(positive_fluxes) if positive_fluxes else 'none'
-    dominant_product = fingerprint_data.get('dominant_product') or 'not available'
-
-    return (
-        'Mission 11 Flux Fingerprint Check\n\n'
-        f"Context: {fingerprint_data.get('target_context')}\n"
-        f"Method: {fingerprint_data.get('method')}\n"
-        f"Selected objective: {fingerprint_data.get('selected_objective')}\n"
-        f"Growth/objective flux: {fingerprint_data.get('objective_result')}\n\n"
-        f"Tracked fluxes:\n{flux_text}\n\n"
-        f"Missing fingerprint fluxes: {missing_text}\n"
-        f"Products with positive secretion: {positive_text}\n"
-        f"Dominant tracked product: {dominant_product}\n\n"
-        f"{method_status}\n"
-        f"{objective_status}\n"
-        f"{oxygen_status}\n"
-        f"{environment_status}\n"
-        f"{knockout_status}\n"
-        f"{tracking_status}\n"
-        f"{positive_status}\n"
-        f"{growth_status}\n\n"
-        f"{final_status}"
-    )
+    return build_mission11_fingerprint_report_text(fingerprint_data)
 
 
 def _build_mission12_text(byproduct_data):
@@ -2415,8 +2118,28 @@ class Window:
                 default_ub_bool = True
             else:
                 default_ub_bool = False
-            menu_reactions.add.toggle_switch('Lower Bound',default_lb_bool, onchange=None, state_text=('Closed', 'Open'), state_text_font_size=20, font_size = 24, state_color=('grey','gold'), state_text_font_color=('black', 'black')) #, kwargs=txt, toggleswitch_id=txt)
-            menu_reactions.add.toggle_switch('Upper Bound',default_ub_bool, onchange=None, state_text=('Closed', 'Open'), state_text_font_size=20, font_size = 24, state_color=('grey','gold'), state_text_font_color=('black', 'black')) #, kwargs=txt, toggleswitch_id=txt)
+            menu_reactions.add.toggle_switch(
+                'Lower Bound',
+                default_lb_bool,
+                onchange=None,
+                state_text=('Closed', 'Open'),
+                state_text_font_size=20,
+                font_size=24,
+                state_color=('grey', 'gold'),
+                state_text_font_color=('black', 'black'),
+                toggleswitch_id=f'reaction_{i}_lb',
+            )
+            menu_reactions.add.toggle_switch(
+                'Upper Bound',
+                default_ub_bool,
+                onchange=None,
+                state_text=('Closed', 'Open'),
+                state_text_font_size=20,
+                font_size=24,
+                state_color=('grey', 'gold'),
+                state_text_font_color=('black', 'black'),
+                toggleswitch_id=f'reaction_{i}_ub',
+            )
             # menu_reactions.add.range_slider('Lower Bound', REACTIONS.lb[i], (-1000,0), 10, font_size=30, range_box_color = 'gold', rangeslider_id=REACTIONS.index[i]+'lb') #, rangeslider_id=OPTIONS['Reactions'][i])
             # menu_reactions.add.range_slider('Upper Bound', REACTIONS.ub[i], (0, 1000), 10, font_size=30, range_box_color = 'gold', rangeslider_id=REACTIONS.index[i]+'ub') #, rangeslider_id=OPTIONS['Reactions'][i])
 
@@ -3051,7 +2774,10 @@ class Window:
 
             mission11_data = None
             if '11' in self.player.missions_activated and '11' not in self.player.missions_completed:
-                mission11_data = run_mission11_flux_fingerprint_check(self.results)
+                if sys.platform == 'emscripten':
+                    mission11_data = run_mission11_flux_fingerprint_check_remote(BACKEND_URL, self.results)
+                else:
+                    mission11_data = run_mission11_flux_fingerprint_check(self.results)
 
             mission12_data = None
             if '12' in self.player.missions_activated and '12' not in self.player.missions_completed:
@@ -3466,7 +3192,17 @@ class Window:
                 and mission19_data.get('method_correct')
                 and mission19_data.get('growth_ok')
             )
-            if (self.results[1] == 'Status: INFEASIBLE' or self.results[1] == 0.0 or self.results[1] == -0.0) and not mission19_viable_perturbation:
+            visible_biomass = _visible_biomass_flux(self.results)
+            no_predicted_growth = (
+                self.results[1] == 'Status: INFEASIBLE'
+                or (visible_biomass is not None and visible_biomass <= MISSION07_FLUX_TOLERANCE)
+                or (
+                    visible_biomass is None
+                    and self.results[0] == MISSION07_BIOMASS_OBJECTIVE
+                    and self.results[1] in (0.0, -0.0)
+                )
+            )
+            if no_predicted_growth and not mission19_viable_perturbation:
                 menu_simul.add.image(ecoli_rip, scale=(0.5, 0.5), image_id='ecolidead')
                 menu_simul.add.vertical_margin(50, margin_id='deadmargin')
             else:

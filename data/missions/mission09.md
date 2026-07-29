@@ -1,29 +1,32 @@
-# Mission 09 — Integrated Strain Design
+# Mission 09 — Integrated Environment-and-Gene Design
 
 ## Theme
-Advanced strain design: combining objective functions, environmental constraints, and one gene knockout.
+Controlled strain design that combines carbon-source replacement with one gene knockout.
 
 ## Learning goal
-The player learns that strain design usually requires several modelling decisions working together. A valid solution must improve product formation while keeping the organism viable.
+The player learns to evaluate an integrated design using one visible biomass-optimal solution: environmental context, genetic perturbation, predicted growth and product secretion must all be controlled and interpreted together.
 
 ## Scenario
-Dr. Nova gives the player an integrated design challenge: configure *E. coli* to improve lactate production using objective choice, an environmental constraint, and exactly one useful knockout.
+Dr. Nova asks the player to replace glucose with L-malate and identify which single candidate knockout creates useful growth-coupled formate secretion while preserving most of the reference growth.
 
-## Player-facing mission description
-Target product: lactate.
+## Controlled experiment
+- FBA;
+- biomass objective;
+- glucose unavailable;
+- L-malate available as the replacement carbon source;
+- oxygen and all remaining environmental bounds unchanged;
+- formate exchange (`EX_for_e`) tracked;
+- all genes active in the reference;
+- exactly one highlighted candidate knockout in each genetic trial.
 
-The player must design a fermentation-compatible setup and test one useful knockout from the candidate list. The correct setup is not given directly; it must be discovered by comparing simulations and reading the Mission 09 Design Check in New Results.
+## Candidate genes
+- `b1479 / maeA`;
+- `b0721 / sdhC`;
+- `b0116 / lpd`;
+- `b0115 / aceF`.
 
-Candidate genes:
-- `b0903`
-- `b2297`
-- `b0723`
-- `b3115`
-- `b0728`
-- `b1241`
+## Operational criteria
+A candidate must retain at least 80% of the no-knockout L-malate reference growth and increase formate secretion by at least 1.0 in the same biomass-optimal solution. These are mission criteria, not universal biological definitions.
 
-## Briefing role
-The briefing should support the biology behind the challenge without giving the solution. It explains that objective choice, environmental constraints, and knockouts can interact, and that a useful knockout should redirect flux without making growth collapse.
-
-## Pedagogical explanation
-Mission 07 introduced objective selection. Mission 08 added environmental constraints. Mission 09 combines those ideas with a single genetic intervention before the final double-knockout challenge in Mission 10.
+## Expected evidence
+The candidate screen should identify `b0115 / aceF` as the unique best eligible design. The result is conditional on this model, medium, objective and bounds.
