@@ -9,118 +9,175 @@ from functions import animation_text_save
 from async_menu import run_menu
 from utils import *
 from simulation import (
-    MISSION12_TARGET_PRODUCT,
-    MISSION12_REQUIRED_TRACKED_FLUXES,
+    MISSION12_CHECK_VERSION,
     MISSION12_COMPETING_FLUXES,
-    MISSION12_MIN_COMPETING_FLUXES,
+    MISSION12_EXPECTED_NEW_BYPRODUCT,
+    MISSION12_GLUCOSE_REACTION,
+    MISSION12_METHOD,
+    MISSION12_OXYGEN_REACTION,
+    MISSION12_PRODUCT_NAMES,
+    MISSION12_REQUIRED_TRACKED_FLUXES,
+    MISSION12_TARGET_OBJECTIVE,
+    MISSION12_TARGET_PRODUCT,
+    build_mission12_comparison_report_text,
+    is_mission12_unlocked,
+    mission12_answer_matches,
+    normalise_mission12_answer,
 )
 
 
 class Mission12_info:
-    """Mission 12 — Competing Byproducts.
+    """Mission 12 — Constraint-Driven Succinate Byproducts.
 
-    Second Dr. Almeida mission. The player must prioritise a target product and
-    use Production Flux evidence to compare it with possible competing
-    byproducts, without using gene knockouts.
+    The player compares two complete, visible succinate-optimal fingerprints.
+    Method, objective, genes, glucose and tracked panel remain fixed; only
+    oxygen availability changes.  The final answer identifies the new positive
+    co-product supported by the accumulated comparison.
     """
 
     def __init__(self, toggle_menu, player) -> None:
         self.player = player
         self.missions_activated = self.player.missions_activated
         self.missions_completed = self.player.missions_completed
-
         self.toggle_menu = toggle_menu
         self.display_surface = pygame.display.get_surface()
-        font_path = get_resource_path('font/LycheeSoda.ttf')
-        self.font = pygame.font.Font(font_path, 30)
+        self.font = pygame.font.Font(get_resource_path('font/LycheeSoda.ttf'), 30)
         self.timer = Timer(200)
-
         self.mission12 = '12' in self.missions_activated
 
-        success_path = get_resource_path('audio/success_3.ogg')
-        self.success = pygame.mixer.Sound(success_path)
+        self.success = pygame.mixer.Sound(get_resource_path('audio/success_3.ogg'))
         self.success.set_volume(1.2)
-
-        failed_path = get_resource_path('audio/failed.ogg')
-        self.failed = pygame.mixer.Sound(failed_path)
+        self.failed = pygame.mixer.Sound(get_resource_path('audio/failed.ogg'))
         self.failed.set_volume(1.2)
 
     async def setup(self):
         menu = pygame_menu.Menu(
             height=720,
+            center_content=False,
             onclose=self.toggle_menu,
             theme=mytheme,
             title='Mission 12',
             width=1280,
         )
 
-        menu_text = pygame_menu.Menu(
-            height=720,
-            onclose=self.toggle_menu,
-            theme=mytheme,
-            title='Mission 12 Briefing',
-            width=1280,
+        if not is_mission12_unlocked(self.missions_completed):
+            menu.add.vertical_margin(40)
+            menu.add.label(
+                'Mission 12 is locked. Complete Mission 11 before comparing constraint-driven byproduct fingerprints.',
+                wordwrap=True,
+                align=pygame_menu.locals.ALIGN_CENTER,
+                padding=(25, 25, 25, 25),
+                background_color='white',
+                font_size=30,
+            )
+            menu.add.button('Back', pygame_menu.events.BACK, background_color=(70, 70, 70))
+            await run_menu(menu, self.display_surface)
+            return
+
+        hint3 = pygame_menu.Menu(
+            height=720, center_content=False, onclose=pygame_menu.events.BACK,
+            theme=mytheme, title='Mission 12 Hint 3', width=1280,
         )
+        hint3.add.label(
+            f'Technical hint: use {MISSION12_METHOD} with objective {MISSION12_TARGET_OBJECTIVE}, keep all genes active and {MISSION12_GLUCOSE_REACTION} at its default bound, track ' + ', '.join(MISSION12_REQUIRED_TRACKED_FLUXES) + f', then compare the fully default medium with a second run in which only the lower bound of {MISSION12_OXYGEN_REACTION} is closed.',
+            wordwrap=True,
+            align=pygame_menu.locals.ALIGN_LEFT,
+            padding=(20, 20, 20, 20),
+        )
+        hint3.add.button('Back', pygame_menu.events.BACK, background_color=(70, 70, 70))
 
-        menu_text.add.label(
+        hint2 = pygame_menu.Menu(
+            height=720, center_content=False, onclose=pygame_menu.events.BACK,
+            theme=mytheme, title='Mission 12 Hint 2', width=1280,
+        )
+        hint2.add.label(
+            'Experimental hint: make the two runs identical in method, objective, genes, glucose supply and tracked panel. Oxygen availability must be the only changed condition, so any target or co-product difference can be attributed to that constraint.',
+            wordwrap=True,
+            align=pygame_menu.locals.ALIGN_LEFT,
+            padding=(20, 20, 20, 20),
+        )
+        hint2.add.button('Reveal technical hint', hint3, background_color=(255, 215, 0), font_color='black')
+        hint2.add.button('Back', pygame_menu.events.BACK, background_color=(70, 70, 70))
+
+        hint1 = pygame_menu.Menu(
+            height=720, center_content=False, onclose=pygame_menu.events.BACK,
+            theme=mytheme, title='Mission 12 Hint 1', width=1280,
+        )
+        hint1.add.label(
+            'Conceptual hint: a constraint is binding when it removes possibilities needed by the previous optimum. Compare both the target flux and the complete byproduct fingerprint before deciding what changed.',
+            wordwrap=True,
+            align=pygame_menu.locals.ALIGN_LEFT,
+            padding=(20, 20, 20, 20),
+        )
+        hint1.add.button('Reveal next hint', hint2, background_color=(255, 215, 0), font_color='black')
+        hint1.add.button('Back', pygame_menu.events.BACK, background_color=(70, 70, 70))
+
+        briefing = pygame_menu.Menu(
+            height=720, center_content=False, onclose=pygame_menu.events.BACK,
+            theme=mytheme, title='Mission 12 Briefing', width=1280,
+        )
+        briefing.add.label(
             f"""
-            Welcome to Mission 12: Competing Byproducts.
+            Dr. Almeida now wants a controlled comparison rather than a single fingerprint. Configure the model to maximise predicted {MISSION12_TARGET_PRODUCT} secretion and record a complete target/byproduct panel under two oxygen conditions.
 
-            Mission 11 showed that production fluxes reveal what the model is secreting.
-            Now the problem is more focused: one product is desired, but other products can compete for flux.
+            Keep the strain and modelling question unchanged. The two visible runs must differ only in oxygen availability. Determine whether the environmental constraint changes the theoretical target maximum and identify the new positive co-product that appears.
 
-            Target product: {MISSION12_TARGET_PRODUCT}
-
-            In metabolic engineering, a good analysis does not only ask whether the target is produced.
-            It also checks which byproducts appear in the same solution.
-
-            Keep the strain unchanged.
-            Use Production Flux evidence to compare the target with competing products.
+            Both direct product-optimal solutions may predict no growth. Treat them as theoretical optima under this model and these bounds, not as viable production-strain claims.
             """,
             max_char=-1,
             wordwrap=True,
             align=pygame_menu.locals.ALIGN_LEFT,
-            margin=(0, 0),
+            padding=(20, 20, 20, 20),
         )
-        menu_text.add.button('Back', pygame_menu.events.BACK, background_color=(70, 70, 70))
-        menu_text.add.vertical_margin(20)
+        briefing.add.button('Optional Hints', hint1, background_color=(230, 230, 180), font_color='black')
+        briefing.add.button('Back', pygame_menu.events.BACK, background_color=(70, 70, 70))
 
+        panel_text = '   '.join(
+            f"{MISSION12_PRODUCT_NAMES.get(reaction_id, reaction_id)} ({reaction_id})"
+            for reaction_id in MISSION12_REQUIRED_TRACKED_FLUXES
+        )
         menu.add.vertical_margin(20)
         menu.add.label(
-            'Mission 12: Competing Byproducts',
-            wordwrap=False,
+            'Mission 12: Constraint-Driven Succinate Byproducts',
             align=pygame_menu.locals.ALIGN_CENTER,
             font_size=34,
         )
-
         menu.add.label(
-            f"""
-            Flux comparison challenge.
-
-            Configure E. coli to prioritise {MISSION12_TARGET_PRODUCT} production.
-            Then use Production Flux to support your conclusion with evidence.
-
-            Track the target product and at least {MISSION12_MIN_COMPETING_FLUXES} competing byproducts.
-
-            Possible competing byproducts:
-            {'  '.join(MISSION12_COMPETING_FLUXES)}
-
-            Do not use gene knockouts.
-            Use New Results to decide when the byproduct comparison is ready.
-            """,
+            'Record two complete succinate-optimal fingerprints with identical settings except for oxygen availability, then identify the new positive co-product.',
             wordwrap=True,
             align=pygame_menu.locals.ALIGN_CENTER,
-            font_size=30,
+            font_size=27,
         )
-
-        menu.add.button('Mission 12 Briefing', menu_text, font_color='black', background_color=(255, 215, 0, 255))
-        menu.add.vertical_margin(50)
+        menu.add.label(
+            f'Target/byproduct panel:\n{panel_text}',
+            wordwrap=True,
+            align=pygame_menu.locals.ALIGN_LEFT,
+            font_size=25,
+            padding=(5, 0, 0, 40),
+        )
+        menu.add.button('Mission 12 Briefing', briefing, font_color='black', background_color=(255, 215, 0))
+        menu.add.button('Optional Hints', hint1, font_color='black', background_color=(230, 230, 180))
+        menu.add.vertical_margin(25)
 
         if self.mission12:
-            menu.add.button('Deliver Byproduct Analysis', action=self.deliver_results, background_color=(50, 100, 100))
-            menu.add.vertical_margin(50)
-            menu.add.label('Mission Activated', font_color=(150, 150, 150))
+            report = load_mission12_byproduct_check()
+            menu.add.label(
+                build_mission12_comparison_report_text(report),
+                wordwrap=True,
+                align=pygame_menu.locals.ALIGN_LEFT,
+                padding=(20, 20, 20, 20),
+                background_color='white',
+                font_size=22,
+            )
             menu.add.vertical_margin(20)
+            menu.add.text_input(
+                'New anaerobic co-product: ',
+                default='',
+                input_underline='_',
+                maxchar=30,
+                onreturn=self.deliver_results,
+            )
+            menu.add.label('Mission Activated', font_color=(150, 150, 150))
         else:
             menu.add.button('Activate Mission', action=self.activate_mission12, background_color=(50, 100, 100))
 
@@ -128,6 +185,10 @@ class Mission12_info:
         await run_menu(menu, self.display_surface)
 
     def activate_mission12(self):
+        if not is_mission12_unlocked(self.missions_completed):
+            self.failed.play()
+            animation_text_save('Complete Mission 11 before starting Mission 12.', time=3000)
+            return
         clear_mission12_byproduct_check()
         self.mission12 = True
         if '12' not in self.missions_activated:
@@ -135,52 +196,38 @@ class Mission12_info:
         animation_text_save('Mission 12 Activated')
         save_file(self.player.get_save_data())
 
-    def deliver_results(self):
-        byproduct_data = load_mission12_byproduct_check()
-
-        if (not byproduct_data
-                or byproduct_data.get('mission_id') != '12'
-                or byproduct_data.get('check_version') != 1):
+    def deliver_results(self, answer):
+        if not is_mission12_unlocked(self.missions_completed):
             self.failed.play()
-            animation_text_save('Run a Mission 12 simulation first!', time=2500)
+            animation_text_save('Complete Mission 11 first!', time=2500)
             return
 
-        if byproduct_data.get('ready_to_deliver'):
-            self.success.play()
-            if '12' not in self.missions_completed:
-                self.missions_completed.insert(0, '12')
-            animation_text_save('Congratulations! Mission 12 completed!', time=2500)
-            save_file(self.player.get_save_data())
+        report = load_mission12_byproduct_check()
+        if not report or report.get('mission_id') != '12' or report.get('check_version') != MISSION12_CHECK_VERSION:
+            self.failed.play()
+            animation_text_save('Build the controlled Mission 12 comparison first.', time=3000)
+            return
+        if not report.get('evidence_ready'):
+            self.failed.play()
+            animation_text_save('Record both complete visible fingerprints before submitting the co-product.', time=3200)
+            return
+        if normalise_mission12_answer(answer) is None:
+            self.failed.play()
+            animation_text_save('Enter the new co-product name or its exchange-reaction id.', time=3000)
+            return
+        if not mission12_answer_matches(answer, report):
+            self.failed.play()
+            animation_text_save('That co-product is not supported by the recorded comparison.', time=3200)
             return
 
-        self.failed.play()
-        if not byproduct_data.get('method_correct'):
-            animation_text_save('Use the standard FBA method for this comparison.', time=3000)
-        elif not byproduct_data.get('objective_correct'):
-            animation_text_save('The objective is not prioritising the requested product yet.', time=3000)
-        elif not byproduct_data.get('oxygen_lower_bound_closed'):
-            animation_text_save('The environment is not suitable for this byproduct comparison yet.', time=3000)
-        elif byproduct_data.get('unexpected_environment_changes'):
-            animation_text_save('Too many environmental changes. Keep only the key constraint.', time=3000)
-        elif byproduct_data.get('knocked_out_genes'):
-            animation_text_save('Do not use knockouts in this diagnostic mission.', time=3000)
-        elif not byproduct_data.get('target_flux_tracked'):
-            animation_text_save('Track the target product in Production Flux.', time=3000)
-        elif not byproduct_data.get('competing_fluxes_ready'):
-            animation_text_save('Track more competing byproducts before delivering.', time=3000)
-        elif not byproduct_data.get('target_flux_positive'):
-            animation_text_save('The target product is not being produced enough yet.', time=3000)
-        elif not byproduct_data.get('growth_ok'):
-            animation_text_save('Growth is too low. The strain is not viable enough.', time=3000)
-        else:
-            animation_text_save('Almost there. Use the Mission 12 Byproduct Check to refine it.', time=3000)
+        self.success.play()
+        if '12' not in self.missions_completed:
+            self.missions_completed.insert(0, '12')
+        animation_text_save('Congratulations! Mission 12 completed!', time=2500)
+        save_file(self.player.get_save_data())
 
     def input(self):
-        keys = pygame.key.get_pressed()
         self.timer.update()
-
-        if keys[pygame.K_ESCAPE]:
-            pass
 
     async def update(self):
         self.input()

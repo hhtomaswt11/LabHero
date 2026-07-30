@@ -715,90 +715,7 @@ def _build_mission11_text(fingerprint_data):
 
 
 def _build_mission12_text(byproduct_data):
-    if not byproduct_data:
-        return ''
-
-    if byproduct_data.get('error') and byproduct_data.get('objective_result') in (None, 'None'):
-        return f"Mission 12 Byproduct Check\nError: {byproduct_data.get('error')}"
-
-    method_status = (
-        'Method: standard FBA comparison.'
-        if byproduct_data.get('method_correct')
-        else 'Method: use FBA for this comparison.'
-    )
-    objective_status = (
-        'Objective: target product is being prioritised.'
-        if byproduct_data.get('objective_correct')
-        else 'Objective: not prioritising the requested product yet.'
-    )
-    oxygen_status = (
-        'Environment: respiration-limited constraint detected.'
-        if byproduct_data.get('oxygen_lower_bound_closed')
-        else 'Environment: still aerobic. Think about product formation under limited respiration.'
-    )
-    environment_status = (
-        'Extra constraints: none.'
-        if not byproduct_data.get('unexpected_environment_changes')
-        else 'Extra constraints: too many environmental changes. Keep only the key constraint.'
-    )
-    knockout_status = (
-        'Gene knockouts: none.'
-        if not byproduct_data.get('knocked_out_genes')
-        else 'Gene knockouts detected. Keep the strain unchanged for this diagnostic comparison.'
-    )
-
-    target_flux_status = (
-        'Evidence: target product flux is being tracked.'
-        if byproduct_data.get('target_flux_tracked')
-        else 'Evidence: track the target product in Production Flux.'
-    )
-    competing_status = (
-        'Evidence: enough competing byproducts are being tracked.'
-        if byproduct_data.get('competing_fluxes_ready')
-        else f"Evidence: track at least {byproduct_data.get('minimum_competing_fluxes')} competing byproducts."
-    )
-    target_production_status = (
-        'Target flux: positive production detected.'
-        if byproduct_data.get('target_flux_positive')
-        else 'Target flux: not enough target production detected yet.'
-    )
-    final_status = (
-        'Byproduct comparison ready. Return to Dr. Almeida and deliver the results.'
-        if byproduct_data.get('ready_to_deliver')
-        else 'Not ready yet. Keep comparing objective, environment and production-flux evidence.'
-    )
-
-    selected_fluxes = byproduct_data.get('selected_fluxes') or []
-    selected_competing = byproduct_data.get('selected_competing_fluxes') or []
-    flux_values = byproduct_data.get('tracked_flux_values') or {}
-
-    flux_lines = []
-    for reaction_id in selected_fluxes:
-        value = flux_values.get(reaction_id)
-        if value is None:
-            flux_lines.append(f'- {reaction_id}: not measured')
-        else:
-            flux_lines.append(f'- {reaction_id}: {float(value):.3f}')
-    flux_text = '\n'.join(flux_lines) if flux_lines else 'none'
-
-    return (
-        'Mission 12 Byproduct Check\n\n'
-        f"Target product: {byproduct_data.get('target_product')}\n"
-        f"Selected objective: {byproduct_data.get('selected_objective')}\n"
-        f"Objective flux: {byproduct_data.get('objective_result')}\n\n"
-        f"Tracked fluxes:\n{flux_text}\n\n"
-        f"Selected competing byproducts: {', '.join(selected_competing) if selected_competing else 'none'}\n"
-        f"Target product flux: {float(byproduct_data.get('target_flux', 0.0)):.3f}\n\n"
-        f"{method_status}\n"
-        f"{objective_status}\n"
-        f"{oxygen_status}\n"
-        f"{environment_status}\n"
-        f"{knockout_status}\n"
-        f"{target_flux_status}\n"
-        f"{competing_status}\n"
-        f"{target_production_status}\n\n"
-        f"{final_status}"
-    )
+    return build_mission12_comparison_report_text(byproduct_data)
 
 
 def _build_mission13_text(method_data):
@@ -2781,7 +2698,10 @@ class Window:
 
             mission12_data = None
             if '12' in self.player.missions_activated and '12' not in self.player.missions_completed:
-                mission12_data = run_mission12_byproduct_check(self.results)
+                if sys.platform == 'emscripten':
+                    mission12_data = run_mission12_byproduct_check_remote(BACKEND_URL, self.results)
+                else:
+                    mission12_data = run_mission12_byproduct_check(self.results)
 
             mission13_data = None
             if '13' in self.player.missions_activated and '13' not in self.player.missions_completed:

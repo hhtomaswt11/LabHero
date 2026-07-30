@@ -92,14 +92,14 @@ class Mission11:
         ]
 
         self.m12_step1 = [
-            "Mission 12 is active. This time, focus on competing byproducts.",
-            f"Prioritize {MISSION12_TARGET_PRODUCT}, but do not ignore what else the model secretes.",
-            "Use Production Flux evidence to compare the target with alternative products."
+            "Mission 12 is active. Compare two complete succinate-optimal fingerprints.",
+            f"Keep {MISSION12_TARGET_PRODUCT} as the objective and change only oxygen availability.",
+            "Use the visible evidence to identify the new co-product introduced by the binding constraint."
         ]
 
         self.m12_step2 = [
             f"Excellent work, {self.player.player_name}.",
-            "You used flux evidence to separate a target product from competing byproducts.",
+            "You showed that a binding environmental constraint can alter both a target maximum and its co-product fingerprint.",
             "Now we can test whether the simulation method changes the diagnosis."
         ]
 

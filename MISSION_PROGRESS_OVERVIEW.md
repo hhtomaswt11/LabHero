@@ -67,10 +67,10 @@ Resumo curto das missões implementadas até agora, organizado por laboratório.
 **Explica:** o valor da função objetivo não descreve sozinho o fenótipo previsto. Um fluxo de troca positivo indica secreção nesta solução; um fluxo zero descreve apenas este modelo, objetivo e conjunto de restrições, não uma incapacidade biológica universal.  
 **Como passar:** depois da Missão 10, usar FBA com objetivo `BIOMASS_Ecoli_core_w_GAM`, todos os genes ativos, glicose default, apenas o lower bound de `EX_o2_e` fechado e restantes bounds inalterados. Acompanhar numericamente `EX_for_e`, `EX_ac_e`, `EX_etoh_e`, `EX_lac__D_e` e `EX_succ_e` na mesma solução visível. O fingerprint deve apresentar aproximadamente crescimento `0.212`, formate `17.805`, acetato `8.504`, etanol `8.279`, D-lactato `0` e succinato `0`. Entregar `formate` / `EX_for_e` como produto dominante.
 
-### Mission 12 — Competing Byproducts
-**Tema:** produto alvo vs subprodutos.  
-**Explica:** produzir um alvo também implica analisar produtos concorrentes.  
-**Como passar:** FBA, objective `EX_succ_e`, fechar lower bound do O2, sem knockouts, acompanhar `EX_succ_e` e pelo menos dois subprodutos candidatos.
+### Mission 12 — Constraint-Driven Succinate Byproducts
+**Tema:** comparação controlada de dois fingerprints produto-ótimos e identificação de uma restrição vinculativa.  
+**Explica:** o efeito de uma restrição depende do objetivo e do fluxo utilizado pelo ótimo anterior. Com `EX_succ_e` como objetivo, retirar oxigénio reduz o máximo teórico de succinato e introduz acetato como coproduto previsto. Ambos os ótimos têm biomassa aproximadamente zero e não representam estirpes produtivas viáveis.  
+**Como passar:** depois da Missão 11, usar FBA com objetivo `EX_succ_e`, todos os genes ativos, glicose default e o painel completo `EX_succ_e`, `EX_ac_e`, `EX_for_e`, `EX_etoh_e`, `EX_lac__D_e`. Registar um run com ambiente completamente default e outro em que apenas o lower bound de `EX_o2_e` está fechado, por qualquer ordem. A comparação deve mostrar succinato aproximadamente `16.384 → 13.906`, oxigénio `2.655 → 0`, acetato `0 → 5.665` e biomassa `0` nos dois runs. Entregar `acetate` / `EX_ac_e` como novo coproduto positivo.
 
 ### Mission 13 — FBA vs pFBA
 **Tema:** método de simulação.  
