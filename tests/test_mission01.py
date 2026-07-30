@@ -207,6 +207,21 @@ class Mission01RegressionTests(unittest.TestCase):
         self.assertTrue(check["baseline_uses_oxygen"])
         self.assertTrue(check["anaerobic_oxygen_blocked"])
 
+    def test_mission01_delivery_requires_activation(self):
+        source = (CODE_DIR / 'mission01.py').read_text(encoding='utf-8')
+        self.assertIn("if '01' not in self.missions_activated:", source)
+        self.assertIn('Activate Mission 01 before delivering results.', source)
+
+    def test_mission01_reactivation_does_not_clear_valid_evidence(self):
+        source = (CODE_DIR / 'mission01.py').read_text(encoding='utf-8')
+        active_guard = source.index("if '01' in self.missions_activated:")
+        clear_runs = source.index('clear_compare_runs()', active_guard)
+        clear_check = source.index('clear_mission01_comparison_check()', active_guard)
+        self.assertLess(active_guard, clear_runs)
+        self.assertLess(active_guard, clear_check)
+        self.assertIn('Mission 01 is already active.', source[active_guard:clear_runs])
+
+
 
 if __name__ == "__main__":
     unittest.main()

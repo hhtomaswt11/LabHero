@@ -343,6 +343,16 @@ class Mission11RegressionTests(unittest.TestCase):
         self.assertIn('same visible solution', text)
         self.assertNotIn('strain is viable', text.lower())
 
+    def test_report_requires_player_to_infer_the_dominant_product(self):
+        report = self._record()
+        text = simulation.build_mission11_fingerprint_report_text(report)
+        self.assertIn('formate (EX_for_e): 17.805', text)
+        self.assertIn('acetate (EX_ac_e): 8.504', text)
+        self.assertIn('ethanol (EX_etoh_e): 8.279', text)
+        self.assertIn('greatest numeric secretion value', text)
+        self.assertNotIn('Dominant tracked product:', text)
+        self.assertNotIn('dominant product within the required panel should be', text.lower())
+
     def test_remote_wrapper_reuses_visible_result_without_hidden_requests(self):
         visible = object()
         expected = {'visible': True}

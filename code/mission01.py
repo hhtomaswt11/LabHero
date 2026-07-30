@@ -162,10 +162,10 @@ class Mission_info:
         self.index = 0
         self.timer = Timer(200)
 
-        if '01' in self.missions_activated:
-            self.mission01 = True
-        else:
-            self.mission01 = False
+        self.mission01 = (
+            '01' in self.missions_activated
+            or '01' in self.missions_completed
+        )
 
         #sounds
         success_path = get_resource_path('audio/success_3.ogg')
@@ -242,16 +242,31 @@ class Mission_info:
 
 
     def activate_mission01(self):
+        # Activation is idempotent. Reopening or calling the action twice must
+        # not erase an in-progress or already validated comparison.
+        if '01' in self.missions_completed:
+            self.mission01 = True
+            animation_text_save('Mission 01 is already completed.', time=2500)
+            return
+        if '01' in self.missions_activated:
+            self.mission01 = True
+            animation_text_save('Mission 01 is already active.', time=2500)
+            return
+
         clear_compare_runs()
         clear_mission01_comparison_check()
         self.mission01 = True
-        if '01' not in self.missions_activated:
-            self.missions_activated.insert(0, '01')
+        self.missions_activated.insert(0, '01')
         animation_text_save('Mission 01 Activated')
         save_file(self.player.get_save_data())
 
 
     def deliver_results(self):
+        if '01' not in self.missions_activated:
+            self.failed.play()
+            animation_text_save('Activate Mission 01 before delivering results.', time=3000)
+            return
+
         report_data = load_mission01_comparison_check()
 
         if (not report_data

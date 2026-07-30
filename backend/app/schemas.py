@@ -24,3 +24,10 @@ class SimulateResponse(BaseModel):
     status: Literal["ok", "infeasible", "error"]
     message: str | None = None
     fluxes: dict[str, float] | None = None
+    method: Literal["FBA", "pFBA", "ROOM", "lMOMA"] | None = None
+    objective_reaction: str | None = None
+    primary_objective_flux: float | None = None
+    method_score: float | None = None
+    method_score_name: str | None = None
+    total_absolute_flux: float | None = None
+    active_reaction_count: int | None = None

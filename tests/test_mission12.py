@@ -76,6 +76,15 @@ class Mission12RegressionTests(unittest.TestCase):
             'selected_ids': list(simulation.MISSION12_REQUIRED_TRACKED_FLUXES),
             'objective_raw': float(target),
             'biomass_raw': float(biomass),
+            'method_diagnostics': {
+                'method': 'FBA',
+                'objective_reaction': simulation.MISSION12_TARGET_OBJECTIVE,
+                'primary_objective_flux': float(target),
+                'method_score': float(target),
+                'method_score_name': 'primary_objective_flux',
+                'total_absolute_flux': 343.047111 if run_type != 'default' else 360.0,
+                'active_reaction_count': 36,
+            },
             'items': [
                 {
                     'reaction_id': reaction_id,
@@ -390,11 +399,23 @@ class Mission12RegressionTests(unittest.TestCase):
         report = self._complete_synthetic_report()
         text = simulation.build_mission12_comparison_report_text(report)
         self.assertIn('reduces the theoretical succinate maximum', text)
-        self.assertIn('introduces acetate as a predicted co-product', text)
+        self.assertIn('changes the predicted co-product profile', text)
         self.assertIn('no predicted growth', text.lower())
         self.assertIn('same two visible solutions', text)
         self.assertNotIn('viable production strain', text.lower())
         self.assertNotIn('-0.000', text)
+
+    def test_report_requires_player_to_compare_fingerprints_for_the_answer(self):
+        report = self._complete_synthetic_report()
+        text = simulation.build_mission12_comparison_report_text(report)
+        self.assertIn('acetate (EX_ac_e): 0.000', text)
+        self.assertIn('acetate (EX_ac_e): 5.665', text)
+        self.assertIn('identify which co-product changes from approximately zero to positive secretion', text)
+        self.assertNotIn('New positive co-product:', text)
+        self.assertNotIn('Acetate change after disabling oxygen uptake:', text)
+        self.assertNotIn('introduces acetate as a predicted co-product', text)
+        self.assertNotIn('new positive anaerobic co-product should be acetate', text.lower())
+        self.assertNotIn('acetate should increase from approximately zero', text.lower())
 
     def test_state_is_json_serialisable_for_future_web_client(self):
         report = self._complete_synthetic_report()
@@ -429,26 +450,20 @@ class Mission12RegressionTests(unittest.TestCase):
         window_source = (CODE_DIR / 'window.py').read_text(encoding='utf-8')
         self.assertIn('run_mission12_byproduct_check_remote', window_source)
 
-    def test_mission13_reads_oxygen_constrained_fba_baseline_from_new_state(self):
+    def test_mission13_imports_diagnostic_complete_fba_baseline_from_new_state(self):
         report = self._complete_synthetic_report()
-        objective, production, _medium = self._synthetic_data('oxygen_constrained')
-        with patch.object(simulation, 'load_mission12_byproduct_check', return_value=report), \
-                patch.object(simulation, 'save_mission13_method_check'):
-            mission13 = simulation._build_mission13_data(
-                simulation.MISSION13_TARGET_METHOD,
-                simulation.MISSION13_TARGET_OBJECTIVE,
-                objective,
-                dict(self.genes),
-                dict(self.constrained_reactions),
-                production_fluxes=production,
-            )
-        self.assertTrue(mission13['baseline_available'])
-        self.assertEqual(mission13['previous_baseline_method'], 'FBA')
+        with patch.object(simulation, 'load_mission12_byproduct_check', return_value=report):
+            imported, basic_available = simulation._mission13_import_mission12_baseline()
+        self.assertTrue(basic_available)
+        self.assertIsNotNone(imported)
+        self.assertEqual(imported['method'], 'FBA')
         self.assertAlmostEqual(
-            mission13['previous_fba_target_flux'],
+            imported['primary_objective_flux'],
             report['oxygen_constrained_run']['target_flux'],
             delta=1e-6,
         )
+        self.assertAlmostEqual(imported['total_absolute_flux'], 343.047111, delta=1e-6)
+        self.assertEqual(imported['active_reaction_count'], 36)
 
     def test_fva_fixes_target_byproducts_biomass_and_oxygen_at_both_optima(self):
         try:

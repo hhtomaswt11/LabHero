@@ -26,7 +26,6 @@ from simulation import (
     MISSION13_TARGET_PRODUCT,
     MISSION13_TARGET_METHOD,
     MISSION14_TARGET_PRODUCT,
-    MISSION14_UNWANTED_PRODUCT,
     MISSION15_TARGET_PRODUCT,
     MISSION15_TARGET_METHOD,
 )
@@ -111,19 +110,19 @@ class Mission11:
 
         self.m13_step2 = [
             f"Excellent method comparison, {self.player.player_name}.",
-            "You have shown that the simulation method is part of the modelling decision.",
-            "Next we will use flux evidence to reduce an unwanted byproduct."
+            "You distinguished the primary product objective from pFBA's secondary parsimony criterion.",
+            "Next, screen genetic interventions without mistaking one lower byproduct for a complete improvement."
         ]
 
         self.m14_step1 = [
-            "Mission 14 is active. Now improve the quality of the design.",
-            f"Keep {MISSION14_TARGET_PRODUCT} as the target, but reduce {MISSION14_UNWANTED_PRODUCT}.",
-            "Use exactly one knockout and prove the result with Production Flux evidence."
+            "Mission 14 is active. Screen every highlighted single-gene intervention.",
+            f"Keep {MISSION14_TARGET_PRODUCT} as the primary target and inspect the complete co-product fingerprint.",
+            "A negative result is valid when every candidate introduces a trade-off."
         ]
 
         self.m14_step2 = [
-            f"Excellent reduction design, {self.player.player_name}.",
-            "You did not just maximize a product; you diagnosed and reduced a competing byproduct.",
+            f"Excellent screening work, {self.player.player_name}.",
+            "You showed that reducing acetate alone can create other co-products or sacrifice the target.",
             "One final Dr. Almeida diagnostic challenge will come next."
         ]
 

@@ -9,123 +9,170 @@ from functions import animation_text_save
 from async_menu import run_menu
 from utils import *
 from simulation import (
+    MISSION13_CHECK_VERSION,
     MISSION13_BASELINE_METHOD,
     MISSION13_TARGET_METHOD,
-    MISSION13_TARGET_PRODUCT,
     MISSION13_TARGET_OBJECTIVE,
-    MISSION13_COMPETING_FLUXES,
-    MISSION13_MIN_COMPETING_FLUXES,
+    MISSION13_REQUIRED_TRACKED_FLUXES,
+    MISSION13_PRODUCT_NAMES,
+    build_mission13_parsimony_report_text,
+    is_mission13_unlocked,
+    mission13_answer_matches,
+    normalise_mission13_answer,
 )
 
 
 class Mission13_info:
-    """Mission 13 — FBA vs pFBA.
+    """Mission 13 — Primary Objective and Flux Parsimony.
 
-    Third Dr. Almeida mission. The player repeats the target/byproduct analysis
-    using pFBA, learning that the simulation method can change the flux
-    distribution used to explain a metabolic design.
+    The player compares one FBA reference with one pFBA run while keeping the
+    biological setup fixed.  The final interpretation distinguishes the
+    primary reaction objective from pFBA's secondary total-flux criterion.
     """
 
     def __init__(self, toggle_menu, player) -> None:
         self.player = player
         self.missions_activated = self.player.missions_activated
         self.missions_completed = self.player.missions_completed
-
         self.toggle_menu = toggle_menu
         self.display_surface = pygame.display.get_surface()
-        font_path = get_resource_path('font/LycheeSoda.ttf')
-        self.font = pygame.font.Font(font_path, 30)
+        self.font = pygame.font.Font(get_resource_path('font/LycheeSoda.ttf'), 30)
         self.timer = Timer(200)
-
         self.mission13 = '13' in self.missions_activated
 
-        success_path = get_resource_path('audio/success_3.ogg')
-        self.success = pygame.mixer.Sound(success_path)
+        self.success = pygame.mixer.Sound(get_resource_path('audio/success_3.ogg'))
         self.success.set_volume(1.2)
-
-        failed_path = get_resource_path('audio/failed.ogg')
-        self.failed = pygame.mixer.Sound(failed_path)
+        self.failed = pygame.mixer.Sound(get_resource_path('audio/failed.ogg'))
         self.failed.set_volume(1.2)
 
     async def setup(self):
         menu = pygame_menu.Menu(
             height=720,
+            center_content=False,
             onclose=self.toggle_menu,
             theme=mytheme,
             title='Mission 13',
             width=1280,
         )
 
-        menu_text = pygame_menu.Menu(
-            height=720,
-            onclose=self.toggle_menu,
-            theme=mytheme,
-            title='Mission 13 Briefing',
-            width=1280,
+        if not is_mission13_unlocked(self.missions_completed):
+            menu.add.vertical_margin(40)
+            menu.add.label(
+                'Mission 13 is locked. Complete Mission 12 before comparing FBA with pFBA.',
+                wordwrap=True,
+                align=pygame_menu.locals.ALIGN_CENTER,
+                padding=(25, 25, 25, 25),
+                background_color='white',
+                font_size=30,
+            )
+            menu.add.button('Back', pygame_menu.events.BACK, background_color=(70, 70, 70))
+            await run_menu(menu, self.display_surface)
+            return
+
+        hint3 = pygame_menu.Menu(
+            height=720, center_content=False, onclose=pygame_menu.events.BACK,
+            theme=mytheme, title='Mission 13 Hint 3', width=1280,
         )
+        hint3.add.label(
+            f'Technical hint: use objective {MISSION13_TARGET_OBJECTIVE}, close only the lower bound of EX_o2_e, keep all genes active and track ' + ', '.join(MISSION13_REQUIRED_TRACKED_FLUXES) + f'. Record one {MISSION13_BASELINE_METHOD} run and one {MISSION13_TARGET_METHOD} run. The order is irrelevant.',
+            wordwrap=True,
+            align=pygame_menu.locals.ALIGN_LEFT,
+            padding=(20, 20, 20, 20),
+        )
+        hint3.add.button('Back', pygame_menu.events.BACK, background_color=(70, 70, 70))
 
-        menu_text.add.label(
+        hint2 = pygame_menu.Menu(
+            height=720, center_content=False, onclose=pygame_menu.events.BACK,
+            theme=mytheme, title='Mission 13 Hint 2', width=1280,
+        )
+        hint2.add.label(
+            'Experimental hint: method must be the only variable that changes. Compare the primary succinate flux, the complete external fingerprint, biomass, medium uptake, total absolute flux and active-reaction count.',
+            wordwrap=True,
+            align=pygame_menu.locals.ALIGN_LEFT,
+            padding=(20, 20, 20, 20),
+        )
+        hint2.add.button('Reveal technical hint', hint3, background_color=(255, 215, 0), font_color='black')
+        hint2.add.button('Back', pygame_menu.events.BACK, background_color=(70, 70, 70))
+
+        hint1 = pygame_menu.Menu(
+            height=720, center_content=False, onclose=pygame_menu.events.BACK,
+            theme=mytheme, title='Mission 13 Hint 1', width=1280,
+        )
+        hint1.add.label(
+            'Conceptual hint: pFBA first preserves the primary optimum. Its extra number belongs to a secondary criterion and must not be interpreted as extra product formation.',
+            wordwrap=True,
+            align=pygame_menu.locals.ALIGN_LEFT,
+            padding=(20, 20, 20, 20),
+        )
+        hint1.add.button('Reveal next hint', hint2, background_color=(255, 215, 0), font_color='black')
+        hint1.add.button('Back', pygame_menu.events.BACK, background_color=(70, 70, 70))
+
+        briefing = pygame_menu.Menu(
+            height=720, center_content=False, onclose=pygame_menu.events.BACK,
+            theme=mytheme, title='Mission 13 Briefing', width=1280,
+        )
+        briefing.add.label(
             f"""
-            Welcome to Mission 13: FBA vs pFBA.
+            Dr. Almeida wants a controlled method comparison. Keep the same anaerobic succinate-optimisation problem from Mission 12, but compare {MISSION13_BASELINE_METHOD} with {MISSION13_TARGET_METHOD}.
 
-            {MISSION13_BASELINE_METHOD} focuses on satisfying the selected objective.
-            {MISSION13_TARGET_METHOD} adds a second idea: prefer a more parsimonious flux distribution.
+            Determine what remains unchanged in the primary objective and external exchange fingerprint. Then interpret what the additional pFBA criterion minimises. A lower total flux is possible, but equality is also scientifically valid when the FBA solver already returned a parsimonious optimum.
 
-            Target product: {MISSION13_TARGET_PRODUCT}
-
-            A method change should not be treated as a cosmetic option.
-            It can change how the model distributes flux while pursuing the same target.
-
-            Repeat the previous type of byproduct analysis using {MISSION13_TARGET_METHOD}.
-            Keep the strain unchanged and support the diagnosis with production-flux evidence.
+            Do not use gene knockouts or alter the medium. Every value used in the comparison must come from the two visible solver results.
             """,
             max_char=-1,
             wordwrap=True,
             align=pygame_menu.locals.ALIGN_LEFT,
-            margin=(0, 0),
+            padding=(20, 20, 20, 20),
         )
-        menu_text.add.button('Back', pygame_menu.events.BACK, background_color=(70, 70, 70))
-        menu_text.add.vertical_margin(20)
+        briefing.add.button('Optional Hints', hint1, background_color=(230, 230, 180), font_color='black')
+        briefing.add.button('Back', pygame_menu.events.BACK, background_color=(70, 70, 70))
 
+        panel_text = '   '.join(
+            f"{MISSION13_PRODUCT_NAMES.get(reaction_id, reaction_id)} ({reaction_id})"
+            for reaction_id in MISSION13_REQUIRED_TRACKED_FLUXES
+        )
         menu.add.vertical_margin(20)
         menu.add.label(
-            'Mission 13: FBA vs pFBA',
-            wordwrap=False,
+            'Mission 13: Primary Objective and Flux Parsimony',
             align=pygame_menu.locals.ALIGN_CENTER,
             font_size=34,
         )
-
         menu.add.label(
-            f"""
-            Method-comparison challenge.
-
-            Use {MISSION13_TARGET_METHOD} to repeat a controlled analysis for {MISSION13_TARGET_PRODUCT} production.
-            Keep the same type of product and byproduct evidence, but change the simulation method.
-
-            Target product objective:
-            {MISSION13_TARGET_OBJECTIVE}
-
-            Track the target product and at least {MISSION13_MIN_COMPETING_FLUXES} competing byproducts.
-
-            Possible competing byproducts:
-            {'  '.join(MISSION13_COMPETING_FLUXES)}
-
-            Do not use gene knockouts.
-            Use New Results to decide when the pFBA comparison is ready.
-            """,
+            'Build a controlled FBA-versus-pFBA comparison and distinguish the primary succinate flux from the secondary parsimony criterion.',
             wordwrap=True,
             align=pygame_menu.locals.ALIGN_CENTER,
-            font_size=30,
+            font_size=27,
         )
-
-        menu.add.button('Mission 13 Briefing', menu_text, font_color='black', background_color=(255, 215, 0, 255))
-        menu.add.vertical_margin(50)
+        menu.add.label(
+            f'Complete exchange panel:\n{panel_text}',
+            wordwrap=True,
+            align=pygame_menu.locals.ALIGN_LEFT,
+            font_size=25,
+            padding=(5, 0, 0, 40),
+        )
+        menu.add.button('Mission 13 Briefing', briefing, font_color='black', background_color=(255, 215, 0))
+        menu.add.button('Optional Hints', hint1, font_color='black', background_color=(230, 230, 180))
+        menu.add.vertical_margin(25)
 
         if self.mission13:
-            menu.add.button('Deliver Method Comparison', action=self.deliver_results, background_color=(50, 100, 100))
-            menu.add.vertical_margin(50)
-            menu.add.label('Mission Activated', font_color=(150, 150, 150))
+            report = load_mission13_method_check()
+            menu.add.label(
+                build_mission13_parsimony_report_text(report),
+                wordwrap=True,
+                align=pygame_menu.locals.ALIGN_LEFT,
+                padding=(20, 20, 20, 20),
+                background_color='white',
+                font_size=22,
+            )
             menu.add.vertical_margin(20)
+            menu.add.text_input(
+                'pFBA secondary criterion minimises: ',
+                default='',
+                input_underline='_',
+                maxchar=60,
+                onreturn=self.deliver_results,
+            )
+            menu.add.label('Mission Activated', font_color=(150, 150, 150))
         else:
             menu.add.button('Activate Mission', action=self.activate_mission13, background_color=(50, 100, 100))
 
@@ -133,6 +180,10 @@ class Mission13_info:
         await run_menu(menu, self.display_surface)
 
     def activate_mission13(self):
+        if not is_mission13_unlocked(self.missions_completed):
+            self.failed.play()
+            animation_text_save('Complete Mission 12 before starting Mission 13.', time=3000)
+            return
         clear_mission13_method_check()
         self.mission13 = True
         if '13' not in self.missions_activated:
@@ -140,50 +191,38 @@ class Mission13_info:
         animation_text_save('Mission 13 Activated')
         save_file(self.player.get_save_data())
 
-    def deliver_results(self):
-        method_data = load_mission13_method_check()
-
-        if (not method_data
-                or method_data.get('mission_id') != '13'
-                or method_data.get('check_version') != 1):
+    def deliver_results(self, answer):
+        if not is_mission13_unlocked(self.missions_completed):
             self.failed.play()
-            animation_text_save('Run a Mission 13 simulation first!', time=2500)
+            animation_text_save('Complete Mission 12 first!', time=2500)
             return
 
-        if method_data.get('ready_to_deliver'):
-            self.success.play()
-            if '13' not in self.missions_completed:
-                self.missions_completed.insert(0, '13')
-            animation_text_save('Congratulations! Mission 13 completed!', time=2500)
-            save_file(self.player.get_save_data())
+        report = load_mission13_method_check()
+        if not report or report.get('mission_id') != '13' or report.get('check_version') != MISSION13_CHECK_VERSION:
+            self.failed.play()
+            animation_text_save('Build the controlled Mission 13 comparison first.', time=3000)
+            return
+        if not report.get('evidence_ready'):
+            self.failed.play()
+            animation_text_save('Record both complete visible method-comparison runs before answering.', time=3200)
+            return
+        if normalise_mission13_answer(answer) is None:
+            self.failed.play()
+            animation_text_save('Enter the quantity minimised by the pFBA secondary criterion.', time=3000)
+            return
+        if not mission13_answer_matches(answer, report):
+            self.failed.play()
+            animation_text_save('That answer confuses the primary product objective with the secondary pFBA criterion.', time=3400)
             return
 
-        self.failed.play()
-        if not method_data.get('method_correct'):
-            animation_text_save('Change the simulation method to pFBA.', time=3000)
-        elif not method_data.get('objective_correct'):
-            animation_text_save('The objective is not prioritising the requested product yet.', time=3000)
-        elif not method_data.get('oxygen_lower_bound_closed'):
-            animation_text_save('The environmental constraint is not ready for this comparison.', time=3000)
-        elif method_data.get('unexpected_environment_changes'):
-            animation_text_save('Too many environmental changes. Keep only the key constraint.', time=3000)
-        elif method_data.get('knocked_out_genes'):
-            animation_text_save('Do not use knockouts in this method-comparison mission.', time=3000)
-        elif not method_data.get('target_flux_tracked'):
-            animation_text_save('Track the target product in Production Flux.', time=3000)
-        elif not method_data.get('competing_fluxes_ready'):
-            animation_text_save('Track more competing byproducts before delivering.', time=3000)
-        elif not method_data.get('target_flux_positive'):
-            animation_text_save('The target product is not being produced enough yet.', time=3000)
-        else:
-            animation_text_save('Almost there. Use the Mission 13 Method Check to refine it.', time=3000)
+        self.success.play()
+        if '13' not in self.missions_completed:
+            self.missions_completed.insert(0, '13')
+        animation_text_save('Congratulations! Mission 13 completed!', time=2500)
+        save_file(self.player.get_save_data())
 
     def input(self):
-        keys = pygame.key.get_pressed()
         self.timer.update()
-
-        if keys[pygame.K_ESCAPE]:
-            pass
 
     async def update(self):
         self.input()

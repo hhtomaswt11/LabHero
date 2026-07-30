@@ -72,15 +72,15 @@ Resumo curto das missões implementadas até agora, organizado por laboratório.
 **Explica:** o efeito de uma restrição depende do objetivo e do fluxo utilizado pelo ótimo anterior. Com `EX_succ_e` como objetivo, retirar oxigénio reduz o máximo teórico de succinato e introduz acetato como coproduto previsto. Ambos os ótimos têm biomassa aproximadamente zero e não representam estirpes produtivas viáveis.  
 **Como passar:** depois da Missão 11, usar FBA com objetivo `EX_succ_e`, todos os genes ativos, glicose default e o painel completo `EX_succ_e`, `EX_ac_e`, `EX_for_e`, `EX_etoh_e`, `EX_lac__D_e`. Registar um run com ambiente completamente default e outro em que apenas o lower bound de `EX_o2_e` está fechado, por qualquer ordem. A comparação deve mostrar succinato aproximadamente `16.384 → 13.906`, oxigénio `2.655 → 0`, acetato `0 → 5.665` e biomassa `0` nos dois runs. Entregar `acetate` / `EX_ac_e` como novo coproduto positivo.
 
-### Mission 13 — FBA vs pFBA
-**Tema:** método de simulação.  
-**Explica:** pFBA procura uma distribuição de fluxos mais parcimoniosa para a mesma objective.  
-**Como passar:** pFBA, objective `EX_succ_e`, fechar lower bound do O2, sem knockouts, acompanhar `EX_succ_e` + subprodutos.
+### Mission 13 — Primary Objective and Flux Parsimony
+**Tema:** comparação controlada entre FBA e pFBA, distinguindo objetivo primário e critério secundário.  
+**Explica:** pFBA preserva o ótimo primário de `EX_succ_e` e minimiza a soma dos valores absolutos dos fluxos como segundo critério. O score pFBA não representa succinato adicional. O fingerprint externo pode permanecer igual, e a igualdade de fluxo total é válida quando o solver FBA já devolveu uma solução parcimoniosa.  
+**Como passar:** depois da Missão 12, usar `EX_succ_e`, todos os genes ativos, glicose default, apenas o lower bound de `EX_o2_e` fechado e o painel completo `EX_succ_e`, `EX_ac_e`, `EX_for_e`, `EX_etoh_e`, `EX_lac__D_e`. Registar um run FBA e um run pFBA por qualquer ordem. Ambos devem apresentar aproximadamente succinato `13.906`, acetato `5.665`, restantes produtos `0`, biomassa `0`, glicose `10` e oxigénio `0`. O pFBA não pode usar mais fluxo total do que o FBA para além da tolerância. Entregar `total flux`, `total absolute flux` ou equivalente.
 
-### Mission 14 — Byproduct Reduction Design
-**Tema:** reduzir subproduto indesejado.  
-**Explica:** otimizar uma estirpe não é só aumentar produto alvo; também pode ser reduzir subprodutos.  
-**Como passar:** pFBA, objective `EX_succ_e`, fechar lower bound do O2, desligar `b1241` / `adhE`, acompanhar `EX_succ_e` + `EX_etoh_e`.
+### Mission 14 — Byproduct Trade-off Screening
+**Tema:** screening controlado de intervenções genéticas e avaliação do perfil completo de trade-offs.  
+**Explica:** reduzir um único coproduto não prova que a intervenção melhorou. É necessário verificar retenção do alvo, redução de acetato e aparecimento de novos produtos. Um resultado negativo também é cientificamente válido.  
+**Como passar:** depois da Missão 13, usar `pFBA`, objetivo `EX_succ_e`, glicose default, apenas o lower bound de `EX_o2_e` fechado e o painel completo `EX_succ_e`, `EX_ac_e`, `EX_for_e`, `EX_etoh_e`, `EX_lac__D_e`. O run pFBA visível da Missão 13 pode ser reutilizado como referência. Testar individualmente `b1241 / adhE`, `b0115 / aceF`, `b0474 / adk` e `b4151 / frdD`. Uma melhoria limpa teria de reter pelo menos 90% do succinato, reduzir acetato em pelo menos 1.0 e não criar novo coproduto acima de 0.1. Nenhum candidato cumpre tudo; entregar `none`, `no candidate`, `nenhum` ou equivalente.
 
 ### Mission 15 — Final Diagnostic Report
 **Tema:** relatório diagnóstico completo.  

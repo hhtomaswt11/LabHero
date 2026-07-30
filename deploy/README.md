@@ -12,7 +12,7 @@ LabHero is a serious game (RPG simulation) that teaches non-bioinformaticians ab
 
 It started life as a Python/Pygame desktop game and has been ported to the browser via pygbag. The stack you'll run consists of two Docker containers:
 
-- **`labhero-backend`** — FastAPI + MEWpy. Receives simulation requests, runs FBA on the `e_coli_core` model, returns the objective value. CPU-bound, small RAM footprint.
+- **`labhero-backend`** — FastAPI + MEWpy. Receives simulation requests, runs the selected method on the `e_coli_core` model, and returns a structured method-aware result separating the primary objective flux from secondary solver scores. CPU-bound, small RAM footprint.
 - **`labhero-frontend`** — nginx. Serves the pygbag-compiled game bundle as static files and reverse-proxies `/api/*` to the backend over the internal Docker network.
 
 Only the frontend is exposed to the host network. End users only ever see one URL.
@@ -237,6 +237,16 @@ docker compose exec frontend nginx -s reload
 ---
 
 ## 6. Known issues to revisit before going public
+
+### Browser save persistence
+
+The current pygbag build keeps player and mission state in an in-memory web store. It survives navigation inside the running game, but a full page refresh or closed tab can discard progress. Before a public classroom release, replace this with either browser `localStorage`/IndexedDB or a backend save API with user/session identifiers. Mission evidence is already JSON-serialisable, so this is a storage-layer task rather than a mission-logic rewrite.
+
+### Browser-only simulation paths
+
+Normal visible simulations use the FastAPI service. A few later features still need dedicated web endpoints before the whole 28-mission campaign is browser-complete, notably Mission 19's perturbation helper and the bound-sweep workflow used by Missions 26-28. They must not attempt to instantiate MEWpy inside the browser build.
+
+### Dependency security
 
 Three Dependabot CVEs were dismissed for the desktop game because they are not reachable in a Pygame desktop binary. They **become reachable** the moment the backend starts parsing real HTTP behind a public TLS terminator.
 

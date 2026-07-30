@@ -4,7 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.schemas import SimulateRequest, SimulateResponse
 from app.simulator import simulate
 
-app = FastAPI(title="LabHero Backend", version="0.1.0")
+app = FastAPI(title="LabHero Backend", version="0.2.0")
 
 app.add_middleware(
     CORSMiddleware,

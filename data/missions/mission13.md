@@ -1,31 +1,55 @@
-# Mission 13 — FBA vs pFBA
+# Mission 13 — Primary Objective and Flux Parsimony
 
 ## Theme
-Flux diagnostics and simulation-method comparison.
+Controlled FBA-versus-pFBA comparison and method-aware interpretation.
 
 ## Learning goal
-Understand that the simulation method is part of the modelling decision. FBA and pFBA can pursue the same objective, but pFBA favours a more parsimonious flux distribution.
+Understand that pFBA preserves the primary metabolic optimum and introduces a secondary criterion that minimises total absolute flux. The pFBA score must not be interpreted as extra product formation.
 
 ## Scenario
-After identifying a target product and its competing byproducts, Dr. Almeida asks the player to repeat the analysis using pFBA instead of standard FBA.
+Dr. Almeida asks the player to keep the oxygen-constrained succinate problem from Mission 12 unchanged and compare two visible solver results:
 
-## Target product
-Succinate.
+- one FBA reference;
+- one pFBA run.
 
-## Required reasoning
-The player should keep the biological design controlled and change the simulation method. The goal is not to introduce new knockouts, but to compare how the model explains product formation under a different optimization strategy.
+The player must determine what remains unchanged and what the pFBA secondary criterion means.
 
-## Briefing
-FBA focuses on satisfying the selected objective. pFBA adds a second layer: it tries to obtain a solution that uses less unnecessary flux.
+## Controlled setup
+Both runs use:
 
-This makes pFBA useful when the objective is not enough to understand the flux distribution. In this mission, the player should compare the target product with competing byproducts using production-flux evidence.
+- objective `EX_succ_e`;
+- all genes active;
+- default glucose supply;
+- only the lower bound of `EX_o2_e` closed;
+- complete panel `EX_succ_e`, `EX_ac_e`, `EX_for_e`, `EX_etoh_e`, `EX_lac__D_e`.
 
-## Mission structure
-- Use pFBA as the simulation method.
-- Prioritise succinate production.
-- Keep the strain unchanged.
-- Use a biologically meaningful environmental constraint.
-- Track the target product and competing byproducts through Production Flux.
+Only the simulation method changes.
 
-## Notes
-The mission should not reveal the exact full solution in-game. The player should use New Results to identify whether the method, objective, environment and flux evidence are consistent.
+## Expected evidence
+The two methods preserve approximately:
+
+- succinate `13.906`;
+- acetate `5.665`;
+- formate `0`;
+- ethanol `0`;
+- D-lactate `0`;
+- biomass `0`;
+- glucose uptake `10`;
+- oxygen uptake `0`.
+
+The pFBA result also reports the secondary parsimony criterion, approximately the total absolute flux of the returned solution. Equality between the FBA and pFBA total fluxes is valid if the FBA solver already returned a parsimonious optimum.
+
+## Required interpretation
+The player must answer that pFBA minimises:
+
+- total flux;
+- total absolute flux;
+- the sum of absolute fluxes.
+
+`Succinate` is not accepted because it is the primary objective, not the secondary criterion.
+
+## Scientific note
+The value near `343.047` is not succinate secretion. The primary `EX_succ_e` flux remains near `13.906`. All values must come from the two visible solver results; no hidden simulations are used.
+
+## Web compatibility
+The mission consumes a structured result contract containing separate fields for the primary objective flux, method score, total absolute flux, active-reaction count, biomass, exchange fluxes and medium fluxes. The mission state is JSON-serialisable and independent of Pygame.

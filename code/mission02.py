@@ -13,6 +13,7 @@ from save_load import (
 from settings import *
 from simulation import (
     build_mission02_evidence_report_text,
+    is_mission02_unlocked,
     mission02_answer_matches,
     normalise_mission02_answer,
 )
@@ -49,6 +50,10 @@ class Mission02:
             self.toggle_menu()
 
     async def update(self):
+        step_locked = [
+            "Dr. Martinez is still waiting for the oxygen comparison.",
+            "Complete Mission 01 before beginning the carbon-source investigation.",
+        ]
         step_intro = [
             "I'm Dr. Martinez. Our E. coli culture has lost access to glucose.",
             "Several alternative carbon sources are available, but they do not all support growth equally.",
@@ -65,7 +70,9 @@ class Mission02:
         ]
 
         self.input()
-        if '02' in self.missions_completed:
+        if not is_mission02_unlocked(self.missions_completed):
+            self.menu_message(step_locked, buttons=False)
+        elif '02' in self.missions_completed:
             self.menu_message(step_complete, buttons=False)
         elif '02' in self.missions_activated:
             self.menu_message(step_active)
@@ -115,7 +122,10 @@ class Mission02_info:
         self.font = pygame.font.Font(font_path, 30)
         self.index = 0
         self.timer = Timer(200)
-        self.mission02 = '02' in self.missions_activated
+        self.mission02 = (
+            '02' in self.missions_activated
+            or '02' in self.missions_completed
+        )
 
         success_path = get_resource_path('audio/success_3.ogg')
         self.success = pygame.mixer.Sound(success_path)
@@ -134,6 +144,20 @@ class Mission02_info:
             title='Mission 02',
             width=1280,
         )
+
+        if not is_mission02_unlocked(self.missions_completed):
+            menu.add.vertical_margin(40)
+            menu.add.label(
+                'Mission 02 is locked. Complete Mission 01 with Dr. Martinez before beginning the carbon-source investigation.',
+                wordwrap=True,
+                align=pygame_menu.locals.ALIGN_CENTER,
+                padding=(25, 25, 25, 25),
+                background_color='white',
+                font_size=30,
+            )
+            menu.add.button('Back', pygame_menu.events.BACK, background_color=(70, 70, 70))
+            await run_menu(menu, self.display_surface)
+            return
 
         menu_text = pygame_menu.Menu(
             height=720,
@@ -337,14 +361,38 @@ class Mission02_info:
         await run_menu(menu, self.display_surface)
 
     def activate_mission02(self):
+        if not is_mission02_unlocked(self.missions_completed):
+            self.failed.play()
+            animation_text_save('Complete Mission 01 before starting Mission 02.', time=3000)
+            return
+
+        # Activation is idempotent. A duplicate action must never clear the
+        # candidate trials already recorded for the current mission.
+        if '02' in self.missions_completed:
+            self.mission02 = True
+            animation_text_save('Mission 02 is already completed.', time=2500)
+            return
+        if '02' in self.missions_activated:
+            self.mission02 = True
+            animation_text_save('Mission 02 is already active.', time=2500)
+            return
+
         clear_mission02_source_comparison_check()
         self.mission02 = True
-        if '02' not in self.missions_activated:
-            self.missions_activated.insert(0, '02')
+        self.missions_activated.insert(0, '02')
         animation_text_save('Mission 02 Activated')
         save_file(self.player.get_save_data())
 
     def deliver_results(self, answer):
+        if not is_mission02_unlocked(self.missions_completed):
+            self.failed.play()
+            animation_text_save('Complete Mission 01 before delivering Mission 02.', time=3000)
+            return
+        if '02' not in self.missions_activated:
+            self.failed.play()
+            animation_text_save('Activate Mission 02 before delivering results.', time=3000)
+            return
+
         report_data = load_mission02_source_comparison_check()
 
         if not report_data or report_data.get('mission_id') != '02' or report_data.get('check_version') != 2:

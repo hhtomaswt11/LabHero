@@ -180,7 +180,7 @@ class Plant(pygame.sprite.Sprite):
         self.check_watered = check_watered
 
         #graphics
-        frames_path = get_resource_path('../graphics/fruit/')
+        frames_path = get_resource_path('graphics/fruit/')
         self.frames = import_folder(frames_path/plant_type)
         
         # plant growing

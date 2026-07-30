@@ -318,6 +318,33 @@ class Mission02RegressionTests(unittest.TestCase):
                     any(expected_issue in issue for issue in report['current_issues']),
                     report['current_issues'],
                 )
+    def test_progression_requires_mission01(self):
+        self.assertFalse(simulation.is_mission02_unlocked([]))
+        self.assertFalse(simulation.is_mission02_unlocked(['02']))
+        self.assertTrue(simulation.is_mission02_unlocked(['01']))
+        self.assertTrue(simulation.is_mission02_unlocked(['01', '02']))
+
+    def test_mission02_guards_every_entry_and_delivery_path(self):
+        source = (CODE_DIR / 'mission02.py').read_text(encoding='utf-8')
+        # Compatibility dialogue, setup, activation and delivery each enforce
+        # the prerequisite instead of relying only on the normal NPC path.
+        self.assertGreaterEqual(
+            source.count('if not is_mission02_unlocked(self.missions_completed):'),
+            4,
+        )
+        self.assertIn('Mission 02 is locked. Complete Mission 01', source)
+        self.assertIn('Complete Mission 01 before starting Mission 02.', source)
+        self.assertIn('Complete Mission 01 before delivering Mission 02.', source)
+        self.assertIn("if '02' not in self.missions_activated:", source)
+
+    def test_mission02_reactivation_does_not_clear_candidate_trials(self):
+        source = (CODE_DIR / 'mission02.py').read_text(encoding='utf-8')
+        active_guard = source.index("if '02' in self.missions_activated:")
+        clear_check = source.index('clear_mission02_source_comparison_check()', active_guard)
+        self.assertLess(active_guard, clear_check)
+        self.assertIn('Mission 02 is already active.', source[active_guard:clear_check])
+
+
 
 if __name__ == '__main__':
     unittest.main()
