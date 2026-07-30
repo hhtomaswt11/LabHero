@@ -115,6 +115,20 @@ def simulate(req: SimulateRequest) -> SimulateResponse:
         )
 
     except Exception as e:
+        # COBRA pFBA raises ``Infeasible`` while ordinary FBA may return an
+        # infeasible result object.  Expose both paths through the same API
+        # contract so the browser never receives a generic backend error for a
+        # scientifically meaningful infeasible model.
+        error_name = type(e).__name__.strip().lower()
+        error_text = str(e).strip().lower()
+        if error_name == "infeasible" or "infeasible" in error_text:
+            return SimulateResponse(
+                objective=req.objective,
+                objective_reaction=req.objective,
+                method=req.method,
+                result="Status: INFEASIBLE",
+                status="infeasible",
+            )
         return SimulateResponse(
             objective=req.objective,
             objective_reaction=req.objective,

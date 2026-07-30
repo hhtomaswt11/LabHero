@@ -270,6 +270,48 @@ class Mission16RegressionTests(unittest.TestCase):
         self.assertIn('Latest run was not recorded', text)
         self.assertIn('Previously valid Mission 16 evidence remains available', text)
 
+    def test_infeasible_pfba_exception_becomes_visible_status_without_crashing(self):
+        class Infeasible(Exception):
+            pass
+
+        class FakeSimulator:
+            objective = None
+
+            def simulate(self, method, constraints):
+                self.last_method = method
+                self.last_constraints = constraints
+                raise Infeasible('None (infeasible).')
+
+        with patch.object(
+            simulation,
+            '_build_local_constraints',
+            return_value=(FakeSimulator(), {}),
+        ):
+            result, production, medium = simulation._simulate_local_objective_with_production_fluxes(
+                'pFBA',
+                simulation.MISSION16_GROWTH_OBJECTIVE,
+                dict(self.genes),
+                self._reactions('EX_akg_e', oxygen_closed=True),
+                [],
+            )
+
+        self.assertEqual(result, 'Status: INFEASIBLE')
+        self.assertIn('infeasible', production.get('error', '').lower())
+        self.assertIn('infeasible', medium.get('error', '').lower())
+
+        complete = self._complete_mission_evidence()
+        invalid = self._record(
+            'EX_akg_e',
+            report=complete,
+            method='pFBA',
+            oxygen_closed=True,
+            result=result,
+            medium=medium,
+        )
+        self.assertFalse(invalid['current_run_recorded'])
+        self.assertTrue(invalid['evidence_ready'])
+        self.assertTrue(invalid['oxygen_challenge_recorded'])
+
     def test_direct_factor_answers_are_easy_to_enter_but_still_evidence_gated(self):
         complete = self._complete_mission_evidence()
         for answer in ('oxygen', 'O2', 'EX_o2_e', 'oxygen availability', 'oxygen uptake', 'oxygen supply', 'oxygen/O2', 'O2 availability', 'oxigénio'):
@@ -346,6 +388,20 @@ class Mission16RegressionTests(unittest.TestCase):
         self.assertEqual(result, 'Status: INFEASIBLE')
         self.assertIn('infeasible', production.get('error', '').lower())
         self.assertIn('infeasible', medium.get('error', '').lower())
+
+        # Regression for the manual invalid-attempt test: COBRA pFBA raises an
+        # exception on this infeasible medium, which must be normalised rather
+        # than allowed to terminate the game.
+        pfba_result, pfba_production, pfba_medium = simulation._simulate_local_objective_with_production_fluxes(
+            'pFBA',
+            simulation.MISSION16_GROWTH_OBJECTIVE,
+            dict(self.genes),
+            self._reactions('EX_akg_e', oxygen_closed=True),
+            [],
+        )
+        self.assertEqual(pfba_result, 'Status: INFEASIBLE')
+        self.assertIn('infeasible', pfba_production.get('error', '').lower())
+        self.assertIn('infeasible', pfba_medium.get('error', '').lower())
 
 
 if __name__ == '__main__':

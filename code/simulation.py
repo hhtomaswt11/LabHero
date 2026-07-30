@@ -669,6 +669,21 @@ def _normalise_result(result):
         return value
 
 
+def _is_infeasible_solver_exception(error):
+    """Recognise solver infeasibility exceptions without desktop-only imports.
+
+    COBRA's FBA path can return a normal result whose status is infeasible, while
+    its pFBA path raises ``cobra.exceptions.Infeasible`` before MEWpy can build a
+    result object.  Keep this helper import-free so ``simulation.py`` remains
+    importable by the browser build, which delegates solving to the backend.
+    """
+    if error is None:
+        return False
+    error_name = type(error).__name__.strip().lower()
+    error_text = str(error).strip().lower()
+    return error_name == 'infeasible' or 'infeasible' in error_text
+
+
 def _numeric_result(value):
     try:
         return max(float(value), 0.0)
@@ -1414,7 +1429,24 @@ def _build_medium_flux_data(reaction_ids=None, flux_getter=None, error=None):
 def _simulate_local_objective_with_production_fluxes(method_name, objective_name, genes, reactions, selected_fluxes):
     simul, constraints = _build_local_constraints(genes, reactions)
     simul.objective = objective_name
-    result = simul.simulate(method=method_name, constraints=constraints)
+    try:
+        result = simul.simulate(method=method_name, constraints=constraints)
+    except Exception as error:
+        # COBRA pFBA raises on an infeasible primary problem instead of returning
+        # the status object produced by ordinary FBA.  Convert that expected
+        # solver outcome into the same visible structured result used elsewhere.
+        if _is_infeasible_solver_exception(error):
+            return (
+                'Status: INFEASIBLE',
+                _build_production_flux_data(
+                    selected_fluxes,
+                    error='Simulation infeasible. Production fluxes could not be measured.'
+                ),
+                _build_medium_flux_data(
+                    error='Simulation infeasible. Medium fluxes could not be measured.'
+                )
+            )
+        raise
     raw_solver_value = _solver_scalar_value(result)
     solver_value = _normalise_result(result)
 
