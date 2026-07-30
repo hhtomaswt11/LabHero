@@ -497,7 +497,7 @@ def _build_simulation_results_text(results):
             text += '\nTotal absolute flux: not available'
         if active_count is not None:
             text += f'\nActive reactions: {int(active_count)}'
-        text += '\nThe secondary value is not the succinate objective flux.'
+        text += '\nThe secondary value is not the selected primary objective flux.'
 
     biomass_flux = _visible_biomass_flux(results)
     if objective_name != MISSION07_BIOMASS_OBJECTIVE and biomass_flux is not None:
@@ -748,132 +748,7 @@ def _build_mission14_text(reduction_data):
 
 
 def _build_mission15_text(report_data):
-    if not report_data:
-        return ''
-
-    if report_data.get('error') and report_data.get('objective_result') in (None, 'None'):
-        return f"Mission 15 Diagnostic Report\nError: {report_data.get('error')}"
-
-    method_status = (
-        'Method: pFBA selected for the final diagnostic report.'
-        if report_data.get('method_correct')
-        else 'Method: use pFBA for this final report.'
-    )
-    objective_status = (
-        'Objective: target product is being prioritised.'
-        if report_data.get('objective_correct')
-        else 'Objective: not prioritising the requested target product yet.'
-    )
-    oxygen_status = (
-        'Environment: respiration-limited constraint detected.'
-        if report_data.get('oxygen_lower_bound_closed')
-        else 'Environment: still aerobic. Keep the product-forming constraint.'
-    )
-    environment_status = (
-        'Extra constraints: none.'
-        if not report_data.get('unexpected_environment_changes')
-        else 'Extra constraints: too many environmental changes. Keep only the key constraint.'
-    )
-    knockout_count_status = (
-        'Knockouts: exactly one candidate gene is disabled.'
-        if report_data.get('exact_one_knockout')
-        else 'Knockouts: use exactly one candidate gene.'
-    )
-    knockout_effect_status = (
-        'Knockout effect: byproduct profile is controlled.'
-        if report_data.get('target_gene_found')
-        else 'Knockout effect: keep testing candidates to control the byproduct profile.'
-    )
-    evidence_status = (
-        'Evidence: full production-flux panel is being tracked.'
-        if report_data.get('required_fluxes_ready')
-        else 'Evidence: track the full production-flux panel.'
-    )
-    target_flux_status = (
-        'Target flux: positive target production detected.'
-        if report_data.get('target_flux_positive')
-        else 'Target flux: target product is not high enough yet.'
-    )
-    unwanted_flux_status = (
-        'Byproduct control: unwanted product remains low.'
-        if report_data.get('unwanted_flux_reduced')
-        else 'Byproduct control: unwanted product is still too high.'
-    )
-    dominance_status = (
-        'Profile verdict: target product dominates the tracked byproduct profile.'
-        if report_data.get('target_dominates_byproducts')
-        else 'Profile verdict: target product does not dominate the tracked byproducts yet.'
-    )
-
-    selected_fluxes = report_data.get('selected_fluxes') or []
-    flux_values = report_data.get('tracked_flux_values') or {}
-    flux_lines = []
-    for reaction_id in selected_fluxes:
-        value = flux_values.get(reaction_id)
-        if value is None:
-            flux_lines.append(f'- {reaction_id}: not measured')
-        else:
-            flux_lines.append(f'- {reaction_id}: {float(value):.3f}')
-    flux_text = '\n'.join(flux_lines) if flux_lines else 'none'
-
-    previous_target = report_data.get('previous_target_flux')
-    previous_target_text = 'not loaded'
-    if previous_target is not None:
-        previous_target_text = f"{float(previous_target):.3f}"
-
-    previous_unwanted = report_data.get('previous_unwanted_flux')
-    previous_unwanted_text = 'not loaded'
-    if previous_unwanted is not None:
-        previous_unwanted_text = f"{float(previous_unwanted):.3f}"
-
-    target_change = report_data.get('target_flux_change_from_previous')
-    target_change_text = 'not available'
-    if target_change is not None:
-        prefix = '+' if float(target_change) > 0 else ''
-        target_change_text = f'{prefix}{float(target_change):.3f}'
-
-    unwanted_change = report_data.get('unwanted_flux_change_from_previous')
-    unwanted_change_text = 'not available'
-    if unwanted_change is not None:
-        prefix = '+' if float(unwanted_change) > 0 else ''
-        unwanted_change_text = f'{prefix}{float(unwanted_change):.3f}'
-
-    knocked_out = report_data.get('knocked_out_genes') or []
-    knocked_out_text = ', '.join(knocked_out) if knocked_out else 'none'
-
-    final_status = (
-        'Final diagnostic report ready. Return to Dr. Almeida and deliver the results.'
-        if report_data.get('ready_to_deliver')
-        else 'Not ready yet. Refine method, environment, knockout choice and flux evidence.'
-    )
-
-    return (
-        'Mission 15 Diagnostic Report\n\n'
-        f"Target product: {report_data.get('target_product')}\n"
-        f"Selected method: {report_data.get('method')}\n"
-        f"Selected objective: {report_data.get('selected_objective')}\n"
-        f"Objective flux: {report_data.get('objective_result')}\n"
-        f"Knockout selected: {knocked_out_text}\n\n"
-        f"Tracked fluxes:\n{flux_text}\n\n"
-        f"Target flux: {float(report_data.get('target_flux', 0.0)):.3f}\n"
-        f"Current unwanted flux: {float(report_data.get('current_unwanted_flux', 0.0)):.3f}\n"
-        f"Highest tracked byproduct flux: {float(report_data.get('highest_byproduct_flux', 0.0)):.3f}\n"
-        f"Previous target flux: {previous_target_text}\n"
-        f"Target change from previous design: {target_change_text}\n"
-        f"Previous unwanted flux: {previous_unwanted_text}\n"
-        f"Unwanted change from previous design: {unwanted_change_text}\n\n"
-        f"{method_status}\n"
-        f"{objective_status}\n"
-        f"{oxygen_status}\n"
-        f"{environment_status}\n"
-        f"{knockout_count_status}\n"
-        f"{knockout_effect_status}\n"
-        f"{evidence_status}\n"
-        f"{target_flux_status}\n"
-        f"{unwanted_flux_status}\n"
-        f"{dominance_status}\n\n"
-        f"{final_status}"
-    )
+    return build_mission15_viability_report_text(report_data)
 
 
 def _build_mission16_text(report_data):
@@ -2534,7 +2409,10 @@ class Window:
 
             mission15_data = None
             if '15' in self.player.missions_activated and '15' not in self.player.missions_completed:
-                mission15_data = run_mission15_diagnostic_report_check(self.results)
+                if sys.platform == 'emscripten':
+                    mission15_data = run_mission15_diagnostic_report_check_remote(BACKEND_URL, self.results)
+                else:
+                    mission15_data = run_mission15_diagnostic_report_check(self.results)
 
             mission16_data = None
             if '16' in self.player.missions_activated and '16' not in self.player.missions_completed:

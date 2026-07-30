@@ -1,6 +1,8 @@
 import copy
 import json
 import sys
+import re
+import unicodedata
 
 from save_load import *
 from options_values import *
@@ -368,8 +370,8 @@ MISSION14_OXYGEN_REACTION = 'EX_o2_e'
 MISSION14_GLUCOSE_REACTION = 'EX_glc__D_e'
 MISSION14_COPRODUCT_PRODUCT = 'acetate'
 MISSION14_COPRODUCT_FLUX = 'EX_ac_e'
-# Compatibility aliases retained for old imports while Mission 15 is pending
-# reconstruction.  Mission 14 now screens acetate trade-offs, not ethanol.
+# Legacy aliases retained for older modules and save-data readers. Mission 14
+# now screens acetate trade-offs, not ethanol.
 MISSION14_UNWANTED_PRODUCT = MISSION14_COPRODUCT_PRODUCT
 MISSION14_UNWANTED_FLUX = MISSION14_COPRODUCT_FLUX
 MISSION14_CANDIDATE_GENES = ['b1241', 'b0115', 'b0474', 'b4151']
@@ -400,19 +402,31 @@ MISSION14_PARSIMONY_TOLERANCE = 0.05
 MISSION14_EXPECTED_SECONDARY_CRITERION = 'total_absolute_flux'
 MISSION14_EXPECTED_CONCLUSION = 'none'
 
+# Mission 15 closes Dr. Almeida's laboratory with a controlled comparison
+# between a product-optimal and a growth-optimal pFBA solution.  The purpose
+# is to test whether a high theoretical product maximum is compatible with
+# predicted growth under the same strain and medium.  Every value comes from
+# the visible solver result, and the accumulated state is JSON-serialisable.
+MISSION15_CHECK_VERSION = 2
 MISSION15_TARGET_METHOD = 'pFBA'
 MISSION15_TARGET_PRODUCT = 'succinate'
-MISSION15_TARGET_OBJECTIVE = 'EX_succ_e'
+MISSION15_PRODUCT_OBJECTIVE = 'EX_succ_e'
+MISSION15_GROWTH_OBJECTIVE = 'BIOMASS_Ecoli_core_w_GAM'
+# Compatibility name retained for older imports and narrative code.
+MISSION15_TARGET_OBJECTIVE = MISSION15_PRODUCT_OBJECTIVE
 MISSION15_OXYGEN_REACTION = 'EX_o2_e'
-MISSION15_TARGET_GENE = 'b1241'
-MISSION15_TARGET_GENE_NAME = 'adhE'
-MISSION15_CANDIDATE_GENES = ['b0903', 'b2297', 'b0728', 'b3115', 'b0118', 'b1241']
-MISSION15_REQUIRED_TRACKED_FLUXES = ['EX_succ_e', 'EX_etoh_e', 'EX_ac_e', 'EX_for_e', 'EX_lac__D_e']
-MISSION15_TARGET_FLUX = 'EX_succ_e'
-MISSION15_UNWANTED_FLUX = 'EX_etoh_e'
-MISSION15_MIN_TARGET_FLUX = 1.0
-MISSION15_MAX_UNWANTED_FLUX = 1.0
-MISSION15_MIN_GROWTH = 1.0
+MISSION15_GLUCOSE_REACTION = 'EX_glc__D_e'
+MISSION15_REQUIRED_TRACKED_FLUXES = ['EX_succ_e', 'EX_ac_e', 'EX_for_e', 'EX_etoh_e', 'EX_lac__D_e']
+MISSION15_PRODUCT_NAMES = dict(MISSION14_PRODUCT_NAMES)
+MISSION15_EXPECTED_SECONDARY_CRITERION = 'total_absolute_flux'
+MISSION15_MIN_PRODUCT_FLUX = 1.0
+MISSION15_MAX_PRODUCT_RUN_BIOMASS = 0.001
+MISSION15_MIN_GROWTH_FLUX = 0.05
+MISSION15_MAX_GROWTH_RUN_PRODUCT = 0.001
+MISSION15_DEFAULT_GLUCOSE_UPTAKE = 10.0
+MISSION15_FLUX_TOLERANCE = 0.01
+MISSION15_PRIMARY_TOLERANCE = 0.01
+MISSION15_EXPECTED_RELATIONSHIP = 'objective_conflict'
 
 MISSION16_METHOD = 'FBA'
 MISSION16_GROWTH_OBJECTIVE = 'BIOMASS_Ecoli_core_w_GAM'
@@ -985,42 +999,9 @@ def _mission14_environment_status(reactions):
 
 
 def _mission15_environment_status(reactions):
-    """Return whether Mission 15 changed only the oxygen lower bound."""
-    reaction_values = list(reactions.values())
-    oxygen_lower_bound_closed = False
-    unexpected_changes = []
-
-    try:
-        oxygen_index = list(REACTIONS.index).index(MISSION15_OXYGEN_REACTION)
-    except ValueError:
-        oxygen_index = None
-
-    for i in range(len(REACTIONS.index)):
-        lb_index = i * 2
-        ub_index = lb_index + 1
-
-        if ub_index >= len(reaction_values):
-            break
-
-        lower_bound_open = bool(reaction_values[lb_index])
-        upper_bound_open = bool(reaction_values[ub_index])
-
-        default_lower_bound_open = REACTIONS.lb.iloc[i] != 0
-        default_upper_bound_open = REACTIONS.ub.iloc[i] != 0
-
-        reaction_id = REACTIONS.index[i]
-
-        if i == oxygen_index:
-            oxygen_lower_bound_closed = not lower_bound_open
-            if upper_bound_open != default_upper_bound_open:
-                unexpected_changes.append(f'{reaction_id} upper bound')
-        else:
-            if lower_bound_open != default_lower_bound_open:
-                unexpected_changes.append(f'{reaction_id} lower bound')
-            if upper_bound_open != default_upper_bound_open:
-                unexpected_changes.append(f'{reaction_id} upper bound')
-
-    return oxygen_lower_bound_closed, unexpected_changes
+    """Validate the exact oxygen-constrained medium with robust bound ids."""
+    oxygen_closed, unexpected_changes = _mission14_environment_status(reactions)
+    return oxygen_closed, list(unexpected_changes)
 
 
 def _environment_has_changes(reactions):
@@ -5388,9 +5369,9 @@ def _build_mission14_data(
             'objective': selected_objective,
             'issues': list(issues),
         },
-        # Compatibility values for the still-pending Mission 15 audit.  They
-        # come from the visible baseline and do not restore the old false
-        # ethanol-reduction interpretation.
+        # Compatibility summary values for older downstream readers. They
+        # come from the visible baseline and preserve the current acetate-screen
+        # interpretation.
         'method': MISSION14_TARGET_METHOD,
         'target_flux': (baseline or {}).get('primary_objective_flux'),
         'tracked_flux_values': copy.deepcopy((baseline or {}).get('tracked_flux_values') or {}),
@@ -5576,144 +5557,431 @@ def build_mission14_tradeoff_report_text(report_data=None):
     return '\n'.join(lines)
 
 
-def _build_mission15_data(method_name, selected_objective, objective_result, genes, reactions, production_fluxes=None, objective_error=None):
-    knocked_out_genes = _knocked_out_genes(genes)
-    selected_fluxes = _read_selected_production_fluxes()
-    flux_values = _production_flux_value_map(production_fluxes)
+def is_mission15_unlocked(missions_completed):
+    """Mission 15 starts only after the Mission 14 intervention screen."""
+    return '14' in (missions_completed or [])
 
-    method_correct = method_name == MISSION15_TARGET_METHOD
-    objective_correct = selected_objective == MISSION15_TARGET_OBJECTIVE
-    objective_value = _as_float_or_none(objective_result)
-    result_valid = objective_value is not None and objective_value > 0
-    oxygen_lower_bound_closed, unexpected_environment_changes = _mission15_environment_status(reactions)
 
-    exact_one_knockout = len(knocked_out_genes) == 1
-    target_gene_found = knocked_out_genes == [MISSION15_TARGET_GENE]
-
-    required_fluxes_ready = all(
-        reaction_id in selected_fluxes
-        for reaction_id in MISSION15_REQUIRED_TRACKED_FLUXES
+def _mission15_report_is_current(report_data):
+    return bool(
+        isinstance(report_data, dict)
+        and report_data.get('mission_id') == '15'
+        and report_data.get('check_version') == MISSION15_CHECK_VERSION
     )
-    target_flux_tracked = MISSION15_TARGET_FLUX in selected_fluxes
-    unwanted_flux_tracked = MISSION15_UNWANTED_FLUX in selected_fluxes
 
-    target_flux = flux_values.get(MISSION15_TARGET_FLUX, 0.0)
-    unwanted_flux = flux_values.get(MISSION15_UNWANTED_FLUX, 0.0)
-    target_flux_positive = target_flux >= MISSION15_MIN_TARGET_FLUX
-    unwanted_flux_reduced = unwanted_flux <= MISSION15_MAX_UNWANTED_FLUX
 
-    byproduct_fluxes = {
-        reaction_id: flux_values.get(reaction_id, 0.0)
-        for reaction_id in MISSION15_REQUIRED_TRACKED_FLUXES
-        if reaction_id != MISSION15_TARGET_FLUX
+def _prepare_mission15_report(report_data):
+    if not _mission15_report_is_current(report_data):
+        return {}
+    return copy.deepcopy(report_data)
+
+
+def _mission15_measured_fluxes(production_fluxes):
+    return {
+        reaction_id: value
+        for reaction_id, value in _mission14_measured_fluxes(production_fluxes).items()
+        if reaction_id in MISSION15_REQUIRED_TRACKED_FLUXES
     }
-    highest_byproduct_flux = max(byproduct_fluxes.values()) if byproduct_fluxes else 0.0
-    target_dominates_byproducts = target_flux > highest_byproduct_flux
 
-    baseline_data = load_mission14_reduction_check()
-    baseline_available = (
-        isinstance(baseline_data, dict)
-        and baseline_data.get('mission_id') == '14'
-        and baseline_data.get('check_version') == 1
-        and baseline_data.get('ready_to_deliver')
-    )
-    baseline_target_flux = None
-    baseline_unwanted_flux = None
-    if baseline_available:
-        baseline_target_flux = baseline_data.get('target_flux')
-        baseline_unwanted_flux = baseline_data.get('current_unwanted_flux')
 
-    target_flux_change = None
-    unwanted_flux_change = None
-    try:
-        if baseline_target_flux is not None:
-            target_flux_change = round(float(target_flux) - float(baseline_target_flux), 3)
-    except Exception:
-        target_flux_change = None
-    try:
-        if baseline_unwanted_flux is not None:
-            unwanted_flux_change = round(float(unwanted_flux) - float(baseline_unwanted_flux), 3)
-    except Exception:
-        unwanted_flux_change = None
+def _mission15_biomass_value(production_fluxes):
+    return _mission14_biomass_value(production_fluxes)
 
-    mission15_data = {
+
+def _mission15_medium_evidence(medium_fluxes):
+    return _mission14_medium_evidence(medium_fluxes)
+
+
+def _mission15_import_mission14_product_run():
+    """Reuse Mission 14's visible no-knockout product optimum.
+
+    The function copies persisted evidence only.  It never launches a solver
+    call, which keeps the same scientific contract for desktop and web.
+    """
+    report = load_mission14_reduction_check()
+    if not (
+        isinstance(report, dict)
+        and report.get('mission_id') == '14'
+        and report.get('check_version') == MISSION14_CHECK_VERSION
+        and report.get('evidence_ready')
+    ):
+        return None, False
+
+    source = report.get('baseline')
+    if not isinstance(source, dict):
+        return None, True
+    tracked = source.get('tracked_flux_values') or {}
+    numeric_values = [
+        source.get('primary_objective_flux'),
+        source.get('method_score'),
+        source.get('biomass_flux'),
+        source.get('glucose_uptake'),
+        source.get('oxygen_uptake'),
+        source.get('total_absolute_flux'),
+        source.get('active_reaction_count'),
+    ]
+    if any(_as_float_or_none(value) is None for value in numeric_values):
+        return None, True
+    if any(_as_float_or_none(tracked.get(rid)) is None for rid in MISSION15_REQUIRED_TRACKED_FLUXES):
+        return None, True
+    if source.get('method') != MISSION15_TARGET_METHOD:
+        return None, True
+    if source.get('objective') != MISSION15_PRODUCT_OBJECTIVE:
+        return None, True
+    if source.get('method_score_name') != MISSION15_EXPECTED_SECONDARY_CRITERION:
+        return None, True
+    if source.get('knocked_out_genes') not in (None, []):
+        return None, True
+    if abs(float(source['primary_objective_flux']) - float(tracked[MISSION15_PRODUCT_OBJECTIVE])) > MISSION15_PRIMARY_TOLERANCE:
+        return None, True
+    if abs(float(source['glucose_uptake']) - MISSION15_DEFAULT_GLUCOSE_UPTAKE) > MISSION15_FLUX_TOLERANCE:
+        return None, True
+    if abs(float(source['oxygen_uptake'])) > MISSION15_FLUX_TOLERANCE:
+        return None, True
+
+    product_run = {
+        'run_type': 'product_optimal',
+        'source': 'mission14_visible_product_run',
+        'method': MISSION15_TARGET_METHOD,
+        'objective': MISSION15_PRODUCT_OBJECTIVE,
+        'primary_objective_flux': round(float(source['primary_objective_flux']), 6),
+        'method_score': round(float(source.get('method_score')), 6)
+        if _as_float_or_none(source.get('method_score')) is not None else None,
+        'method_score_name': source.get('method_score_name'),
+        'total_absolute_flux': round(float(source['total_absolute_flux']), 6),
+        'active_reaction_count': int(source['active_reaction_count']),
+        'tracked_flux_values': {
+            rid: round(float(tracked[rid]), 6)
+            for rid in MISSION15_REQUIRED_TRACKED_FLUXES
+        },
+        'biomass_flux': round(float(source['biomass_flux']), 6),
+        'glucose_uptake': round(float(source['glucose_uptake']), 6),
+        'oxygen_uptake': round(float(source['oxygen_uptake']), 6),
+        'knocked_out_genes': [],
+    }
+    return product_run, True
+
+
+def initialise_mission15_viability_audit():
+    """Create the current state and import visible Mission 14 evidence."""
+    product_run, mission14_available = _mission15_import_mission14_product_run()
+    data = {
         'mission_id': '15',
-        'check_version': 1,
-        'target_product': MISSION15_TARGET_PRODUCT,
-        'target_objective': MISSION15_TARGET_OBJECTIVE,
+        'check_version': MISSION15_CHECK_VERSION,
+        'mission_title': 'Product–Growth Viability Audit',
         'target_method': MISSION15_TARGET_METHOD,
-        'method': method_name,
-        'method_correct': method_correct,
-        'selected_objective': selected_objective,
-        'objective_correct': objective_correct,
-        'objective_result': round(objective_value, 3) if objective_value is not None else str(objective_result),
+        'target_product': MISSION15_TARGET_PRODUCT,
+        'product_objective': MISSION15_PRODUCT_OBJECTIVE,
+        'growth_objective': MISSION15_GROWTH_OBJECTIVE,
+        'required_tracked_fluxes': list(MISSION15_REQUIRED_TRACKED_FLUXES),
+        'product_names': dict(MISSION15_PRODUCT_NAMES),
+        'product_optimal_run': product_run,
+        'growth_optimal_run': None,
+        'mission14_product_run_available': mission14_available,
+        'mission14_product_run_imported': bool(product_run),
+        'comparison_complete': False,
+        'same_controlled_setup': False,
+        'relationship_classification': None,
+        'objective_conflict_supported': False,
+        'expected_relationship': MISSION15_EXPECTED_RELATIONSHIP,
+        'evidence_ready': False,
+        'answer_ready': False,
+        'ready_to_deliver': False,
+        'current_run_valid': False,
+        'current_run_recorded': False,
+        'current_run_type': None,
+        'current_issues': [],
+        'latest_attempt': None,
+    }
+    save_mission15_diagnostic_report_check(data)
+    return data
+
+
+def _mission15_relationship(product_run, growth_run):
+    if not product_run or not growth_run:
+        return None
+    product_biomass = _as_float_or_none(product_run.get('biomass_flux'))
+    growth_product = _as_float_or_none(
+        (growth_run.get('tracked_flux_values') or {}).get(MISSION15_PRODUCT_OBJECTIVE)
+    )
+    if product_biomass is None or growth_product is None:
+        return None
+    if (
+        product_biomass <= MISSION15_MAX_PRODUCT_RUN_BIOMASS + MISSION15_FLUX_TOLERANCE
+        and growth_product <= MISSION15_MAX_GROWTH_RUN_PRODUCT + MISSION15_FLUX_TOLERANCE
+    ):
+        return 'objective_conflict'
+    if (
+        product_biomass > MISSION15_MAX_PRODUCT_RUN_BIOMASS + MISSION15_FLUX_TOLERANCE
+        and growth_product > MISSION15_MAX_GROWTH_RUN_PRODUCT + MISSION15_FLUX_TOLERANCE
+    ):
+        return 'coexistence'
+    return 'asymmetric_tradeoff'
+
+
+def _mission15_same_setup(product_run, growth_run):
+    if not product_run or not growth_run:
+        return False
+    if product_run.get('method') != growth_run.get('method'):
+        return False
+    if product_run.get('knocked_out_genes') or growth_run.get('knocked_out_genes'):
+        return False
+    for key in ('glucose_uptake', 'oxygen_uptake'):
+        left = _as_float_or_none(product_run.get(key))
+        right = _as_float_or_none(growth_run.get(key))
+        if left is None or right is None or abs(left - right) > MISSION15_FLUX_TOLERANCE:
+            return False
+    left_panel = set((product_run.get('tracked_flux_values') or {}).keys())
+    right_panel = set((growth_run.get('tracked_flux_values') or {}).keys())
+    return left_panel == right_panel == set(MISSION15_REQUIRED_TRACKED_FLUXES)
+
+
+def _build_mission15_data(
+    method_name,
+    selected_objective,
+    objective_result,
+    genes,
+    reactions,
+    production_fluxes=None,
+    medium_fluxes=None,
+    existing_report=None,
+    objective_error=None,
+    selected_fluxes=None,
+):
+    existing = _prepare_mission15_report(existing_report)
+    product_run = copy.deepcopy(existing.get('product_optimal_run'))
+    growth_run = copy.deepcopy(existing.get('growth_optimal_run'))
+
+    imported_product, mission14_available = _mission15_import_mission14_product_run()
+    if not product_run and imported_product:
+        product_run = imported_product
+
+    knocked_out_genes = _knocked_out_genes(genes)
+    selected_fluxes = list(
+        selected_fluxes
+        if selected_fluxes is not None
+        else _read_selected_production_fluxes()
+    )
+    measured_fluxes = _mission15_measured_fluxes(production_fluxes)
+    biomass_flux = _mission15_biomass_value(production_fluxes)
+    glucose_uptake, oxygen_uptake = _mission15_medium_evidence(medium_fluxes)
+    oxygen_closed, unexpected_changes = _mission15_environment_status(reactions)
+    diagnostics = _method_diagnostics_from_production_data(production_fluxes)
+
+    primary_objective_flux = _as_float_or_none(diagnostics.get('primary_objective_flux'))
+    method_score = _as_float_or_none(diagnostics.get('method_score'))
+    total_absolute_flux = _as_float_or_none(diagnostics.get('total_absolute_flux'))
+    method_score_name = diagnostics.get('method_score_name')
+    try:
+        active_reaction_count = int(diagnostics.get('active_reaction_count'))
+    except Exception:
+        active_reaction_count = None
+    objective_value = _as_float_or_none(objective_result)
+
+    current_run_type = None
+    if selected_objective == MISSION15_PRODUCT_OBJECTIVE:
+        current_run_type = 'product_optimal'
+    elif selected_objective == MISSION15_GROWTH_OBJECTIVE:
+        current_run_type = 'growth_optimal'
+
+    missing_selected = [
+        rid for rid in MISSION15_REQUIRED_TRACKED_FLUXES
+        if rid not in selected_fluxes
+    ]
+    missing_measured = [
+        rid for rid in MISSION15_REQUIRED_TRACKED_FLUXES
+        if _as_float_or_none(measured_fluxes.get(rid)) is None
+    ]
+
+    issues = []
+    if objective_error:
+        issues.append(objective_error)
+    if method_name != MISSION15_TARGET_METHOD:
+        issues.append(f'Use {MISSION15_TARGET_METHOD} for both controlled runs.')
+    if current_run_type is None:
+        issues.append(
+            f'Use either {MISSION15_PRODUCT_OBJECTIVE} or {MISSION15_GROWTH_OBJECTIVE} as the selected objective.'
+        )
+    if knocked_out_genes:
+        issues.append('Keep every gene active; Mission 15 changes only the selected objective.')
+    if not oxygen_closed:
+        issues.append('Close only the lower bound of oxygen uptake for the controlled anaerobic medium.')
+    issues.extend(f'Unexpected environmental change: {item}.' for item in unexpected_changes)
+    if missing_selected:
+        issues.append('Select the complete target/co-product panel: ' + ', '.join(missing_selected) + '.')
+    if missing_measured:
+        issues.append('The visible result is missing numeric fluxes for: ' + ', '.join(missing_measured) + '.')
+    if objective_value is None:
+        issues.append('The visible objective value is not numeric.')
+    if biomass_flux is None:
+        issues.append('The visible result does not contain a numeric biomass flux.')
+    if glucose_uptake is None:
+        issues.append('The visible result does not contain glucose uptake.')
+    elif abs(float(glucose_uptake) - MISSION15_DEFAULT_GLUCOSE_UPTAKE) > MISSION15_FLUX_TOLERANCE:
+        issues.append('Keep the default glucose uptake capacity for both runs.')
+    if oxygen_uptake is None:
+        issues.append('The visible result does not contain oxygen uptake.')
+    elif abs(float(oxygen_uptake)) > MISSION15_FLUX_TOLERANCE:
+        issues.append('The visible solution is still using oxygen.')
+    if diagnostics.get('method') != MISSION15_TARGET_METHOD:
+        issues.append('The visible method diagnostics do not describe pFBA.')
+    if diagnostics.get('objective_reaction') != selected_objective:
+        issues.append('The visible method diagnostics do not match the selected objective.')
+    if primary_objective_flux is None:
+        issues.append('The primary objective flux is missing from the visible result.')
+    if method_score is None:
+        issues.append('The pFBA secondary score is missing from the visible result.')
+    if method_score_name != MISSION15_EXPECTED_SECONDARY_CRITERION:
+        issues.append('The pFBA secondary criterion is not identified as total absolute flux.')
+    if total_absolute_flux is None:
+        issues.append('The total absolute flux is missing from the visible result.')
+    if active_reaction_count is None:
+        issues.append('The active-reaction count is missing from the visible result.')
+    if (
+        objective_value is not None
+        and primary_objective_flux is not None
+        and abs(float(objective_value) - float(primary_objective_flux)) > MISSION15_PRIMARY_TOLERANCE
+    ):
+        issues.append('The displayed objective value does not match the primary objective flux.')
+
+    if current_run_type == 'product_optimal':
+        product_flux = _as_float_or_none(measured_fluxes.get(MISSION15_PRODUCT_OBJECTIVE))
+        if product_flux is None:
+            pass
+        elif primary_objective_flux is not None and abs(product_flux - primary_objective_flux) > MISSION15_PRIMARY_TOLERANCE:
+            issues.append('The tracked succinate flux does not match the product objective flux.')
+        if primary_objective_flux is not None and primary_objective_flux < MISSION15_MIN_PRODUCT_FLUX:
+            issues.append('The product-optimal run did not produce a meaningful succinate optimum.')
+    elif current_run_type == 'growth_optimal':
+        if (
+            biomass_flux is not None
+            and primary_objective_flux is not None
+            and abs(float(biomass_flux) - float(primary_objective_flux)) > MISSION15_PRIMARY_TOLERANCE
+        ):
+            issues.append('The measured biomass flux does not match the growth objective flux.')
+        if biomass_flux is not None and biomass_flux < MISSION15_MIN_GROWTH_FLUX:
+            issues.append('The growth-optimal run did not produce viable predicted growth.')
+
+    current_run_valid = not issues
+    current_run_recorded = False
+    if current_run_valid:
+        run = {
+            'run_type': current_run_type,
+            'source': 'current_visible_run',
+            'method': method_name,
+            'objective': selected_objective,
+            'primary_objective_flux': round(float(primary_objective_flux), 6),
+            'method_score': round(float(method_score), 6),
+            'method_score_name': method_score_name,
+            'total_absolute_flux': round(float(total_absolute_flux), 6),
+            'active_reaction_count': int(active_reaction_count),
+            'tracked_flux_values': {
+                rid: round(float(measured_fluxes[rid]), 6)
+                for rid in MISSION15_REQUIRED_TRACKED_FLUXES
+            },
+            'biomass_flux': round(float(biomass_flux), 6),
+            'glucose_uptake': round(float(glucose_uptake), 6),
+            'oxygen_uptake': round(
+                0.0 if abs(float(oxygen_uptake)) < DISPLAY_ZERO_TOLERANCE else float(oxygen_uptake),
+                6,
+            ),
+            'knocked_out_genes': [],
+        }
+        if current_run_type == 'product_optimal':
+            product_run = run
+        else:
+            growth_run = run
+        current_run_recorded = True
+
+    comparison_complete = bool(product_run and growth_run)
+    same_controlled_setup = _mission15_same_setup(product_run, growth_run)
+    relationship = _mission15_relationship(product_run, growth_run) if comparison_complete else None
+    objective_conflict_supported = relationship == MISSION15_EXPECTED_RELATIONSHIP
+    evidence_ready = bool(comparison_complete and same_controlled_setup and relationship)
+
+    data = {
+        'mission_id': '15',
+        'check_version': MISSION15_CHECK_VERSION,
+        'mission_title': 'Product–Growth Viability Audit',
+        'target_method': MISSION15_TARGET_METHOD,
+        'target_product': MISSION15_TARGET_PRODUCT,
+        'product_objective': MISSION15_PRODUCT_OBJECTIVE,
+        'growth_objective': MISSION15_GROWTH_OBJECTIVE,
         'oxygen_reaction': MISSION15_OXYGEN_REACTION,
-        'oxygen_lower_bound_closed': oxygen_lower_bound_closed,
-        'unexpected_environment_changes': unexpected_environment_changes,
-        'candidate_genes': MISSION15_CANDIDATE_GENES,
-        'target_gene': MISSION15_TARGET_GENE,
-        'target_gene_name': MISSION15_TARGET_GENE_NAME,
-        'knocked_out_genes': knocked_out_genes,
-        'exact_one_knockout': exact_one_knockout,
-        'target_gene_found': target_gene_found,
-        'selected_fluxes': selected_fluxes,
-        'tracked_flux_values': {reaction_id: round(value, 3) for reaction_id, value in flux_values.items()},
-        'required_tracked_fluxes': MISSION15_REQUIRED_TRACKED_FLUXES,
-        'required_fluxes_ready': required_fluxes_ready,
-        'target_flux_tracked': target_flux_tracked,
-        'unwanted_flux_tracked': unwanted_flux_tracked,
-        'target_flux': round(target_flux, 3),
-        'minimum_target_flux': MISSION15_MIN_TARGET_FLUX,
-        'target_flux_positive': target_flux_positive,
-        'current_unwanted_flux': round(unwanted_flux, 3),
-        'maximum_unwanted_flux': MISSION15_MAX_UNWANTED_FLUX,
-        'unwanted_flux_reduced': unwanted_flux_reduced,
-        'byproduct_fluxes': {reaction_id: round(value, 3) for reaction_id, value in byproduct_fluxes.items()},
-        'highest_byproduct_flux': round(highest_byproduct_flux, 3),
-        'target_dominates_byproducts': target_dominates_byproducts,
-        'baseline_available': baseline_available,
-        'previous_target_flux': baseline_target_flux,
-        'previous_unwanted_flux': baseline_unwanted_flux,
-        'target_flux_change_from_previous': target_flux_change,
-        'unwanted_flux_change_from_previous': unwanted_flux_change,
-        'result_valid': result_valid,
-        'ready_to_deliver': (
-            method_correct
-            and objective_correct
-            and oxygen_lower_bound_closed
-            and not unexpected_environment_changes
-            and exact_one_knockout
-            and target_gene_found
-            and required_fluxes_ready
-            and target_flux_tracked
-            and unwanted_flux_tracked
-            and target_flux_positive
-            and unwanted_flux_reduced
-            and target_dominates_byproducts
-            and result_valid
+        'glucose_reaction': MISSION15_GLUCOSE_REACTION,
+        'required_tracked_fluxes': list(MISSION15_REQUIRED_TRACKED_FLUXES),
+        'product_names': dict(MISSION15_PRODUCT_NAMES),
+        'product_optimal_run': product_run,
+        'growth_optimal_run': growth_run,
+        'mission14_product_run_available': mission14_available,
+        'mission14_product_run_imported': bool(
+            product_run and product_run.get('source') == 'mission14_visible_product_run'
         ),
+        'comparison_complete': comparison_complete,
+        'same_controlled_setup': same_controlled_setup,
+        'relationship_classification': relationship,
+        'objective_conflict_supported': objective_conflict_supported,
+        'expected_relationship': MISSION15_EXPECTED_RELATIONSHIP,
+        'evidence_ready': evidence_ready,
+        'answer_ready': evidence_ready,
+        'ready_to_deliver': evidence_ready,
+        'current_run_valid': current_run_valid,
+        'current_run_recorded': current_run_recorded,
+        'current_run_type': current_run_type,
+        'current_method': method_name,
+        'current_objective': selected_objective,
+        'current_knocked_out_genes': knocked_out_genes,
+        'current_primary_objective_flux': round(float(primary_objective_flux), 6)
+        if primary_objective_flux is not None else None,
+        'current_method_score': round(float(method_score), 6) if method_score is not None else None,
+        'current_method_score_name': method_score_name,
+        'current_total_absolute_flux': round(float(total_absolute_flux), 6)
+        if total_absolute_flux is not None else None,
+        'current_active_reaction_count': active_reaction_count,
+        'current_tracked_flux_values': {
+            rid: round(float(value), 6) for rid, value in measured_fluxes.items()
+        },
+        'current_biomass_flux': round(float(biomass_flux), 6) if biomass_flux is not None else None,
+        'current_glucose_uptake': round(float(glucose_uptake), 6) if glucose_uptake is not None else None,
+        'current_oxygen_uptake': round(float(oxygen_uptake), 6) if oxygen_uptake is not None else None,
+        'selected_production_fluxes': selected_fluxes,
+        'missing_selected_fluxes': missing_selected,
+        'missing_measured_fluxes': missing_measured,
+        'full_panel_measured': not missing_measured,
+        'current_issues': issues,
+        'latest_attempt': {
+            'valid': current_run_valid,
+            'recorded': current_run_recorded,
+            'run_type': current_run_type,
+            'method': method_name,
+            'objective': selected_objective,
+            'issues': list(issues),
+        },
     }
     if objective_error:
-        mission15_data['error'] = objective_error
-    save_mission15_diagnostic_report_check(mission15_data)
-    return mission15_data
+        data['error'] = objective_error
+    save_mission15_diagnostic_report_check(data)
+    return data
 
 
 def run_mission15_diagnostic_report_check(simulation_results=None):
     method_name, selected_objective, genes, reactions = _read_simulation_file()
-
     objective_result = None
     production_fluxes = None
+    medium_fluxes = None
     objective_error = None
     try:
-        if simulation_results and simulation_results[0] == selected_objective:
+        if simulation_results is not None:
+            result_objective = simulation_results[0]
             objective_result = simulation_results[1]
             production_fluxes = simulation_results[2] if len(simulation_results) > 2 else None
+            medium_fluxes = simulation_results[3] if len(simulation_results) > 3 else None
+            if result_objective != selected_objective:
+                objective_error = 'The displayed simulation result does not match the currently selected objective.'
+        else:
+            objective_error = 'Run a visible product-optimal or growth-optimal pFBA simulation before recording Mission 15 evidence.'
     except Exception:
-        objective_result = None
-
-    if objective_result is None:
-        objective_error = 'Run the simulation before delivering Mission 15.'
+        objective_error = 'Could not read the current visible simulation result.'
 
     return _build_mission15_data(
         method_name,
@@ -5722,8 +5990,237 @@ def run_mission15_diagnostic_report_check(simulation_results=None):
         genes,
         reactions,
         production_fluxes=production_fluxes,
+        medium_fluxes=medium_fluxes,
+        existing_report=load_mission15_diagnostic_report_check(),
         objective_error=objective_error,
     )
+
+
+def _mission15_answer_text(answer):
+    """Return accent-insensitive lower-case words for free-text answers."""
+    text = unicodedata.normalize('NFKD', str(answer or ''))
+    text = ''.join(char for char in text if not unicodedata.combining(char))
+    return re.sub(r'[^a-z0-9]+', ' ', text.lower()).strip()
+
+
+def _mission15_priority_clause_supports(clause, priority_terms, zero_terms):
+    """Recognise one side of the two-optimum zero-flux observation."""
+    priority_pattern = r'(?:maximi[sz](?:e|ed|es|ing)|prioriti[sz](?:e|ed|es|ing)|optimi[sz](?:e|ed|es|ing)|priority|optimum)'
+    zero_pattern = r'(?:zero|0(?:\.0+)?|absent|no\s+predicted)'
+    priority_subject = r'(?:' + '|'.join(priority_terms) + r')'
+    zero_subject = r'(?:' + '|'.join(zero_terms) + r')'
+    priority_found = bool(
+        re.search(rf'\b{priority_subject}\b(?:\s+\w+){{0,4}}\s+{priority_pattern}\b', clause)
+        or re.search(rf'\b{priority_pattern}\b(?:\s+\w+){{0,4}}\s+\b{priority_subject}\b', clause)
+    )
+    zero_found = bool(
+        re.search(rf'\b{zero_subject}\b(?:\s+\w+){{0,4}}\s+{zero_pattern}\b', clause)
+        or re.search(rf'\b{zero_pattern}\b(?:\s+\w+){{0,4}}\s+\b{zero_subject}\b', clause)
+    )
+    return priority_found and zero_found
+
+
+def normalise_mission15_answer(answer):
+    phrase = _mission15_answer_text(answer)
+    compact = phrase.replace(' ', '')
+    aliases = {
+        'objectiveconflict': 'objective_conflict',
+        'thereisanobjectiveconflict': 'objective_conflict',
+        'theobjectivesconflict': 'objective_conflict',
+        'conflictbetweenobjectives': 'objective_conflict',
+        'conflictbetweengrowthandproduction': 'objective_conflict',
+        'growthproductionconflict': 'objective_conflict',
+        'growthproductconflict': 'objective_conflict',
+        'notgrowthcoupled': 'objective_conflict',
+        'notgrowthcoupledproduction': 'objective_conflict',
+        'notgrowthcompatible': 'objective_conflict',
+        'productnotgrowthcoupled': 'objective_conflict',
+        'productionisnotgrowthcoupled': 'objective_conflict',
+        'succinateisnotgrowthcoupled': 'objective_conflict',
+        'succinateproductionisnotgrowthcoupled': 'objective_conflict',
+        'growthandproductionarenotcoupled': 'objective_conflict',
+        'growthisnotcoupledtoproduction': 'objective_conflict',
+        'conflitodeobjetivos': 'objective_conflict',
+        'conflitoentreobjetivos': 'objective_conflict',
+        'conflitocrescimentoproducao': 'objective_conflict',
+        'naoestaacopladoaocrescimento': 'objective_conflict',
+        'naoacopladoaocrescimento': 'objective_conflict',
+        'producaonaoestaacopladaaocrescimento': 'objective_conflict',
+        'crescimentoeproducaonaoestaoacoplados': 'objective_conflict',
+        'coexistence': 'coexistence',
+        'compatible': 'coexistence',
+        'bothpositive': 'coexistence',
+        'asymmetrictradeoff': 'asymmetric_tradeoff',
+        'partialtradeoff': 'asymmetric_tradeoff',
+    }
+    exact = aliases.get(compact)
+    if exact:
+        return exact
+    if not phrase:
+        return None
+
+    # Explicit claims of compatibility or absence of conflict must not be
+    # misread as the supported Mission 15 conclusion.
+    coexistence_patterns = (
+        r'\b(?:growth|biomass)\b.*\b(?:succinate|product|production)\b.*\b(?:are|is|remain|can be)\s+compatible\b',
+        r'\b(?:succinate|product|production)\b.*\b(?:growth|biomass)\b.*\b(?:are|is|remain|can be)\s+compatible\b',
+        r'\b(?:no|without)\s+(?:objective\s+|growth production\s+)?conflict\b',
+        r'\b(?:do|does)\s+not\s+conflict\b',
+        r'\bcan\s+coexist\b',
+    )
+    if any(re.search(pattern, phrase) for pattern in coexistence_patterns):
+        return 'coexistence'
+
+    words = set(phrase.split())
+    has_growth = bool(words.intersection({'growth', 'biomass'}))
+    has_product = bool(words.intersection({'succinate', 'product', 'production'}))
+    has_both_subjects = has_growth and has_product
+
+    if has_both_subjects:
+        conflict_language = bool(words.intersection({
+            'conflict', 'conflicts', 'conflicting', 'incompatible',
+            'incompatibility', 'tradeoff', 'uncoupled',
+        })) or 'trade off' in phrase or 'mutually exclusive' in phrase
+        negative_coupling = bool(re.search(
+            r'\b(?:not|no|never)\b(?:\s+\w+){0,3}\s+\b(?:coupled|compatible)\b',
+            phrase,
+        ))
+        if conflict_language or negative_coupling:
+            return 'objective_conflict'
+
+    # Accept a complete evidence-based sentence even when the player does not
+    # use specialist terms such as "objective conflict" or "growth-coupled".
+    clauses = [part.strip() for part in re.split(r'\b(?:and|while|whereas|but)\b', phrase) if part.strip()]
+    product_priority_zero_growth = any(
+        _mission15_priority_clause_supports(
+            clause,
+            ('succinate', 'product', 'production'),
+            ('growth', 'biomass'),
+        )
+        for clause in clauses
+    )
+    growth_priority_zero_product = any(
+        _mission15_priority_clause_supports(
+            clause,
+            ('growth', 'biomass'),
+            ('succinate', 'product', 'production'),
+        )
+        for clause in clauses
+    )
+    if product_priority_zero_growth and growth_priority_zero_product:
+        return 'objective_conflict'
+
+    return None
+
+
+def mission15_answer_matches(answer, report_data=None):
+    if report_data is None:
+        report_data = load_mission15_diagnostic_report_check() or {}
+    report = _prepare_mission15_report(report_data)
+    return bool(
+        report.get('evidence_ready')
+        and report.get('relationship_classification')
+        and normalise_mission15_answer(answer) == report.get('relationship_classification')
+    )
+
+
+def _mission15_run_lines(title, run):
+    if not run:
+        return [f'{title}: not recorded.']
+    values = run.get('tracked_flux_values') or {}
+    lines = [
+        f'{title}:',
+        f"- Objective: {run.get('objective')}",
+        f"- Primary objective flux: {_clean_display_number(run.get('primary_objective_flux')):.3f}",
+        f"- Predicted biomass: {_clean_display_number(run.get('biomass_flux')):.3f}",
+    ]
+    for reaction_id in MISSION15_REQUIRED_TRACKED_FLUXES:
+        lines.append(
+            f"- {MISSION15_PRODUCT_NAMES.get(reaction_id, reaction_id)} ({reaction_id}): "
+            f"{_clean_display_number(values.get(reaction_id)):.3f}"
+        )
+    lines.extend([
+        f"- Glucose uptake: {_clean_display_number(run.get('glucose_uptake')):.3f}",
+        f"- Oxygen uptake: {_clean_display_number(run.get('oxygen_uptake')):.3f}",
+        f"- Total absolute flux: {_clean_display_number(run.get('total_absolute_flux')):.3f}",
+        f"- Active reactions: {int(run.get('active_reaction_count', 0))}",
+    ])
+    return lines
+
+
+def build_mission15_viability_report_text(report_data=None):
+    if report_data is None:
+        report_data = load_mission15_diagnostic_report_check() or {}
+    report = _prepare_mission15_report(report_data)
+    product_run = report.get('product_optimal_run')
+    growth_run = report.get('growth_optimal_run')
+    lines = ['Mission 15 Product–Growth Viability Audit', '']
+
+    if not report:
+        lines.append('Build two controlled visible pFBA optima under the same anaerobic medium and exchange panel.')
+        return '\n'.join(lines)
+
+    lines.extend([
+        'Controlled setup:',
+        f'- Method in both runs: {MISSION15_TARGET_METHOD}',
+        '- Genes: all active',
+        '- Medium: default glucose; oxygen uptake closed; all other bounds default',
+        '- Complete target/co-product panel: ' + ', '.join(MISSION15_REQUIRED_TRACKED_FLUXES),
+        '- Experimental variable: selected objective only',
+        '',
+    ])
+    lines.extend(_mission15_run_lines('Product-priority optimum', product_run))
+    lines.append('')
+    lines.extend(_mission15_run_lines('Growth-priority optimum', growth_run))
+
+    if product_run and growth_run:
+        product_biomass = _clean_display_number(product_run.get('biomass_flux'))
+        growth_succinate = _clean_display_number(
+            (growth_run.get('tracked_flux_values') or {}).get(MISSION15_PRODUCT_OBJECTIVE)
+        )
+        lines.extend([
+            '',
+            'Cross-objective evidence:',
+            f'- Biomass in the product-priority optimum: {product_biomass:.3f}',
+            f'- Succinate in the growth-priority optimum: {growth_succinate:.3f}',
+            '- Controlled setup preserved: ' + ('yes' if report.get('same_controlled_setup') else 'no'),
+        ])
+
+    if report.get('current_run_recorded'):
+        lines.extend(['', f"Latest valid visible run recorded: {report.get('current_run_type', '').replace('_', ' ')}."])
+    elif report.get('current_issues'):
+        lines.extend(['', 'Latest run was not recorded:'])
+        lines.extend(f'- {issue}' for issue in report.get('current_issues') or [])
+        if product_run or growth_run:
+            lines.append('Previously valid Mission 15 evidence remains available.')
+
+    lines.append('')
+    if report.get('evidence_ready'):
+        lines.extend([
+            'Evidence complete.',
+            'Compare what happens to biomass when product is prioritised with what happens to succinate when growth is prioritised.',
+            'Submit the relationship supported by both controlled optima to Dr. Almeida.',
+        ])
+    else:
+        missing = []
+        if not product_run:
+            missing.append('product-priority pFBA optimum')
+        if not growth_run:
+            missing.append('growth-priority pFBA optimum')
+        if missing:
+            lines.append('Evidence incomplete. Missing: ' + ', '.join(missing) + '.')
+            if report.get('mission14_product_run_available') and not report.get('mission14_product_run_imported') and not product_run:
+                lines.append('Mission 14 evidence exists but lacks a complete current-format product run; repeat that visible product-optimal run once.')
+        elif not report.get('same_controlled_setup'):
+            lines.append('Both runs exist, but the controlled setup is not identical apart from the objective.')
+
+    lines.extend([
+        '',
+        'Interpretation note: an optimum answers the selected objective under the imposed constraints; it does not automatically impose a positive lower bound on another reaction.',
+        'Zero flux describes these model solutions and conditions. It is not a universal experimental impossibility claim.',
+        'All objective, exchange, biomass, medium and pFBA diagnostic values come from the same visible solver results. No hidden simulation is used.',
+    ])
+    return '\n'.join(lines)
 
 
 def _mission16_environment_status(reactions):
@@ -9829,3 +10326,8 @@ def run_mission13_method_check_remote(backend_url, simulation_results=None):
 def run_mission14_reduction_check_remote(backend_url, simulation_results=None):
     """Reuse the visible browser result; Mission 14 launches no hidden requests."""
     return run_mission14_reduction_check(simulation_results)
+
+
+def run_mission15_diagnostic_report_check_remote(backend_url, simulation_results=None):
+    """Reuse the visible browser result; Mission 15 launches no hidden requests."""
+    return run_mission15_diagnostic_report_check(simulation_results)

@@ -128,14 +128,16 @@ class Mission11:
 
         self.m15_step1 = [
             "Mission 15 is active. This is my final diagnostic challenge.",
-            f"Build a complete report for {MISSION15_TARGET_PRODUCT} production using {MISSION15_TARGET_METHOD}.",
-            "Use method choice, one knockout and full Production Flux evidence."
+            f"Compare {MISSION15_TARGET_METHOD} optima for {MISSION15_TARGET_PRODUCT} and predicted growth under one controlled setup.",
+            "Use the cross-objective biomass and product fluxes to support your conclusion."
         ]
 
         self.m15_step2 = [
             f"Outstanding work, {self.player.player_name}.",
-            "You can now design, diagnose and justify metabolic engineering strategies.",
-            "This laboratory's flux-diagnostics training is complete."
+            "You showed why a product optimum must be audited against predicted viability",
+            "instead of being treated as a complete strain design.",
+            "This laboratory's flux-diagnostics training is complete.",
+            "Dr. Rio will continue with medium-dependent behaviour."
         ]
 
         self.input()

@@ -82,7 +82,7 @@ Resumo curto das missões implementadas até agora, organizado por laboratório.
 **Explica:** reduzir um único coproduto não prova que a intervenção melhorou. É necessário verificar retenção do alvo, redução de acetato e aparecimento de novos produtos. Um resultado negativo também é cientificamente válido.  
 **Como passar:** depois da Missão 13, usar `pFBA`, objetivo `EX_succ_e`, glicose default, apenas o lower bound de `EX_o2_e` fechado e o painel completo `EX_succ_e`, `EX_ac_e`, `EX_for_e`, `EX_etoh_e`, `EX_lac__D_e`. O run pFBA visível da Missão 13 pode ser reutilizado como referência. Testar individualmente `b1241 / adhE`, `b0115 / aceF`, `b0474 / adk` e `b4151 / frdD`. Uma melhoria limpa teria de reter pelo menos 90% do succinato, reduzir acetato em pelo menos 1.0 e não criar novo coproduto acima de 0.1. Nenhum candidato cumpre tudo; entregar `none`, `no candidate`, `nenhum` ou equivalente.
 
-### Mission 15 — Final Diagnostic Report
-**Tema:** relatório diagnóstico completo.  
-**Explica:** uma solução deve ser justificada por método, objective, ambiente, knockout e painel completo de fluxos.  
-**Como passar:** pFBA, objective `EX_succ_e`, fechar lower bound do O2, desligar `b1241` / `adhE`, acompanhar `EX_succ_e`, `EX_etoh_e`, `EX_ac_e`, `EX_for_e`, `EX_lac__D_e`.
+### Mission 15 — Product–Growth Viability Audit
+**Tema:** comparação controlada entre um ótimo de produto e um ótimo de crescimento.  
+**Explica:** um máximo teórico de produto não demonstra automaticamente uma solução compatível com crescimento. A função objetivo muda a solução selecionada, pelo que biomassa e produto devem ser inspecionados cruzadamente sob a mesma estirpe e meio.  
+**Como passar:** depois da Missão 14, usar `pFBA`, todos os genes ativos, glicose default, apenas o lower bound de `EX_o2_e` fechado e o painel completo `EX_succ_e`, `EX_ac_e`, `EX_for_e`, `EX_etoh_e`, `EX_lac__D_e`. Registar um run com objetivo `EX_succ_e` e outro com `BIOMASS_Ecoli_core_w_GAM`, mantendo tudo o resto idêntico. O primeiro deve mostrar succinato aproximadamente `13.906` e biomassa `0`; o segundo, biomassa aproximadamente `0.212` e succinato `0`. Entregar uma conclusão escrita coerente com os dois valores cruzados.
