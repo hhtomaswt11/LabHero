@@ -141,6 +141,15 @@ class Mission08_info:
             self.failed.play()
             animation_text_save('Complete Mission 07 first!', time=2500)
             return
+        if '08' in self.missions_completed:
+            self.mission08 = True
+            animation_text_save('Mission 08 is already completed.', time=2500)
+            return
+        if '08' in self.missions_activated:
+            self.mission08 = True
+            animation_text_save('Mission 08 is already active.', time=2500)
+            return
+
         clear_mission08_constraint_check()
         self.mission08 = True
         if '08' not in self.missions_activated:
@@ -152,6 +161,10 @@ class Mission08_info:
         if not is_mission08_unlocked(self.missions_completed):
             self.failed.play()
             animation_text_save('Complete Mission 07 first!', time=2500)
+            return
+        if '08' not in self.missions_activated:
+            self.failed.play()
+            animation_text_save('Activate Mission 08 before delivering results.', time=3000)
             return
 
         report = load_mission08_constraint_check()

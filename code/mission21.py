@@ -110,7 +110,7 @@ class Mission21:
 
         active25_dialogue = [
             "Mission 25 is active. Build a final controlled report.",
-            "Compare aerobic baseline vs oxygen-limited growth again, but now track the full product panel.",
+            "Compare aerobic and oxygen-limited growth while tracking the full product panel.",
             "Use Compare Runs to show both growth and production-profile changes."
         ]
 
@@ -164,6 +164,7 @@ class Mission21:
         self.screen.blit(nome, (52, 677))
 
         for line, msg in enumerate(message):
+            msg = prepare_dialogue_text(msg, self.player.player_name)
             surf = self.font.render(msg, True, 'black')
             self.screen.blit(surf, (200, 525 + (line * 20) + (15 * line)))
 

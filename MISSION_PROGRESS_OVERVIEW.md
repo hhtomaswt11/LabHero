@@ -86,3 +86,10 @@ Resumo curto das missões implementadas até agora, organizado por laboratório.
 **Tema:** comparação controlada entre um ótimo de produto e um ótimo de crescimento.  
 **Explica:** um máximo teórico de produto não demonstra automaticamente uma solução compatível com crescimento. A função objetivo muda a solução selecionada, pelo que biomassa e produto devem ser inspecionados cruzadamente sob a mesma estirpe e meio.  
 **Como passar:** depois da Missão 14, usar `pFBA`, todos os genes ativos, glicose default, apenas o lower bound de `EX_o2_e` fechado e o painel completo `EX_succ_e`, `EX_ac_e`, `EX_for_e`, `EX_etoh_e`, `EX_lac__D_e`. Registar um run com objetivo `EX_succ_e` e outro com `BIOMASS_Ecoli_core_w_GAM`, mantendo tudo o resto idêntico. O primeiro deve mostrar succinato aproximadamente `13.906` e biomassa `0`; o segundo, biomassa aproximadamente `0.212` e succinato `0`. Entregar uma conclusão escrita coerente com os dois valores cruzados.
+
+## Lab 6 — Dr. Rio
+
+### Mission 16 — Context-Dependent Carbon Rescue
+**Tema:** screening controlado de fontes de carbono e robustez perante uma segunda alteração ambiental.  
+**Explica:** uma fonte que apresenta o maior crescimento sob um protocolo molar comum pode depender de outro componente do meio. A classificação é específica do modelo e dos bounds usados; um resultado `INFEASIBLE` após retirar oxigénio não constitui uma impossibilidade experimental universal.  
+**Como passar:** depois da Missão 15, usar FBA com objetivo de biomassa, todos os genes ativos, fechar a captação de glicose e testar individualmente `EX_ac_e`, `EX_pyr_e`, `EX_mal__L_e`, `EX_fum_e` e `EX_akg_e`, mantendo oxigénio e todos os restantes bounds no default. O Exchange Flux Report deve confirmar glucose `0`, fonte alternativa aproximadamente `10` e oxigénio positivo em cada run. Depois dos cinco ensaios, repetir a fonte com maior crescimento (`EX_akg_e`) fechando apenas a captação de oxigénio. O resultado visível deve ser `INFEASIBLE`. Entregar `oxygen`, `O2`, `EX_o2_e` ou equivalente curto.

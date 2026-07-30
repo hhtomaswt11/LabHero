@@ -73,8 +73,8 @@ class Mission11:
             'Return after finishing the controlled two-gene comparison.',
         ]
         self.m11_step1 = [
-            f"Hello {self.player.player_name}. I'm Dr. Almeida, and I study flux diagnostics.",
-            "Dr. Nova taught you how to design strains; now you must diagnose their predicted phenotypes.",
+            f"Hello {self.player.player_name}. I'm Dr. Almeida.",
+            "Dr. Nova taught strain design; now you must diagnose predicted phenotypes.",
             "Start by building and interpreting a complete anaerobic secretion fingerprint.",
         ]
 
@@ -86,19 +86,19 @@ class Mission11:
 
         self.m11_step3 = [
             "Excellent diagnostic work.",
-            "You distinguished predicted growth from the secretion fingerprint and interpreted the dominant product.",
-            "Now use the same evidence discipline to compare a target product with competing byproducts.",
+            "You separated growth from the fingerprint and found its dominant product.",
+            "Now compare a target product with the full competing-byproduct evidence.",
         ]
 
         self.m12_step1 = [
             "Mission 12 is active. Compare two complete succinate-optimal fingerprints.",
             f"Keep {MISSION12_TARGET_PRODUCT} as the objective and change only oxygen availability.",
-            "Use the visible evidence to identify the new co-product introduced by the binding constraint."
+            "Use visible evidence to identify the co-product introduced by the binding constraint."
         ]
 
         self.m12_step2 = [
             f"Excellent work, {self.player.player_name}.",
-            "You showed that a binding environmental constraint can alter both a target maximum and its co-product fingerprint.",
+            "You showed that a binding constraint can change the target and co-products.",
             "Now we can test whether the simulation method changes the diagnosis."
         ]
 
@@ -110,25 +110,25 @@ class Mission11:
 
         self.m13_step2 = [
             f"Excellent method comparison, {self.player.player_name}.",
-            "You distinguished the primary product objective from pFBA's secondary parsimony criterion.",
-            "Next, screen genetic interventions without mistaking one lower byproduct for a complete improvement."
+            "You separated the primary objective from pFBA's parsimony criterion.",
+            "Next, screen genes without treating one lower byproduct as a full improvement."
         ]
 
         self.m14_step1 = [
             "Mission 14 is active. Screen every highlighted single-gene intervention.",
-            f"Keep {MISSION14_TARGET_PRODUCT} as the primary target and inspect the complete co-product fingerprint.",
+            f"Keep {MISSION14_TARGET_PRODUCT} as the target and inspect the complete co-product fingerprint.",
             "A negative result is valid when every candidate introduces a trade-off."
         ]
 
         self.m14_step2 = [
             f"Excellent screening work, {self.player.player_name}.",
-            "You showed that reducing acetate alone can create other co-products or sacrifice the target.",
+            "You showed that lowering acetate can create co-products or sacrifice the target.",
             "One final Dr. Almeida diagnostic challenge will come next."
         ]
 
         self.m15_step1 = [
             "Mission 15 is active. This is my final diagnostic challenge.",
-            f"Compare {MISSION15_TARGET_METHOD} optima for {MISSION15_TARGET_PRODUCT} and predicted growth under one controlled setup.",
+            f"Compare {MISSION15_TARGET_METHOD} optima for {MISSION15_TARGET_PRODUCT} and growth under the same setup.",
             "Use the cross-objective biomass and product fluxes to support your conclusion."
         ]
 
@@ -186,6 +186,7 @@ class Mission11:
         self.screen.blit(nome, (42, 677))
 
         for line, msg in enumerate(message):
+            msg = prepare_dialogue_text(msg, self.player.player_name)
             surf = self.font.render(msg, True, 'black')
             self.screen.blit(surf, (200, 525 + (line * 20) + (15 * line)))
 
@@ -329,6 +330,15 @@ class Mission11_info:
             self.failed.play()
             animation_text_save('Complete Mission 10 before starting Mission 11.', time=3000)
             return
+        if '11' in self.missions_completed:
+            self.mission11 = True
+            animation_text_save('Mission 11 is already completed.', time=2500)
+            return
+        if '11' in self.missions_activated:
+            self.mission11 = True
+            animation_text_save('Mission 11 is already active.', time=2500)
+            return
+
         clear_mission11_flux_fingerprint_check()
         self.mission11 = True
         if '11' not in self.missions_activated:
@@ -340,6 +350,10 @@ class Mission11_info:
         if not is_mission11_unlocked(self.missions_completed):
             self.failed.play()
             animation_text_save('Complete Mission 10 first!', time=2500)
+            return
+        if '11' not in self.missions_activated:
+            self.failed.play()
+            animation_text_save('Activate Mission 11 before delivering results.', time=3000)
             return
 
         report = load_mission11_flux_fingerprint_check()

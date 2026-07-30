@@ -51,12 +51,12 @@ class Mission07:
     async def update(self):
         locked = [
             "Complete Dr. Carter's controlled multi-knockout challenge first.",
-            'Mission 07 builds directly on the difference between observing ethanol in a growth-optimal solution and maximising ethanol itself.',
+            'Mission 07 builds on the difference between measuring ethanol and maximising it.',
         ]
         self.m07_step1 = [
-            f"Hello {self.player.player_name}! Welcome to the Advanced Strain Design Lab.",
-            'In the previous challenge, ethanol was measured while biomass remained the objective.',
-            'Now compare that question with a simulation that directly prioritises ethanol.',
+            f"Hello {self.player.player_name}! Welcome to Dr. Nova's lab.",
+            'Previously, ethanol was measured while biomass remained the objective.',
+            'Now compare that with a simulation that directly prioritises ethanol.',
         ]
         self.m07_step2 = [
             'Mission 07 is active. Keep the strain, medium and method unchanged.',
@@ -64,40 +64,40 @@ class Mission07:
             'Use the visible biomass, ethanol and oxygen evidence to interpret both solutions.',
         ]
         self.m07_step3 = [
-            'Excellent. You showed that a goal changes the mathematical question, not the strain itself.',
-            'Direct product maximisation can find a theoretical optimum with no predicted growth.',
-            'Test whether adding an environmental restriction necessarily changes such an optimum.',
+            'Excellent. You showed that the objective changes the question, not the strain.',
+            'Direct product maximisation can yield an optimum with no predicted growth.',
+            'Now test whether an environmental restriction must change that optimum.',
         ]
 
         self.m08_step1 = [
-            'Mission 08 is active. Compare the same direct D-lactate objective before and after one oxygen constraint.',
+            'Mission 08 is active. Compare D-lactate before and after oxygen is closed.',
             'Do not assume that adding a restriction must change the optimum.',
-            'Use the visible production, growth and oxygen fluxes to decide whether the restriction changes the optimum.',
+            'Use product, growth and oxygen fluxes to decide whether the optimum changes.',
         ]
         self.m08_step2 = [
             f'Excellent work, {self.player.player_name}.',
-            'You showed that closing oxygen did not change the optimum because the previous optimum already used no oxygen.',
+            'Closing oxygen changed nothing because the earlier optimum used no oxygen.',
             'Now integrate a controlled carbon-source change with one genetic perturbation.',
         ]
         self.m09_step1 = [
-            'Mission 09 is active. Build an L-malate reference and compare the highlighted single knockouts.',
+            'Mission 09 is active. Build an L-malate reference and test each highlighted knockout.',
             f'Track {MISSION09_TARGET_PRODUCT} in the same biomass-optimal solutions used to assess growth.',
             'Use New Results to identify the best balanced integrated design.',
         ]
         self.m09_step2 = [
             f'Great job, {self.player.player_name}.',
-            'You combined environmental context, biomass-optimal evidence, and a helpful knockout.',
+            'You combined environmental context, biomass evidence and a helpful knockout.',
             'One final Nova challenge remains: two-gene redundancy and flux redirection.',
         ]
         self.m10_step1 = [
             'Mission 10 is active. This is my hardest challenge yet.',
             f'Use two-gene redundancy to redirect anaerobic flux toward {MISSION10_TARGET_PRODUCT}.',
-            'Record the reference and every controlled pair, then justify the winner using growth, ethanol and acetate evidence.',
+            'Record every pair, then justify the winner with growth, ethanol and acetate.',
         ]
         self.m10_step2 = [
             f'Excellent work, {self.player.player_name}.',
-            'You completed objective choice, constraints, single knockout and double knockout design.',
-            "The Advanced Strain Design Lab is complete. Proceed to Dr. Almeida's Flux Diagnostics Lab.",
+            'You completed objective choice, constraints, and single- and double-knockout design.',
+            "The lab is complete. Proceed to Dr. Almeida's Flux Diagnostics Lab.",
         ]
 
         self.input()
@@ -142,6 +142,7 @@ class Mission07:
         self.screen.blit(name, (55, 677))
 
         for line, msg in enumerate(message):
+            msg = prepare_dialogue_text(msg, self.player.player_name)
             surf = self.font.render(msg, True, 'black')
             self.screen.blit(surf, (200, 525 + (line * 20) + (15 * line)))
 
@@ -307,6 +308,15 @@ class Mission07_info:
             self.failed.play()
             animation_text_save('Complete Mission 06 first!', time=2500)
             return
+        if '07' in self.missions_completed:
+            self.mission07 = True
+            animation_text_save('Mission 07 is already completed.', time=2500)
+            return
+        if '07' in self.missions_activated:
+            self.mission07 = True
+            animation_text_save('Mission 07 is already active.', time=2500)
+            return
+
         clear_mission07_objective_check()
         self.mission07 = True
         if '07' not in self.missions_activated:
@@ -318,6 +328,10 @@ class Mission07_info:
         if not is_mission07_unlocked(self.missions_completed):
             self.failed.play()
             animation_text_save('Complete Mission 06 first!', time=2500)
+            return
+        if '07' not in self.missions_activated:
+            self.failed.play()
+            animation_text_save('Activate Mission 07 before delivering results.', time=3000)
             return
 
         objective_data = load_mission07_objective_check()

@@ -39,9 +39,9 @@ class Mission01:
 
     async def update(self):
         self.m01_step1 = [
-            f"Hello {self.player.player_name}! I'm Dr. Martinez, and I'm working on groundbreaking research",
-            "involving E. coli. We're trying to understand how this remarkable microbe adapts",
-            "when its environment changes. Can you help me test one condition?"
+            f"Hello {self.player.player_name}! I'm Dr. Martinez.",
+            "I study how E. coli adapts when its environment changes.",
+            "Can you help me test one controlled condition?"
         ]
         
         self.m01_step2 = [
@@ -125,6 +125,7 @@ class Mission01:
         self.screen.blit(nome,(40,677))
 
         for line, msg in enumerate(message):
+            msg = prepare_dialogue_text(msg, self.player.player_name)
             surf = self.font.render(msg, True, 'black')
             self.screen.blit(surf,(200,525+(line*20)+(15*line)))
 

@@ -18,7 +18,7 @@ from simulation import (
     normalise_mission02_answer,
 )
 from timers import Timer
-from utils import get_resource_path
+from utils import get_resource_path, prepare_dialogue_text
 
 
 class Mission02:
@@ -56,7 +56,7 @@ class Mission02:
         ]
         step_intro = [
             "I'm Dr. Martinez. Our E. coli culture has lost access to glucose.",
-            "Several alternative carbon sources are available, but they do not all support growth equally.",
+            "Several alternatives are available, but they do not support growth equally.",
             "Can you design a fair comparison and identify the strongest substitute?",
         ]
         step_active = [
@@ -97,6 +97,7 @@ class Mission02:
         self.screen.blit(name, (40, 677))
 
         for line, msg in enumerate(message):
+            msg = prepare_dialogue_text(msg, self.player.player_name)
             surf = self.font.render(msg, True, 'black')
             self.screen.blit(surf, (200, 525 + (line * 20) + (15 * line)))
 

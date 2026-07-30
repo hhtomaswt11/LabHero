@@ -428,24 +428,32 @@ MISSION15_FLUX_TOLERANCE = 0.01
 MISSION15_PRIMARY_TOLERANCE = 0.01
 MISSION15_EXPECTED_RELATIONSHIP = 'objective_conflict'
 
+MISSION16_CHECK_VERSION = 2
 MISSION16_METHOD = 'FBA'
 MISSION16_GROWTH_OBJECTIVE = 'BIOMASS_Ecoli_core_w_GAM'
 MISSION16_BLOCKED_CARBON_SOURCE = 'EX_glc__D_e'
-MISSION16_TARGET_CONTEXT = 'alternative carbon rescue'
+MISSION16_OXYGEN_REACTION = 'EX_o2_e'
+MISSION16_TARGET_CONTEXT = 'context-dependent carbon rescue'
 MISSION16_CANDIDATE_CARBON_SOURCES = ['EX_ac_e', 'EX_pyr_e', 'EX_mal__L_e', 'EX_fum_e', 'EX_akg_e']
+MISSION16_SOURCE_NAMES = {
+    'EX_ac_e': 'Acetate',
+    'EX_pyr_e': 'Pyruvate',
+    'EX_mal__L_e': 'L-Malate',
+    'EX_fum_e': 'Fumarate',
+    'EX_akg_e': '2-Oxoglutarate',
+}
 MISSION16_REQUIRED_MEDIUM_FLUXES = [
     MISSION16_BLOCKED_CARBON_SOURCE,
-    'EX_ac_e',
-    'EX_pyr_e',
-    'EX_mal__L_e',
-    'EX_fum_e',
-    'EX_akg_e',
-    'EX_nh4_e',
-    'EX_pi_e',
-    'EX_o2_e',
+    *MISSION16_CANDIDATE_CARBON_SOURCES,
+    MISSION16_OXYGEN_REACTION,
 ]
-MISSION16_MIN_GROWTH = 5.0
-MISSION16_MIN_SOURCE_UPTAKE = 0.001
+MISSION16_EXPECTED_SOURCE_UPTAKE = 10.0
+MISSION16_SOURCE_UPTAKE_TOLERANCE = 0.05
+MISSION16_FLUX_TOLERANCE = 0.001
+MISSION16_MIN_POSITIVE_GROWTH = 0.01
+MISSION16_RANK_TOLERANCE = 0.000001
+MISSION16_EXPECTED_STRONGEST_SOURCE = 'EX_akg_e'
+MISSION16_EXPECTED_FACTOR = 'oxygen'
 
 MISSION17_METHOD = 'FBA'
 MISSION17_GROWTH_OBJECTIVE = 'BIOMASS_Ecoli_core_w_GAM'
@@ -708,6 +716,17 @@ def _reaction_bound_open_states(reactions, reaction_index):
     if lb_key in reactions and ub_key in reactions:
         return bool(reactions[lb_key]), bool(reactions[ub_key])
 
+    # If this is an explicit-key payload, missing one member of the requested
+    # pair means the data is incomplete.  Do not reinterpret the remaining
+    # values positionally, because JSON/dictionary order is not scientific
+    # information and could silently map a different reaction to this index.
+    if any(
+        str(key).startswith('reaction_')
+        and (str(key).endswith('_lb') or str(key).endswith('_ub'))
+        for key in reactions
+    ):
+        return None, None
+
     reaction_values = list(reactions.values())
     lb_index = reaction_index * 2
     ub_index = lb_index + 1
@@ -759,22 +778,17 @@ def _oxygen_lower_bound_closed(reactions):
     except ValueError:
         return False
 
-    reaction_values = list(reactions.values())
-    lb_index = oxygen_index * 2
-    if lb_index >= len(reaction_values):
-        return False
-
-    return not bool(reaction_values[lb_index])
+    lower_open, _upper_open = _reaction_bound_open_states(reactions, oxygen_index)
+    return lower_open is not None and not lower_open
 
 
 def _mission08_environment_status(reactions):
     """Classify the medium as default or oxygen-constrained.
 
-    Mission 08 accepts exactly two environmental states: the unchanged model
-    medium, or that same medium with only the oxygen-exchange lower bound
-    closed.  Any other changed bound is returned as an unexpected change.
+    Explicit reaction-bound identifiers are read independently of dictionary
+    order.  The positional fallback remains available only for legacy
+    pygame-menu saves created before explicit identifiers were introduced.
     """
-    reaction_values = list(reactions.values())
     oxygen_lower_bound_closed = False
     unexpected_changes = []
 
@@ -784,21 +798,17 @@ def _mission08_environment_status(reactions):
         oxygen_index = None
 
     for i in range(len(REACTIONS.index)):
-        lb_index = i * 2
-        ub_index = lb_index + 1
-        if ub_index >= len(reaction_values):
-            break
+        lower_bound_open, upper_bound_open = _reaction_bound_open_states(reactions, i)
+        reaction_id = REACTIONS.index[i]
+        if lower_bound_open is None or upper_bound_open is None:
+            unexpected_changes.append(f'{reaction_id} bounds unavailable')
+            continue
 
-        lower_bound_open = bool(reaction_values[lb_index])
-        upper_bound_open = bool(reaction_values[ub_index])
         default_lower_bound_open = REACTIONS.lb.iloc[i] != 0
         default_upper_bound_open = REACTIONS.ub.iloc[i] != 0
-        reaction_id = REACTIONS.index[i]
 
         if i == oxygen_index:
             oxygen_lower_bound_closed = not lower_bound_open
-            # The lower bound may either remain at its default state or be
-            # closed.  The upper bound must remain unchanged.
             if upper_bound_open != default_upper_bound_open:
                 unexpected_changes.append(f'{reaction_id} upper bound')
         else:
@@ -1005,20 +1015,19 @@ def _mission15_environment_status(reactions):
 
 
 def _environment_has_changes(reactions):
-    reaction_values = list(reactions.values())
+    """Return whether any exchange-bound toggle differs from the model.
+
+    Explicit keys make the result independent of JSON/dictionary ordering.
+    Incomplete bound data is treated conservatively as a changed environment
+    rather than silently accepting an uncontrolled run.
+    """
     for i in range(len(REACTIONS.index)):
-        lb_index = i * 2
-        ub_index = lb_index + 1
-
-        if ub_index >= len(reaction_values):
-            break
-
-        lower_bound_open = reaction_values[lb_index]
-        upper_bound_open = reaction_values[ub_index]
+        lower_bound_open, upper_bound_open = _reaction_bound_open_states(reactions, i)
+        if lower_bound_open is None or upper_bound_open is None:
+            return True
 
         default_lower_bound_open = REACTIONS.lb.iloc[i] != 0
         default_upper_bound_open = REACTIONS.ub.iloc[i] != 0
-
         if (
             lower_bound_open != default_lower_bound_open
             or upper_bound_open != default_upper_bound_open
@@ -6223,57 +6232,6 @@ def build_mission15_viability_report_text(report_data=None):
     return '\n'.join(lines)
 
 
-def _mission16_environment_status(reactions):
-    """Evaluate the medium changes required for Mission 16.
-
-    The player must close glucose uptake and open exactly one candidate
-    alternative carbon source, without adding unrelated medium changes.
-    """
-    reaction_values = list(reactions.values())
-    glucose_lower_bound_closed = False
-    selected_sources = []
-    unexpected_changes = []
-
-    for i in range(len(REACTIONS.index)):
-        lb_index = i * 2
-        ub_index = lb_index + 1
-
-        if ub_index >= len(reaction_values):
-            break
-
-        reaction_id = REACTIONS.index[i]
-        lower_bound_open = bool(reaction_values[lb_index])
-        upper_bound_open = bool(reaction_values[ub_index])
-
-        default_lower_bound_open = REACTIONS.lb.iloc[i] != 0
-        default_upper_bound_open = REACTIONS.ub.iloc[i] != 0
-
-        lower_changed = lower_bound_open != default_lower_bound_open
-        upper_changed = upper_bound_open != default_upper_bound_open
-
-        if reaction_id == MISSION16_BLOCKED_CARBON_SOURCE:
-            glucose_lower_bound_closed = not lower_bound_open
-            if upper_changed:
-                unexpected_changes.append(f'{reaction_id} upper bound')
-            continue
-
-        if reaction_id in MISSION16_CANDIDATE_CARBON_SOURCES:
-            if lower_changed and lower_bound_open:
-                selected_sources.append(reaction_id)
-            elif lower_changed:
-                unexpected_changes.append(f'{reaction_id} lower bound')
-            if upper_changed:
-                unexpected_changes.append(f'{reaction_id} upper bound')
-            continue
-
-        if lower_changed:
-            unexpected_changes.append(f'{reaction_id} lower bound')
-        if upper_changed:
-            unexpected_changes.append(f'{reaction_id} upper bound')
-
-    return glucose_lower_bound_closed, selected_sources, unexpected_changes
-
-
 def _medium_flux_maps(medium_fluxes):
     raw_fluxes = {}
     uptake_fluxes = {}
@@ -6293,92 +6251,428 @@ def _medium_flux_maps(medium_fluxes):
     return raw_fluxes, uptake_fluxes, secretion_fluxes
 
 
-def _build_mission16_data(method_name, selected_objective, objective_result, genes, reactions, medium_fluxes=None, objective_error=None):
-    knocked_out_genes = _knocked_out_genes(genes)
+def is_mission16_unlocked(missions_completed):
+    """Mission 16 starts only after the complete Dr. Almeida path."""
+    return '15' in (missions_completed or [])
+
+
+def _mission16_environment_status(reactions):
+    """Return an order-independent description of the Mission 16 medium.
+
+    The valid protocol closes glucose uptake, opens exactly one candidate
+    carbon source and either keeps oxygen at its model default (screening) or
+    closes only its lower bound (the final robustness challenge).
+    """
+    bounds_complete = True
+    glucose_lower_bound_closed = False
+    oxygen_lower_bound_closed = False
+    selected_sources = []
+    unexpected_changes = []
+
+    for i in range(len(REACTIONS.index)):
+        reaction_id = REACTIONS.index[i]
+        lower_open, upper_open = _reaction_bound_open_states(reactions, i)
+        if lower_open is None or upper_open is None:
+            bounds_complete = False
+            continue
+
+        default_lower_open = REACTIONS.lb.iloc[i] != 0
+        default_upper_open = REACTIONS.ub.iloc[i] != 0
+        lower_changed = lower_open != default_lower_open
+        upper_changed = upper_open != default_upper_open
+
+        if reaction_id == MISSION16_BLOCKED_CARBON_SOURCE:
+            glucose_lower_bound_closed = not lower_open
+            if upper_changed:
+                unexpected_changes.append(f'{reaction_id} upper bound')
+            continue
+
+        if reaction_id == MISSION16_OXYGEN_REACTION:
+            oxygen_lower_bound_closed = not lower_open
+            if lower_changed and lower_open:
+                unexpected_changes.append(f'{reaction_id} lower bound')
+            if upper_changed:
+                unexpected_changes.append(f'{reaction_id} upper bound')
+            continue
+
+        if reaction_id in MISSION16_CANDIDATE_CARBON_SOURCES:
+            if lower_changed and lower_open:
+                selected_sources.append(reaction_id)
+            elif lower_changed:
+                unexpected_changes.append(f'{reaction_id} lower bound')
+            if upper_changed:
+                unexpected_changes.append(f'{reaction_id} upper bound')
+            continue
+
+        if lower_changed:
+            unexpected_changes.append(f'{reaction_id} lower bound')
+        if upper_changed:
+            unexpected_changes.append(f'{reaction_id} upper bound')
+
+    return {
+        'bounds_complete': bounds_complete,
+        'glucose_lower_bound_closed': glucose_lower_bound_closed,
+        'oxygen_lower_bound_closed': oxygen_lower_bound_closed,
+        'selected_sources': selected_sources,
+        'unexpected_environment_changes': unexpected_changes,
+    }
+
+
+def _mission16_rank_trials(trials):
+    ranked = sorted(
+        (
+            {
+                'source_id': source_id,
+                'source_name': MISSION16_SOURCE_NAMES.get(source_id, source_id),
+                'growth': float(trial.get('growth')),
+            }
+            for source_id, trial in (trials or {}).items()
+            if source_id in MISSION16_CANDIDATE_CARBON_SOURCES
+            and _as_float_or_none(trial.get('growth')) is not None
+        ),
+        key=lambda row: (-row['growth'], MISSION16_CANDIDATE_CARBON_SOURCES.index(row['source_id'])),
+    )
+    if not ranked:
+        return ranked, [], None
+
+    best_growth = ranked[0]['growth']
+    strongest = [
+        row['source_id'] for row in ranked
+        if abs(row['growth'] - best_growth) <= MISSION16_RANK_TOLERANCE
+    ]
+    unique = strongest[0] if len(strongest) == 1 else None
+    return ranked, strongest, unique
+
+
+def _normalise_mission16_text(value):
+    text = unicodedata.normalize('NFKD', str(value or ''))
+    text = ''.join(char for char in text if not unicodedata.combining(char))
+    return ''.join(char.lower() for char in text if char.isalnum())
+
+
+def normalise_mission16_answer(answer):
+    """Map concise, unambiguous factor names to the expected answer."""
+    key = _normalise_mission16_text(answer)
+    aliases = {
+        'oxygen',
+        'o2',
+        'molecularoxygen',
+        'oxygenavailability',
+        'oxygensupply',
+        'oxygengas',
+        'oxygenuptake',
+        'oxygenexchange',
+        'oxygeno2',
+        'o2availability',
+        'o2uptake',
+        'exo2e',
+        'oxigenio',
+        'disponibilidadedeoxigenio',
+    }
+    return MISSION16_EXPECTED_FACTOR if key in aliases else None
+
+
+def mission16_answer_matches(answer, report_data=None):
+    if report_data is None:
+        report_data = load_mission16_medium_report_check() or {}
+    return bool(
+        report_data.get('evidence_ready')
+        and report_data.get('relationship_supported')
+        and normalise_mission16_answer(answer) == report_data.get('expected_factor')
+    )
+
+
+def initialise_mission16_context_rescue():
+    data = {
+        'mission_id': '16',
+        'check_version': MISSION16_CHECK_VERSION,
+        'mission_title': 'Context-Dependent Carbon Rescue',
+        'target_context': MISSION16_TARGET_CONTEXT,
+        'target_method': MISSION16_METHOD,
+        'growth_objective': MISSION16_GROWTH_OBJECTIVE,
+        'blocked_carbon_source': MISSION16_BLOCKED_CARBON_SOURCE,
+        'oxygen_reaction': MISSION16_OXYGEN_REACTION,
+        'candidate_carbon_sources': list(MISSION16_CANDIDATE_CARBON_SOURCES),
+        'source_names': dict(MISSION16_SOURCE_NAMES),
+        'required_medium_fluxes': list(MISSION16_REQUIRED_MEDIUM_FLUXES),
+        'candidate_trials': {},
+        'valid_trial_count': 0,
+        'required_trial_count': len(MISSION16_CANDIDATE_CARBON_SOURCES),
+        'missing_candidates': list(MISSION16_CANDIDATE_CARBON_SOURCES),
+        'aerobic_screen_complete': False,
+        'ranked_candidates': [],
+        'strongest_candidates': [],
+        'strongest_candidate': None,
+        'strongest_growth': None,
+        'expected_strongest_candidate': MISSION16_EXPECTED_STRONGEST_SOURCE,
+        'expected_strongest_confirmed': False,
+        'oxygen_challenge_run': None,
+        'oxygen_challenge_recorded': False,
+        'oxygen_challenge_infeasible': False,
+        'relationship_supported': False,
+        'expected_factor': MISSION16_EXPECTED_FACTOR,
+        'evidence_ready': False,
+        'answer_ready': False,
+        'ready_to_deliver': False,
+        'current_run_valid': False,
+        'current_run_recorded': False,
+        'current_run_type': None,
+        'current_issues': [],
+        'latest_attempt': None,
+    }
+    save_mission16_medium_report_check(data)
+    return data
+
+
+def _build_mission16_data(
+    method_name,
+    selected_objective,
+    objective_result,
+    genes,
+    reactions,
+    medium_fluxes=None,
+    existing_report=None,
+    objective_error=None,
+):
+    """Validate and accumulate one visible Mission 16 run."""
+    existing_report = existing_report or {}
+    if (
+        existing_report.get('mission_id') != '16'
+        or existing_report.get('check_version') != MISSION16_CHECK_VERSION
+    ):
+        existing_report = {}
+
+    trials = copy.deepcopy(existing_report.get('candidate_trials') or {})
+    oxygen_challenge_run = copy.deepcopy(existing_report.get('oxygen_challenge_run'))
+
     method_correct = method_name == MISSION16_METHOD
     objective_correct = selected_objective == MISSION16_GROWTH_OBJECTIVE
-    objective_value = _as_float_or_none(objective_result)
-    growth_value = _numeric_result(objective_value)
-    growth_ok = growth_value >= MISSION16_MIN_GROWTH
+    knocked_out_genes = _knocked_out_genes(genes)
+    environment = _mission16_environment_status(reactions)
+    selected_sources = list(environment.get('selected_sources') or [])
+    exactly_one_source = len(selected_sources) == 1
+    selected_source = selected_sources[0] if exactly_one_source else None
+    oxygen_closed = bool(environment.get('oxygen_lower_bound_closed'))
+    run_type = 'oxygen_challenge' if oxygen_closed else 'aerobic_screen'
 
-    glucose_lower_bound_closed, selected_sources, unexpected_environment_changes = _mission16_environment_status(reactions)
-    exactly_one_alternative_source = len(selected_sources) == 1
-    selected_source = selected_sources[0] if exactly_one_alternative_source else None
+    objective_numeric = _as_float_or_none(objective_result)
+    result_infeasible = 'INFEASIBLE' in str(objective_result or '').upper()
+    result_available = objective_numeric is not None or result_infeasible
 
     raw_fluxes, uptake_fluxes, secretion_fluxes = _medium_flux_maps(medium_fluxes)
-    selected_source_uptake = uptake_fluxes.get(selected_source, 0.0) if selected_source else 0.0
-    glucose_uptake = uptake_fluxes.get(MISSION16_BLOCKED_CARBON_SOURCE, 0.0)
-    source_uptake_detected = selected_source_uptake >= MISSION16_MIN_SOURCE_UPTAKE
-    glucose_uptake_blocked = glucose_uptake <= MISSION16_MIN_SOURCE_UPTAKE
+    missing_medium_fluxes = [
+        reaction_id for reaction_id in MISSION16_REQUIRED_MEDIUM_FLUXES
+        if reaction_id not in raw_fluxes
+    ]
+    selected_source_uptake = (
+        _as_float_or_none(uptake_fluxes.get(selected_source)) if selected_source else None
+    )
+    glucose_uptake = _as_float_or_none(uptake_fluxes.get(MISSION16_BLOCKED_CARBON_SOURCE))
+    oxygen_uptake = _as_float_or_none(uptake_fluxes.get(MISSION16_OXYGEN_REACTION))
 
-    result_valid = objective_value is not None and objective_value > 0
+    ranked_before, strongest_before, strongest_source_before = _mission16_rank_trials(trials)
+    screen_complete_before = all(
+        source_id in trials for source_id in MISSION16_CANDIDATE_CARBON_SOURCES
+    )
 
-    mission16_data = {
-        'mission_id': '16',
-        'check_version': 1,
-        'mission_title': 'Alternative Carbon Rescue',
-        'target_context': MISSION16_TARGET_CONTEXT,
-        'method': method_name,
-        'target_method': MISSION16_METHOD,
-        'method_correct': method_correct,
-        'selected_objective': selected_objective,
-        'growth_objective': MISSION16_GROWTH_OBJECTIVE,
-        'objective_correct': objective_correct,
-        'objective_result': round(growth_value, 3) if objective_value is not None else str(objective_result),
-        'blocked_carbon_source': MISSION16_BLOCKED_CARBON_SOURCE,
-        'candidate_carbon_sources': MISSION16_CANDIDATE_CARBON_SOURCES,
-        'glucose_lower_bound_closed': glucose_lower_bound_closed,
-        'selected_alternative_sources': selected_sources,
-        'selected_source': selected_source,
-        'exactly_one_alternative_source': exactly_one_alternative_source,
-        'unexpected_environment_changes': unexpected_environment_changes,
-        'knocked_out_genes': knocked_out_genes,
-        'medium_fluxes': medium_fluxes or {},
-        'medium_raw_fluxes': {reaction_id: round(value, 3) for reaction_id, value in raw_fluxes.items()},
-        'medium_uptake_fluxes': {reaction_id: round(value, 3) for reaction_id, value in uptake_fluxes.items()},
-        'medium_secretion_fluxes': {reaction_id: round(value, 3) for reaction_id, value in secretion_fluxes.items()},
-        'selected_source_uptake': round(selected_source_uptake, 3),
-        'glucose_uptake': round(glucose_uptake, 3),
-        'minimum_source_uptake': MISSION16_MIN_SOURCE_UPTAKE,
-        'source_uptake_detected': source_uptake_detected,
-        'glucose_uptake_blocked': glucose_uptake_blocked,
-        'minimum_growth': MISSION16_MIN_GROWTH,
-        'growth_ok': growth_ok,
-        'result_valid': result_valid,
-        'ready_to_deliver': (
-            method_correct
-            and objective_correct
-            and glucose_lower_bound_closed
-            and glucose_uptake_blocked
-            and exactly_one_alternative_source
-            and not unexpected_environment_changes
-            and not knocked_out_genes
-            and source_uptake_detected
-            and growth_ok
-            and result_valid
-        ),
-    }
+    issues = []
     if objective_error:
-        mission16_data['error'] = objective_error
-    save_mission16_medium_report_check(mission16_data)
-    return mission16_data
+        issues.append(objective_error)
+    if not method_correct:
+        issues.append('Use FBA for every Mission 16 run.')
+    if not objective_correct:
+        issues.append('Use the biomass objective for every Mission 16 run.')
+    if knocked_out_genes:
+        issues.append('Keep every gene active; this is a medium-context experiment.')
+    if not environment.get('bounds_complete'):
+        issues.append('The environmental-bound payload is incomplete.')
+    if not environment.get('glucose_lower_bound_closed'):
+        issues.append('Close glucose uptake before testing an alternative carbon source.')
+    if not exactly_one_source:
+        issues.append('Open exactly one Mission 16 candidate carbon source per run.')
+    if environment.get('unexpected_environment_changes'):
+        issues.append('Keep every unrelated environmental bound at its model default.')
+    if not result_available:
+        issues.append('The visible simulation did not return a numeric or infeasible result.')
+
+    if run_type == 'aerobic_screen':
+        if result_infeasible:
+            issues.append('Aerobic screening runs must return a feasible numeric growth result.')
+        if medium_fluxes and medium_fluxes.get('error'):
+            issues.append('The Exchange Flux Report did not return measurable screening fluxes.')
+        if missing_medium_fluxes:
+            issues.append('The Exchange Flux Report is missing required Mission 16 reactions.')
+        if glucose_uptake is None:
+            issues.append('Numeric glucose-uptake evidence is missing.')
+        elif glucose_uptake > MISSION16_FLUX_TOLERANCE:
+            issues.append('The visible solution still consumes glucose.')
+        if selected_source_uptake is None:
+            issues.append('Numeric uptake evidence for the selected source is missing.')
+        elif abs(selected_source_uptake - MISSION16_EXPECTED_SOURCE_UPTAKE) > MISSION16_SOURCE_UPTAKE_TOLERANCE:
+            issues.append('Use the same model-defined -10 uptake protocol for every candidate source.')
+        if oxygen_uptake is None:
+            issues.append('Numeric oxygen-uptake evidence is missing.')
+        elif oxygen_uptake <= MISSION16_FLUX_TOLERANCE:
+            issues.append('Keep oxygen available during the five-run aerobic screen.')
+        if objective_numeric is None:
+            issues.append('The aerobic screen did not provide numeric predicted growth.')
+        elif objective_numeric < MISSION16_MIN_POSITIVE_GROWTH:
+            issues.append('The selected source did not provide positive growth rescue.')
+    else:
+        if not screen_complete_before:
+            issues.append('Complete the five-source aerobic screen before the oxygen-removal challenge.')
+        if strongest_source_before is None:
+            issues.append('The aerobic evidence does not identify one unique strongest-growth source.')
+        elif selected_source != strongest_source_before:
+            issues.append('Repeat the uniquely strongest aerobic source for the oxygen-removal challenge.')
+        if objective_numeric is not None:
+            if medium_fluxes and medium_fluxes.get('error'):
+                issues.append('The feasible challenge result is missing its Exchange Flux Report.')
+            elif missing_medium_fluxes:
+                issues.append('The feasible challenge result is missing required medium-flux values.')
+
+    current_run_valid = not issues
+    current_run_recorded = False
+    current_run = None
+    if current_run_valid and run_type == 'aerobic_screen':
+        current_run = {
+            'run_type': 'aerobic_screen',
+            'source': 'visible_simulation',
+            'source_id': selected_source,
+            'source_name': MISSION16_SOURCE_NAMES.get(selected_source, selected_source),
+            'method': method_name,
+            'objective': selected_objective,
+            'growth': round(float(objective_numeric), 6),
+            'source_uptake': round(float(selected_source_uptake), 6),
+            'glucose_uptake': round(float(glucose_uptake), 6),
+            'oxygen_uptake': round(float(oxygen_uptake), 6),
+            'medium_raw_fluxes': {
+                reaction_id: round(float(raw_fluxes[reaction_id]), 6)
+                for reaction_id in MISSION16_REQUIRED_MEDIUM_FLUXES
+            },
+        }
+        trials[selected_source] = current_run
+        current_run_recorded = True
+    elif current_run_valid and run_type == 'oxygen_challenge':
+        current_run = {
+            'run_type': 'oxygen_challenge',
+            'source': 'visible_simulation',
+            'source_id': selected_source,
+            'source_name': MISSION16_SOURCE_NAMES.get(selected_source, selected_source),
+            'method': method_name,
+            'objective': selected_objective,
+            'oxygen_lower_bound_closed': True,
+            'status': 'infeasible' if result_infeasible else 'feasible',
+            'visible_result': str(objective_result),
+            'growth': round(float(objective_numeric), 6) if objective_numeric is not None else None,
+        }
+        oxygen_challenge_run = current_run
+        current_run_recorded = True
+
+    ranked_candidates, strongest_candidates, strongest_candidate = _mission16_rank_trials(trials)
+    missing_candidates = [
+        source_id for source_id in MISSION16_CANDIDATE_CARBON_SOURCES
+        if source_id not in trials
+    ]
+    aerobic_screen_complete = not missing_candidates
+    strongest_growth = ranked_candidates[0]['growth'] if ranked_candidates else None
+    expected_strongest_confirmed = (
+        aerobic_screen_complete
+        and strongest_candidate == MISSION16_EXPECTED_STRONGEST_SOURCE
+    )
+    oxygen_challenge_recorded = isinstance(oxygen_challenge_run, dict)
+    oxygen_challenge_infeasible = bool(
+        oxygen_challenge_recorded
+        and oxygen_challenge_run.get('status') == 'infeasible'
+    )
+    relationship_supported = bool(
+        expected_strongest_confirmed
+        and oxygen_challenge_infeasible
+        and oxygen_challenge_run.get('source_id') == strongest_candidate
+    )
+    evidence_ready = bool(aerobic_screen_complete and oxygen_challenge_recorded)
+
+    data = {
+        'mission_id': '16',
+        'check_version': MISSION16_CHECK_VERSION,
+        'mission_title': 'Context-Dependent Carbon Rescue',
+        'target_context': MISSION16_TARGET_CONTEXT,
+        'target_method': MISSION16_METHOD,
+        'growth_objective': MISSION16_GROWTH_OBJECTIVE,
+        'blocked_carbon_source': MISSION16_BLOCKED_CARBON_SOURCE,
+        'oxygen_reaction': MISSION16_OXYGEN_REACTION,
+        'candidate_carbon_sources': list(MISSION16_CANDIDATE_CARBON_SOURCES),
+        'source_names': dict(MISSION16_SOURCE_NAMES),
+        'required_medium_fluxes': list(MISSION16_REQUIRED_MEDIUM_FLUXES),
+        'candidate_trials': trials,
+        'valid_trial_count': len(trials),
+        'required_trial_count': len(MISSION16_CANDIDATE_CARBON_SOURCES),
+        'missing_candidates': missing_candidates,
+        'aerobic_screen_complete': aerobic_screen_complete,
+        'ranked_candidates': ranked_candidates,
+        'strongest_candidates': strongest_candidates,
+        'strongest_candidate': strongest_candidate,
+        'strongest_growth': round(float(strongest_growth), 6) if strongest_growth is not None else None,
+        'expected_strongest_candidate': MISSION16_EXPECTED_STRONGEST_SOURCE,
+        'expected_strongest_confirmed': expected_strongest_confirmed,
+        'oxygen_challenge_run': oxygen_challenge_run,
+        'oxygen_challenge_recorded': oxygen_challenge_recorded,
+        'oxygen_challenge_infeasible': oxygen_challenge_infeasible,
+        'relationship_supported': relationship_supported,
+        'expected_factor': MISSION16_EXPECTED_FACTOR,
+        'evidence_ready': evidence_ready,
+        'answer_ready': evidence_ready,
+        'ready_to_deliver': evidence_ready and relationship_supported,
+        'current_run_valid': current_run_valid,
+        'current_run_recorded': current_run_recorded,
+        'current_run_type': run_type,
+        'current_selected_source': selected_source,
+        'current_method': method_name,
+        'current_objective': selected_objective,
+        'current_result': objective_result,
+        'current_result_infeasible': result_infeasible,
+        'current_knocked_out_genes': knocked_out_genes,
+        'current_bounds_complete': environment.get('bounds_complete'),
+        'current_glucose_lower_bound_closed': environment.get('glucose_lower_bound_closed'),
+        'current_oxygen_lower_bound_closed': oxygen_closed,
+        'current_unexpected_environment_changes': list(environment.get('unexpected_environment_changes') or []),
+        'current_missing_medium_fluxes': missing_medium_fluxes,
+        'current_source_uptake': round(float(selected_source_uptake), 6) if selected_source_uptake is not None else None,
+        'current_glucose_uptake': round(float(glucose_uptake), 6) if glucose_uptake is not None else None,
+        'current_oxygen_uptake': round(float(oxygen_uptake), 6) if oxygen_uptake is not None else None,
+        'current_issues': issues,
+        'latest_attempt': {
+            'valid': current_run_valid,
+            'recorded': current_run_recorded,
+            'run_type': run_type,
+            'source_id': selected_source,
+            'method': method_name,
+            'objective': selected_objective,
+            'infeasible': result_infeasible,
+            'issues': list(issues),
+        },
+    }
+    save_mission16_medium_report_check(data)
+    return data
 
 
 def run_mission16_medium_report_check(simulation_results=None):
     method_name, selected_objective, genes, reactions = _read_simulation_file()
-
     objective_result = None
     medium_fluxes = None
     objective_error = None
+
     try:
-        if simulation_results and simulation_results[0] == selected_objective:
+        if simulation_results is not None:
+            result_objective = simulation_results[0]
             objective_result = simulation_results[1]
             medium_fluxes = simulation_results[3] if len(simulation_results) > 3 else None
+            if result_objective != selected_objective:
+                objective_error = 'The displayed simulation result does not match the currently selected objective.'
+        else:
+            objective_error = 'Run a visible Mission 16 simulation before recording evidence.'
     except Exception:
-        objective_result = None
-
-    if objective_result is None:
-        objective_error = 'Run the simulation before delivering Mission 16.'
+        objective_error = 'Could not read the current visible Mission 16 simulation result.'
 
     return _build_mission16_data(
         method_name,
@@ -6387,10 +6681,105 @@ def run_mission16_medium_report_check(simulation_results=None):
         genes,
         reactions,
         medium_fluxes=medium_fluxes,
+        existing_report=load_mission16_medium_report_check(),
         objective_error=objective_error,
     )
 
 
+def run_mission16_medium_report_check_remote(backend_url, simulation_results=None):
+    """Use the already visible remote result; never issue a hidden request."""
+    return run_mission16_medium_report_check(simulation_results)
+
+
+def build_mission16_context_report_text(report):
+    if not report:
+        return 'Mission 16 Context-Dependent Carbon Rescue\n\nActivate the mission and run the controlled screen.'
+
+    lines = [
+        'Mission 16 Context-Dependent Carbon Rescue',
+        '',
+        'Aerobic screening protocol:',
+        '- FBA biomass objective; all genes active',
+        '- Glucose uptake closed; one candidate source opened per run',
+        '- Oxygen and every unrelated medium bound kept at model default',
+        f'- Common molar uptake protocol: {MISSION16_EXPECTED_SOURCE_UPTAKE:.1f}',
+        '',
+        f"Candidate trials recorded: {report.get('valid_trial_count', 0)}/{report.get('required_trial_count', len(MISSION16_CANDIDATE_CARBON_SOURCES))}",
+    ]
+
+    trials = report.get('candidate_trials') or {}
+    for source_id in MISSION16_CANDIDATE_CARBON_SOURCES:
+        trial = trials.get(source_id)
+        label = f"{MISSION16_SOURCE_NAMES.get(source_id, source_id)} ({source_id})"
+        if not trial:
+            lines.append(f'- {label}: not recorded')
+            continue
+        lines.append(
+            f"- {label}: growth {float(trial.get('growth', 0.0)):.3f}; "
+            f"source uptake {float(trial.get('source_uptake', 0.0)):.3f}; "
+            f"oxygen uptake {float(trial.get('oxygen_uptake', 0.0)):.3f}"
+        )
+
+    if report.get('aerobic_screen_complete'):
+        lines.extend(['', 'Aerobic screen complete.'])
+        ranked = report.get('ranked_candidates') or []
+        if ranked:
+            lines.append('Growth ranking under this common molar protocol:')
+            for index, row in enumerate(ranked, start=1):
+                lines.append(
+                    f"{index}. {MISSION16_SOURCE_NAMES.get(row.get('source_id'), row.get('source_id'))} "
+                    f"({row.get('source_id')}): {float(row.get('growth', 0.0)):.3f}"
+                )
+            if report.get('strongest_candidate'):
+                lines.append(
+                    'Highest observed growth trial: '
+                    f"{MISSION16_SOURCE_NAMES.get(report.get('strongest_candidate'), report.get('strongest_candidate'))} "
+                    f"({report.get('strongest_candidate')})."
+                )
+        lines.append('This is a ranking under equal molar uptake bounds, not a universal carbon-efficiency ranking.')
+    else:
+        missing = report.get('missing_candidates') or []
+        if missing:
+            lines.append('Missing aerobic trials: ' + ', '.join(missing) + '.')
+
+    challenge = report.get('oxygen_challenge_run') or {}
+    lines.extend(['', 'Robustness challenge:'])
+    if challenge:
+        lines.extend([
+            f"- Repeated source: {challenge.get('source_name')} ({challenge.get('source_id')})",
+            f"- Changed factor: {MISSION16_OXYGEN_REACTION} lower bound closed",
+            f"- Visible solver status: {str(challenge.get('status', '')).upper()}",
+        ])
+    elif report.get('aerobic_screen_complete'):
+        lines.append('Repeat the uniquely strongest-growth source after closing oxygen uptake.')
+    else:
+        lines.append('Complete the aerobic screen before running this challenge.')
+
+    if report.get('current_run_recorded'):
+        lines.extend(['', f"Latest valid visible run recorded: {str(report.get('current_run_type', '')).replace('_', ' ')}."])
+    elif report.get('current_issues'):
+        lines.extend(['', 'Latest run was not recorded:'])
+        lines.extend(f'- {issue}' for issue in report.get('current_issues') or [])
+        if trials or challenge:
+            lines.append('Previously valid Mission 16 evidence remains available.')
+
+    lines.append('')
+    if report.get('evidence_ready'):
+        lines.extend([
+            'Evidence complete.',
+            'Use the five-run ranking and the visible robustness-test status to answer Dr. Rio.',
+            'Question: Which removed environmental factor did the strongest rescue depend on?',
+        ])
+    else:
+        lines.append('Evidence incomplete.')
+
+    lines.extend([
+        '',
+        'Interpretation note: the ranking is specific to this model, these bounds and this equal-molar protocol.',
+        'An infeasible oxygen-removal result is a condition-specific model prediction, not a universal experimental claim.',
+        'All growth and exchange values come from the visible solver results. No hidden simulation is used.',
+    ])
+    return '\n'.join(lines)
 
 def _mission17_environment_status(reactions):
     """Evaluate the medium perturbation required for Mission 17.
@@ -7547,11 +7936,9 @@ def mission05_answer_matches(answer, report_data=None):
 def _mission05_environment_status(reactions):
     """Return whether only the oxygen lower bound was closed.
 
-    Mission 05 requires the model's default medium with one environmental
-    change: oxygen uptake is unavailable.  Every other lower/upper-bound
-    toggle must match the SBML model so candidate effects remain comparable.
+    Bound identifiers are interpreted independently of dictionary order while
+    preserving compatibility with legacy positional pygame-menu saves.
     """
-    reaction_values = list((reactions or {}).values())
     oxygen_lower_bound_closed = False
     unexpected_changes = []
 
@@ -7561,17 +7948,14 @@ def _mission05_environment_status(reactions):
         oxygen_index = None
 
     for i in range(len(REACTIONS.index)):
-        lb_index = i * 2
-        ub_index = lb_index + 1
-        if ub_index >= len(reaction_values):
-            unexpected_changes.append('incomplete environmental-bound data')
-            break
+        lower_bound_open, upper_bound_open = _reaction_bound_open_states(reactions, i)
+        reaction_id = REACTIONS.index[i]
+        if lower_bound_open is None or upper_bound_open is None:
+            unexpected_changes.append(f'{reaction_id} bounds unavailable')
+            continue
 
-        lower_bound_open = bool(reaction_values[lb_index])
-        upper_bound_open = bool(reaction_values[ub_index])
         default_lower_bound_open = REACTIONS.lb.iloc[i] != 0
         default_upper_bound_open = REACTIONS.ub.iloc[i] != 0
-        reaction_id = REACTIONS.index[i]
 
         if i == oxygen_index:
             oxygen_lower_bound_closed = not lower_bound_open
@@ -7997,23 +8381,12 @@ def _result_value_from_simulation_results(simulation_results):
 
 
 def _bound_state_for_reaction(reactions, reaction_id):
-    """Return lower/upper bound UI booleans for a reaction.
-
-    The environmental menu stores two booleans per exchange reaction:
-    lower-bound open/closed and upper-bound open/closed.
-    """
+    """Return lower/upper bound UI booleans for one exchange reaction."""
     try:
         reaction_index = list(REACTIONS.index).index(reaction_id)
     except ValueError:
         return None, None
-
-    reaction_values = list(reactions.values())
-    lb_index = reaction_index * 2
-    ub_index = lb_index + 1
-    if ub_index >= len(reaction_values):
-        return None, None
-
-    return bool(reaction_values[lb_index]), bool(reaction_values[ub_index])
+    return _reaction_bound_open_states(reactions, reaction_index)
 
 
 def _mission21_environment_status(reactions):
@@ -8341,26 +8714,22 @@ def build_compare_runs_report_text(compare_runs=None):
 def _mission02_environment_status(reactions):
     """Inspect whether a run follows Mission 02's controlled protocol.
 
-    A valid trial removes glucose, opens exactly one candidate carbon-source
-    lower bound, and leaves every other environmental toggle unchanged.
+    Explicit bound identifiers are independent of dictionary ordering; legacy
+    positional saves remain readable through ``_reaction_bound_open_states``.
     """
-    reaction_values = list(reactions.values())
     selected_sources = []
     unexpected_changes = []
     glucose_lower_bound_closed = False
 
     for i in range(len(REACTIONS.index)):
-        lb_index = i * 2
-        ub_index = lb_index + 1
-        if ub_index >= len(reaction_values):
-            break
-
         reaction_id = REACTIONS.index[i]
-        lower_bound_open = bool(reaction_values[lb_index])
-        upper_bound_open = bool(reaction_values[ub_index])
+        lower_bound_open, upper_bound_open = _reaction_bound_open_states(reactions, i)
+        if lower_bound_open is None or upper_bound_open is None:
+            unexpected_changes.append(f'{reaction_id} bounds unavailable')
+            continue
+
         default_lower_bound_open = REACTIONS.lb.iloc[i] != 0
         default_upper_bound_open = REACTIONS.ub.iloc[i] != 0
-
         lower_changed = lower_bound_open != default_lower_bound_open
         upper_changed = upper_bound_open != default_upper_bound_open
 

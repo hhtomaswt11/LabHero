@@ -20,7 +20,7 @@ from simulation import (
     is_mission06_unlocked,
 )
 from timers import Timer
-from utils import get_resource_path
+from utils import get_resource_path, prepare_dialogue_text
 
 
 class Mission06:
@@ -47,15 +47,15 @@ class Mission06:
     async def update(self):
         locked = [
             'Complete Dr. Silva\'s context-dependent production investigation first.',
-            'Mission 06 combines the genetic and environmental reasoning developed through Mission 05.',
+            'Mission 06 combines the genetic and environmental reasoning from Mission 05.',
         ]
         step1 = [
-            f"Welcome, {self.player.player_name}. I'm Dr. Carter, and I have a competitive strain-design challenge.",
+            f"Welcome, {self.player.player_name}. I'm Dr. Carter.",
             'The rival balances growth and ethanol production under a strict genetic budget.',
-            'Can you beat the rival without changing or enriching the medium?',
+            'Can you beat that design without changing or enriching the medium?',
         ]
         step2 = [
-            'Have you recorded a clean aerobic reference and tested valid one- or two-gene designs?',
+            'Have you recorded an aerobic reference and tested valid one- or two-gene designs?',
             'Your best valid design is retained, so a weaker later attempt will not erase it.',
         ]
         step3 = [
@@ -99,6 +99,7 @@ class Mission06:
         self.screen.blit(name, (55, 677))
 
         for line, msg in enumerate(message):
+            msg = prepare_dialogue_text(msg, self.player.player_name)
             surf = self.font.render(msg, True, 'black')
             self.screen.blit(surf, (200, 525 + (line * 20) + (15 * line)))
 
@@ -263,6 +264,15 @@ class Mission06_info:
             self.failed.play()
             animation_text_save('Complete Mission 05 before starting Mission 06.', time=3000)
             return
+        if '06' in self.missions_completed:
+            self.mission06 = True
+            animation_text_save('Mission 06 is already completed.', time=2500)
+            return
+        if '06' in self.missions_activated:
+            self.mission06 = True
+            animation_text_save('Mission 06 is already active.', time=2500)
+            return
+
         clear_challenge_score()
         self.mission06 = True
         if '06' not in self.missions_activated:
@@ -271,6 +281,14 @@ class Mission06_info:
         save_file(self.player.get_save_data())
 
     def deliver_results(self):
+        if not is_mission06_unlocked(self.missions_completed):
+            self.failed.play()
+            animation_text_save('Complete Mission 05 before delivering Mission 06.', time=3000)
+            return
+        if '06' not in self.missions_activated:
+            self.failed.play()
+            animation_text_save('Activate Mission 06 before delivering results.', time=3000)
+            return
         report = load_challenge_score()
         if not report or report.get('mission_id') != '06' or report.get('check_version') != 3:
             self.failed.play()

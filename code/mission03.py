@@ -20,7 +20,7 @@ from simulation import (
     normalise_mission03_answer,
 )
 from timers import Timer
-from utils import get_resource_path
+from utils import get_resource_path, prepare_dialogue_text
 from mission04 import Mission04_info
 from mission05 import Mission05_info
 
@@ -49,7 +49,7 @@ class Mission03:
     async def update(self):
         locked = [
             'Dr. Martinez is still guiding the environmental investigation.',
-            'Complete Mission 02 before moving from environmental changes to genetic perturbations.',
+            'Complete Mission 02 before moving from environmental tests to gene perturbations.',
         ]
         step1 = [
             f"Greetings {self.player.player_name}! I'm Dr. Silva.",
@@ -57,7 +57,7 @@ class Mission03:
             'Can you use the candidate evidence to identify the conditionally essential gene?',
         ]
         step2 = [
-            'Have you built a viable reference and isolated the effect of each candidate knockout?',
+            'Have you built a viable reference and isolated each candidate knockout?',
             'Show me the evidence and the conclusion supported by the growth ratios.',
         ]
         step3 = [
@@ -120,6 +120,7 @@ class Mission03:
         self.screen.blit(name, (55, 677))
 
         for line, msg in enumerate(message):
+            msg = prepare_dialogue_text(msg, self.player.player_name)
             surf = self.font.render(msg, True, 'black')
             self.screen.blit(surf, (200, 525 + (line * 20) + (15 * line)))
 
@@ -277,6 +278,15 @@ class Mission03_info:
             self.failed.play()
             animation_text_save('Complete Mission 02 before starting Mission 03.', time=3000)
             return
+        if '03' in self.missions_completed:
+            self.mission03 = True
+            animation_text_save('Mission 03 is already completed.', time=2500)
+            return
+        if '03' in self.missions_activated:
+            self.mission03 = True
+            animation_text_save('Mission 03 is already active.', time=2500)
+            return
+
         clear_mission03_gene_screen_check()
         self.mission03 = True
         if '03' not in self.missions_activated:
@@ -285,6 +295,14 @@ class Mission03_info:
         save_file(self.player.get_save_data())
 
     def deliver_results(self, answer):
+        if not is_mission03_unlocked(self.missions_completed):
+            self.failed.play()
+            animation_text_save('Complete Mission 02 before delivering Mission 03.', time=3000)
+            return
+        if '03' not in self.missions_activated:
+            self.failed.play()
+            animation_text_save('Activate Mission 03 before delivering results.', time=3000)
+            return
         report = load_mission03_gene_screen_check()
         if not report or report.get('mission_id') != '03' or report.get('check_version') != 2:
             self.failed.play()

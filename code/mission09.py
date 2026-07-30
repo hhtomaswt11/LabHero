@@ -130,6 +130,15 @@ class Mission09_info:
             self.failed.play()
             animation_text_save('Complete Mission 08 before starting Mission 09.', time=3000)
             return
+        if '09' in self.missions_completed:
+            self.mission09 = True
+            animation_text_save('Mission 09 is already completed.', time=2500)
+            return
+        if '09' in self.missions_activated:
+            self.mission09 = True
+            animation_text_save('Mission 09 is already active.', time=2500)
+            return
+
         clear_mission09_design_check()
         self.mission09 = True
         if '09' not in self.missions_activated:
@@ -141,6 +150,10 @@ class Mission09_info:
         if not is_mission09_unlocked(self.missions_completed):
             self.failed.play()
             animation_text_save('Complete Mission 08 first!', time=2500)
+            return
+        if '09' not in self.missions_activated:
+            self.failed.play()
+            animation_text_save('Activate Mission 09 before delivering results.', time=3000)
             return
         report = load_mission09_design_check()
         if not report or report.get('mission_id') != '09' or report.get('check_version') != MISSION09_CHECK_VERSION:

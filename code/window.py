@@ -752,87 +752,7 @@ def _build_mission15_text(report_data):
 
 
 def _build_mission16_text(report_data):
-    if not report_data:
-        return ''
-
-    if report_data.get('error') and report_data.get('objective_result') in (None, 'None'):
-        return f"Mission 16 Medium Report\nError: {report_data.get('error')}"
-
-    method_status = (
-        'Method: FBA medium baseline selected.'
-        if report_data.get('method_correct')
-        else 'Method: use FBA for this first medium-engineering baseline.'
-    )
-    objective_status = (
-        'Objective: biomass objective used to test growth rescue.'
-        if report_data.get('objective_correct')
-        else 'Objective: use the biomass objective to test whether growth is rescued.'
-    )
-    glucose_status = (
-        'Original carbon source: glucose uptake is blocked.'
-        if report_data.get('glucose_lower_bound_closed') and report_data.get('glucose_uptake_blocked')
-        else 'Original carbon source: still available. Remove glucose uptake first.'
-    )
-    environment_status = (
-        'Extra medium changes: none.'
-        if not report_data.get('unexpected_environment_changes')
-        else 'Extra medium changes: too many changes. Keep only glucose removal and one candidate source.'
-    )
-    knockout_status = (
-        'Gene knockouts: none.'
-        if not report_data.get('knocked_out_genes')
-        else 'Gene knockouts detected. This is a medium challenge, not a knockout challenge.'
-    )
-
-    selected_sources = report_data.get('selected_alternative_sources') or []
-    if not selected_sources:
-        source_status = 'Alternative source: none selected yet. Open one candidate carbon source.'
-    elif len(selected_sources) > 1:
-        source_status = 'Alternative source: too many candidates opened. Test one source at a time.'
-    elif report_data.get('source_uptake_detected'):
-        source_status = f"Alternative source: {selected_sources[0]} is being consumed."
-    else:
-        source_status = f"Alternative source: {selected_sources[0]} is selected but uptake is not strong enough yet."
-
-    growth_status = (
-        'Growth: rescue detected.'
-        if report_data.get('growth_ok')
-        else f"Growth: still too low. Keep it above {float(report_data.get('minimum_growth', 0.0)):.1f}."
-    )
-
-    uptake_fluxes = report_data.get('medium_uptake_fluxes') or {}
-    candidate_sources = report_data.get('candidate_carbon_sources') or []
-    medium_lines = []
-    for reaction_id in [report_data.get('blocked_carbon_source')] + candidate_sources:
-        if not reaction_id:
-            continue
-        medium_lines.append(f"- {reaction_id}: uptake {float(uptake_fluxes.get(reaction_id, 0.0)):.3f}")
-    medium_text = '\n'.join(medium_lines) if medium_lines else 'No medium fluxes available.'
-
-    final_status = (
-        'Alternative carbon rescue ready. Return to Dr. Rio and deliver the report.'
-        if report_data.get('ready_to_deliver')
-        else 'Not ready yet. Keep testing candidate sources and check the Medium Report.'
-    )
-
-    return (
-        'Mission 16 Medium Report\n\n'
-        f"Context: {report_data.get('target_context')}\n"
-        f"Selected method: {report_data.get('method')}\n"
-        f"Selected objective: {report_data.get('selected_objective')}\n"
-        f"Growth/objective flux: {report_data.get('objective_result')}\n"
-        f"Selected alternative source(s): {', '.join(selected_sources) if selected_sources else 'none'}\n\n"
-        f"Medium uptake evidence:\n{medium_text}\n\n"
-        f"{method_status}\n"
-        f"{objective_status}\n"
-        f"{glucose_status}\n"
-        f"{source_status}\n"
-        f"{environment_status}\n"
-        f"{knockout_status}\n"
-        f"{growth_status}\n\n"
-        f"{final_status}"
-    )
-
+    return build_mission16_context_report_text(report_data)
 
 
 def _build_mission17_text(report_data):
@@ -2416,7 +2336,10 @@ class Window:
 
             mission16_data = None
             if '16' in self.player.missions_activated and '16' not in self.player.missions_completed:
-                mission16_data = run_mission16_medium_report_check(self.results)
+                if sys.platform == 'emscripten':
+                    mission16_data = run_mission16_medium_report_check_remote(BACKEND_URL, self.results)
+                else:
+                    mission16_data = run_mission16_medium_report_check(self.results)
 
             mission17_data = None
             if '17' in self.player.missions_activated and '17' not in self.player.missions_completed:

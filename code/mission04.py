@@ -21,7 +21,7 @@ from simulation import (
     normalise_mission04_answer,
 )
 from timers import Timer
-from utils import get_resource_path
+from utils import get_resource_path, prepare_dialogue_text
 
 
 class Mission04:
@@ -61,7 +61,7 @@ class Mission04:
         ]
         step3 = [
             'Excellent. You identified growth-coupled product formation from controlled evidence.',
-            'The medium remained aerobic, but the genetic perturbation changed respiratory capacity.',
+            'The medium stayed aerobic, but the knockout changed respiratory capacity.',
             'Next we will combine genetic and environmental constraints.',
         ]
 
@@ -93,6 +93,7 @@ class Mission04:
         self.screen.blit(name, (55, 677))
 
         for line, msg in enumerate(message):
+            msg = prepare_dialogue_text(msg, self.player.player_name)
             surf = self.font.render(msg, True, 'black')
             self.screen.blit(surf, (200, 525 + (line * 20) + (15 * line)))
 
@@ -261,6 +262,15 @@ class Mission04_info:
             self.failed.play()
             animation_text_save('Complete Mission 03 before starting Mission 04.', time=3000)
             return
+        if '04' in self.missions_completed:
+            self.mission04 = True
+            animation_text_save('Mission 04 is already completed.', time=2500)
+            return
+        if '04' in self.missions_activated:
+            self.mission04 = True
+            animation_text_save('Mission 04 is already active.', time=2500)
+            return
+
         clear_mission04_production_check()
         self.mission04 = True
         if '04' not in self.missions_activated:
@@ -269,6 +279,14 @@ class Mission04_info:
         save_file(self.player.get_save_data())
 
     def deliver_results(self, answer):
+        if not is_mission04_unlocked(self.missions_completed):
+            self.failed.play()
+            animation_text_save('Complete Mission 03 before delivering Mission 04.', time=3000)
+            return
+        if '04' not in self.missions_activated:
+            self.failed.play()
+            animation_text_save('Activate Mission 04 before delivering results.', time=3000)
+            return
         report = load_mission04_production_check()
         if not report or report.get('mission_id') != '04' or report.get('check_version') != 2:
             self.failed.play()

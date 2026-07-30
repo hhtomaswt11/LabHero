@@ -25,3 +25,26 @@ def get_save_path(filename):
         base = os.path.join(xdg, APP_NAME) if xdg else os.path.join(os.path.expanduser('~'), '.local', 'share', APP_NAME)
     os.makedirs(base, exist_ok=True)
     return os.path.join(base, filename)
+
+DIALOGUE_PLAYER_NAME_MAX_CHARS = 18
+
+def compact_dialogue_player_name(name, max_chars=DIALOGUE_PLAYER_NAME_MAX_CHARS):
+    """Return a display-only player name that cannot overflow dialogue lines.
+
+    The full name remains unchanged in the player profile and save file. Only
+    dialogue rendering uses this compact form.
+    """
+    value = ' '.join(str(name or '').split()) or 'Player'
+    if len(value) <= max_chars:
+        return value
+    return value[:max_chars].rstrip() + '...'
+
+
+def prepare_dialogue_text(message, player_name):
+    """Replace a full player name in a dialogue line with its safe display form."""
+    text = str(message)
+    full_name = str(player_name or '')
+    if not full_name or full_name not in text:
+        return text
+    return text.replace(full_name, compact_dialogue_player_name(full_name))
+

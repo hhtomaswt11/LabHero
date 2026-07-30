@@ -189,6 +189,15 @@ class Mission12_info:
             self.failed.play()
             animation_text_save('Complete Mission 11 before starting Mission 12.', time=3000)
             return
+        if '12' in self.missions_completed:
+            self.mission12 = True
+            animation_text_save('Mission 12 is already completed.', time=2500)
+            return
+        if '12' in self.missions_activated:
+            self.mission12 = True
+            animation_text_save('Mission 12 is already active.', time=2500)
+            return
+
         clear_mission12_byproduct_check()
         self.mission12 = True
         if '12' not in self.missions_activated:
@@ -200,6 +209,10 @@ class Mission12_info:
         if not is_mission12_unlocked(self.missions_completed):
             self.failed.play()
             animation_text_save('Complete Mission 11 first!', time=2500)
+            return
+        if '12' not in self.missions_activated:
+            self.failed.play()
+            animation_text_save('Activate Mission 12 before delivering results.', time=3000)
             return
 
         report = load_mission12_byproduct_check()

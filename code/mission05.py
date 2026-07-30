@@ -21,7 +21,7 @@ from simulation import (
     normalise_mission05_answer,
 )
 from timers import Timer
-from utils import get_resource_path
+from utils import get_resource_path, prepare_dialogue_text
 
 
 class Mission05:
@@ -51,9 +51,9 @@ class Mission05:
             'Complete Mission 04 before testing whether that strategy transfers to anaerobiosis.',
         ]
         step1 = [
-            f'Good work, {self.player.player_name}. Your aerobic design forced ethanol secretion.',
-            'But genetic strategies are not independent of their environment.',
-            'Can you find the strongest viable design after oxygen uptake becomes unavailable?',
+            f'Good work, {self.player.player_name}.',
+            'The aerobic design forced ethanol secretion, but its effect depends on the medium.',
+            'Can you find the strongest viable design after oxygen uptake is removed?',
         ]
         step2 = [
             'Have you established an anaerobic reference and compared every candidate?',
@@ -61,8 +61,8 @@ class Mission05:
         ]
         step3 = [
             'Excellent. You demonstrated that a useful knockout is context-dependent.',
-            'The aerobic winner became neutral, while another strategy performed better anaerobically.',
-            'Dr. Carter is waiting in the next lab with a broader multi-knockout strain-design challenge.',
+            'The aerobic winner became neutral; another strategy worked better without oxygen.',
+            'Dr. Carter awaits with a broader multi-knockout design challenge.',
         ]
 
         self.input()
@@ -93,6 +93,7 @@ class Mission05:
         self.screen.blit(name, (55, 677))
 
         for line, msg in enumerate(message):
+            msg = prepare_dialogue_text(msg, self.player.player_name)
             surf = self.font.render(msg, True, 'black')
             self.screen.blit(surf, (200, 525 + (line * 20) + (15 * line)))
 
@@ -261,6 +262,15 @@ class Mission05_info:
             self.failed.play()
             animation_text_save('Complete Mission 04 before starting Mission 05.', time=3000)
             return
+        if '05' in self.missions_completed:
+            self.mission05 = True
+            animation_text_save('Mission 05 is already completed.', time=2500)
+            return
+        if '05' in self.missions_activated:
+            self.mission05 = True
+            animation_text_save('Mission 05 is already active.', time=2500)
+            return
+
         clear_mission05_production_check()
         self.mission05 = True
         if '05' not in self.missions_activated:
@@ -269,6 +279,14 @@ class Mission05_info:
         save_file(self.player.get_save_data())
 
     def deliver_results(self, answer):
+        if not is_mission05_unlocked(self.missions_completed):
+            self.failed.play()
+            animation_text_save('Complete Mission 04 before delivering Mission 05.', time=3000)
+            return
+        if '05' not in self.missions_activated:
+            self.failed.play()
+            animation_text_save('Activate Mission 05 before delivering results.', time=3000)
+            return
         report = load_mission05_production_check()
         if not report or report.get('mission_id') != '05' or report.get('check_version') != 2:
             self.failed.play()

@@ -57,7 +57,7 @@ class Mission26:
         intro26_dialogue = [
             f"Hello {self.player.player_name}. I'm Dr. Luna.",
             "Dr. Vega taught you to compare two runs.",
-            "Now we study sensitivity: what happens between fully available and blocked conditions?"
+            "Now study sensitivity between fully available and blocked conditions."
         ]
 
         active26_dialogue = [
@@ -68,8 +68,8 @@ class Mission26:
 
         intro27_dialogue = [
             f"Good work, {self.player.player_name}.",
-            "Oxygen was the first sensitivity test. Now remove the comfort of an obvious gas switch.",
-            "Let's study carbon limitation: carbon-supply levels, growth collapse, and secretion trends."
+            "Oxygen was the first sensitivity test. Now move beyond an obvious gas switch.",
+            "Now study carbon supply, growth collapse and secretion trends."
         ]
 
         active27_dialogue = [
@@ -81,18 +81,18 @@ class Mission26:
         intro28_dialogue = [
             f"Excellent, {self.player.player_name}.",
             "You found how carbon limitation affects both growth and byproduct secretion.",
-            "Now combine a controlled medium change with a sweep of an alternative nutrient source."
+            "Now combine a controlled medium change with a sweep of another nutrient source."
         ]
 
         active28_dialogue = [
             "Mission 28 is active. Create a medium where the usual carbon source is unavailable.",
             "Then test one candidate source across several availability levels.",
-            "A good source should be consumed, support growth, and show limitation when it becomes scarce."
+            "A good source is consumed, supports growth, and becomes limiting when scarce."
         ]
 
         completed28_dialogue = [
             f"Good analysis, {self.player.player_name}.",
-            "You showed that carbon-source choice is not just present or absent; the level matters.",
+            "You showed that carbon-source availability level matters, not only its presence.",
             "Next, we will push sensitivity testing toward minimal viable conditions."
         ]
 
@@ -132,6 +132,7 @@ class Mission26:
         self.screen.blit(nome, (52, 677))
 
         for line, msg in enumerate(message):
+            msg = prepare_dialogue_text(msg, self.player.player_name)
             surf = self.font.render(msg, True, 'black')
             self.screen.blit(surf, (200, 525 + (line * 20) + (15 * line)))
 

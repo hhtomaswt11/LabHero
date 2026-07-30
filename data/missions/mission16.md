@@ -1,24 +1,62 @@
-# Mission 16 — Alternative Carbon Rescue
+# Mission 16 — Context-Dependent Carbon Rescue
 
 ## Professor
-Dr. Rio — Media Engineering & Stress Robustness
+Dr. Rio — Medium Engineering & Stress Robustness
 
 ## Learning goal
-Understand that a metabolic model is constrained by what the cell can import from the environment. Growth depends not only on genes and objectives, but also on the available medium.
+Evaluate a carbon-source rescue as a controlled medium experiment and test whether the strongest result remains valid after a second environmental factor is removed.
 
-## Challenge
-Remove access to the usual carbon source and test candidate alternative carbon sources. The goal is to find one alternative source that keeps *E. coli* viable under a controlled medium design.
+The mission teaches that:
 
-## Candidate alternative carbon sources
-- `EX_ac_e`
-- `EX_pyr_e`
-- `EX_mal__L_e`
-- `EX_fum_e`
-- `EX_akg_e`
+- a source ranking is meaningful only under a declared comparison protocol;
+- equal molar uptake bounds are not the same as equal carbon supply;
+- a strong result in one medium may depend on another medium component;
+- an infeasible solver result is evidence about this model and these constraints, not a universal biological impossibility.
 
-## Briefing
-Exchange reactions connect the model to the environment. In many exchange reactions, negative flux means uptake/consumption and positive flux means secretion/export.
+## Phase A — aerobic screening
 
-Use the Medium Report to check whether the original carbon source was removed and whether the selected alternative source is actually being consumed by the model.
+Use:
 
-Do not solve this as a genetic problem. This mission is about medium engineering.
+- `FBA`;
+- objective `BIOMASS_Ecoli_core_w_GAM`;
+- all genes active;
+- glucose uptake closed;
+- model-default oxygen availability;
+- exactly one candidate source opened per run;
+- every unrelated environmental bound unchanged;
+- the Exchange Flux Report from the visible result.
+
+Candidates:
+
+- `EX_ac_e` — acetate;
+- `EX_pyr_e` — pyruvate;
+- `EX_mal__L_e` — L-malate;
+- `EX_fum_e` — fumarate;
+- `EX_akg_e` — 2-oxoglutarate.
+
+All five runs use the same open lower-bound protocol, corresponding to a maximum uptake of `10` model flux units for these sources.
+
+Expected growth ranking under this equal-molar protocol:
+
+1. `EX_akg_e` — approximately `0.529`;
+2. `EX_mal__L_e` and `EX_fum_e` — approximately `0.371`;
+3. `EX_pyr_e` — approximately `0.291`;
+4. `EX_ac_e` — approximately `0.173`.
+
+This is a protocol-specific growth ranking, not a universal carbon-efficiency ranking.
+
+## Phase B — robustness challenge
+
+Repeat the uniquely strongest source, `EX_akg_e`, while keeping the screening setup unchanged except for closing the lower bound of `EX_o2_e`.
+
+Expected visible result:
+
+```text
+Status: INFEASIBLE
+```
+
+The final question is intentionally concise:
+
+> Which removed environmental factor did the strongest rescue depend on?
+
+Accepted answers include `oxygen`, `O2`, and `EX_o2_e`.
