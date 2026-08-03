@@ -23,8 +23,8 @@ from simulation import (
 class Mission22_info:
     """Mission 22 — Knockout Comparison.
 
-    Second Dr. Vega mission. The player compares the normal strain with a
-    single-gene knockout while tracking ethanol production.
+    Second and final Dr. Vega mission. The player moves from the controlled
+    export-bound comparison in Mission 21 to a controlled strain comparison.
     """
 
     def __init__(self, toggle_menu, player) -> None:
@@ -69,8 +69,9 @@ class Mission22_info:
             f"""
             Mission 22: Knockout Comparison.
 
-            In Mission 21 you compared two environments. Now compare two strains:
-            the normal strain and a strain with one gene disabled.
+            In Mission 21 you compared a reference with one export-bound change.
+            Now keep one protocol fixed and compare two strains: the normal strain
+            and a strain with one gene disabled.
 
             Keep the method, objective and environment the same in both runs.
             The only intended change is the gene knockout.

@@ -10,23 +10,23 @@ from button import Button
 from async_menu import run_menu
 from utils import *
 from mission22 import Mission22_info
-from mission23 import Mission23_info
-from mission24 import Mission24_info
-from mission25 import Mission25_info
 from simulation import (
+    MISSION21_CHECK_VERSION,
     MISSION21_METHOD,
     MISSION21_GROWTH_OBJECTIVE,
     MISSION21_OXYGEN_REACTION,
-    MISSION21_MIN_GROWTH_DROP,
+    MISSION21_ETHANOL_EXPORT,
+    MISSION21_REQUIRED_TRACKED_FLUXES,
+    build_mission21_compensatory_report_text,
+    initialise_mission21_compensatory_comparison,
+    is_mission21_unlocked,
+    mission21_answer_matches,
+    normalise_mission21_answer,
 )
 
 
 class Mission21:
-    """Mission 21 — Controlled Comparison.
-
-    First Dr. Vega mission and first mission of Lab 5: Comparative Experiment Lab.
-    The player learns to compare two simulations instead of judging one run alone.
-    """
+    """Dr. Vega's two-mission controlled-comparison sequence."""
 
     def __init__(self, toggle_menu, player) -> None:
         self.player = player
@@ -42,9 +42,6 @@ class Mission21:
 
         self.menu21 = Mission21_info(self.toggle_menu, self.player)
         self.menu22 = Mission22_info(self.toggle_menu, self.player)
-        self.menu23 = Mission23_info(self.toggle_menu, self.player)
-        self.menu24 = Mission24_info(self.toggle_menu, self.player)
-        self.menu25 = Mission25_info(self.toggle_menu, self.player)
         self.pending = None
 
     def input(self):
@@ -56,85 +53,37 @@ class Mission21:
     async def update(self):
         intro21_dialogue = [
             f"Hello {self.player.player_name}. I'm Dr. Vega.",
-            "This lab is about comparing experiments, not only running one simulation.",
-            "Let's start with a controlled comparison: normal oxygen vs no oxygen."
+            "My lab studies controlled before-and-after comparisons.",
+            "Begin by tracing compensation after one active export route is closed."
         ]
 
         active21_dialogue = [
-            "Mission 21 is active. Run two controlled simulations.",
-            "First run the normal baseline. Then change only oxygen availability.",
-            "Use Compare Runs in New Results to interpret the difference."
+            "Mission 21 is active. Record the anaerobic reference and modified run.",
+            "Change only the ethanol-export upper bound between the two simulations.",
+            "Compare the flux differences and submit the secretion with the largest rise."
         ]
 
         intro22_dialogue = [
-            f"Good first comparison, {self.player.player_name}.",
-            "Now compare two strains instead of two environments.",
-            "Keep everything the same, then test one gene knockout."
+            f"Strong comparison, {self.player.player_name}.",
+            "You quantified compensation after an environmental constraint.",
+            "My second task will compare two strains under one controlled protocol."
         ]
 
         active22_dialogue = [
-            "Mission 22 is active. Compare normal strain vs one knockout.",
-            "Track ethanol in Production Flux for both runs.",
-            "Then use Compare Runs to see if production improved."
+            "Mission 22 is active. Compare the reference strain with one knockout.",
+            "Keep method, objective, medium and tracked evidence unchanged.",
+            "Use the two visible results to support the final strain comparison."
         ]
 
-        intro23_dialogue = [
-            f"Strong work, {self.player.player_name}.",
-            "Now compare two objectives instead of two environments or strains.",
-            "Same setup, different objective: growth versus ethanol production."
-        ]
-
-        active23_dialogue = [
-            "Mission 23 is active. Compare biomass objective vs ethanol objective.",
-            "Keep the strain and environment unchanged in both runs.",
-            "Track ethanol and use Compare Runs to inspect the objective trade-off."
-        ]
-
-        intro24_dialogue = [
-            f"Excellent comparison, {self.player.player_name}.",
-            "You showed that changing the objective changes what the model optimizes.",
-            "Now compare two simulation methods while keeping the setup unchanged."
-        ]
-
-        active24_dialogue = [
-            "Mission 24 is active. Compare FBA with pFBA.",
-            "Keep objective, genes and environment the same in both runs.",
-            "Track the same production fluxes and use Compare Runs."
-        ]
-
-        intro25_dialogue = [
-            f"Great work, {self.player.player_name}.",
-            "You compared environments, genes, objectives and methods.",
-            "For my final task, prepare a complete controlled comparison report."
-        ]
-
-        active25_dialogue = [
-            "Mission 25 is active. Build a final controlled report.",
-            "Compare aerobic and oxygen-limited growth while tracking the full product panel.",
-            "Use Compare Runs to show both growth and production-profile changes."
-        ]
-
-        completed25_dialogue = [
+        completed22_dialogue = [
             f"Excellent work, {self.player.player_name}.",
-            "You completed Dr. Vega's controlled-comparison sequence.",
-            "You are ready for Dr. Luna and sensitivity experiments."
+            "You completed Dr. Vega's two controlled-comparison missions.",
+            "Dr. Luna will continue with sensitivity experiments in Mission 23."
         ]
 
         self.input()
-        if '25' in self.missions_completed:
-            self.menu_message(completed25_dialogue, buttons=False)
-        elif '25' in self.missions_activated:
-            self.menu_message(active25_dialogue, menu_to_open=self.menu25)
-        elif '24' in self.missions_completed:
-            self.menu_message(intro25_dialogue, menu_to_open=self.menu25)
-        elif '24' in self.missions_activated:
-            self.menu_message(active24_dialogue, menu_to_open=self.menu24)
-        elif '23' in self.missions_completed:
-            self.menu_message(intro24_dialogue, menu_to_open=self.menu24)
-        elif '23' in self.missions_activated:
-            self.menu_message(active23_dialogue, menu_to_open=self.menu23)
-        elif '22' in self.missions_completed:
-            self.menu_message(intro23_dialogue, menu_to_open=self.menu23)
+        if '22' in self.missions_completed:
+            self.menu_message(completed22_dialogue, buttons=False)
         elif '22' in self.missions_activated:
             self.menu_message(active22_dialogue, menu_to_open=self.menu22)
         elif '21' in self.missions_completed:
@@ -182,110 +131,168 @@ class Mission21:
 
 
 class Mission21_info:
+    """Mission 21 — Compensatory Flux Comparison."""
+
     def __init__(self, toggle_menu, player) -> None:
         self.player = player
         self.missions_activated = self.player.missions_activated
         self.missions_completed = self.player.missions_completed
-
         self.toggle_menu = toggle_menu
         self.display_surface = pygame.display.get_surface()
-        font_path = get_resource_path('font/LycheeSoda.ttf')
-        self.font = pygame.font.Font(font_path, 30)
+        self.font = pygame.font.Font(get_resource_path('font/LycheeSoda.ttf'), 30)
         self.timer = Timer(200)
-
         self.mission21 = '21' in self.missions_activated
 
-        success_path = get_resource_path('audio/success_3.ogg')
-        self.success = pygame.mixer.Sound(success_path)
+        self.success = pygame.mixer.Sound(get_resource_path('audio/success_3.ogg'))
         self.success.set_volume(1.2)
-
-        failed_path = get_resource_path('audio/failed.ogg')
-        self.failed = pygame.mixer.Sound(failed_path)
+        self.failed = pygame.mixer.Sound(get_resource_path('audio/failed.ogg'))
         self.failed.set_volume(1.2)
 
     async def setup(self):
         menu = pygame_menu.Menu(
             height=720,
+            center_content=False,
             onclose=self.toggle_menu,
             theme=mytheme,
             title='Mission 21',
             width=1280,
         )
 
-        menu_text = pygame_menu.Menu(
+        if not is_mission21_unlocked(self.missions_completed):
+            menu.add.vertical_margin(40)
+            menu.add.label(
+                'Mission 21 is locked. Complete Mission 20 before beginning Dr. Vega\'s comparison laboratory.',
+                wordwrap=True,
+                align=pygame_menu.locals.ALIGN_CENTER,
+                padding=(25, 25, 25, 25),
+                background_color='white',
+                font_size=30,
+            )
+            menu.add.button('Back', pygame_menu.events.BACK, background_color=(70, 70, 70))
+            await run_menu(menu, self.display_surface)
+            return
+
+        hint3 = pygame_menu.Menu(
+            height=720, center_content=False, onclose=pygame_menu.events.BACK,
+            theme=mytheme, title='Mission 21 Hint 3', width=1280,
+        )
+        hint3.add.label(
+            f'Technical hint: use {MISSION21_METHOD}, objective {MISSION21_GROWTH_OBJECTIVE}, every gene active and model-default glucose. Close {MISSION21_OXYGEN_REACTION} uptake in both runs. Track ' + ', '.join(MISSION21_REQUIRED_TRACKED_FLUXES) + f'. In the second run, close only the upper bound of {MISSION21_ETHANOL_EXPORT}.',
+            wordwrap=True,
+            align=pygame_menu.locals.ALIGN_LEFT,
+            padding=(20, 20, 20, 20),
+        )
+        hint3.add.button('Back', pygame_menu.events.BACK, background_color=(70, 70, 70))
+
+        hint2 = pygame_menu.Menu(
+            height=720, center_content=False, onclose=pygame_menu.events.BACK,
+            theme=mytheme, title='Mission 21 Hint 2', width=1280,
+        )
+        hint2.add.label(
+            'Experimental hint: calculate each tracked value as modified minus reference. The requested route is the one with the largest positive difference, not necessarily the largest final value.',
+            wordwrap=True,
+            align=pygame_menu.locals.ALIGN_LEFT,
+            padding=(20, 20, 20, 20),
+        )
+        hint2.add.button('Reveal technical hint', hint3, background_color=(255, 215, 0), font_color='black')
+        hint2.add.button('Back', pygame_menu.events.BACK, background_color=(70, 70, 70))
+
+        hint1 = pygame_menu.Menu(
+            height=720, center_content=False, onclose=pygame_menu.events.BACK,
+            theme=mytheme, title='Mission 21 Hint 1', width=1280,
+        )
+        hint1.add.label(
+            'Conceptual hint: when an active export route is removed, a viable network may redirect flux through another secretion route. A controlled comparison attributes the change to the single altered bound.',
+            wordwrap=True,
+            align=pygame_menu.locals.ALIGN_LEFT,
+            padding=(20, 20, 20, 20),
+        )
+        hint1.add.button('Reveal next hint', hint2, background_color=(255, 215, 0), font_color='black')
+        hint1.add.button('Back', pygame_menu.events.BACK, background_color=(70, 70, 70))
+
+        briefing = pygame_menu.Menu(
             height=720,
-            onclose=self.toggle_menu,
+            center_content=False,
+            onclose=pygame_menu.events.BACK,
             theme=mytheme,
             title='Mission 21 Briefing',
             width=1280,
         )
-
-        menu_text.add.label(
+        briefing.add.label(
             f"""
-            Welcome to Mission 21: Controlled Comparison.
+            Dr. Vega wants one compact before-and-after comparison.
 
-            Lab 5 introduces comparative experiments. Instead of checking only one
-            simulation result, you will compare two runs side by side.
+            Shared protocol:
+            Use {MISSION21_METHOD}, the biomass objective, every gene active, model-default glucose and the complete product/byproduct panel. Close oxygen uptake in both runs and keep every unrelated bound at its model default.
 
-            Run A should be the baseline: normal medium, no gene knockouts,
-            {MISSION21_METHOD}, and the biomass objective.
+            Record two visible runs:
+            1. Anaerobic reference: ethanol export upper bound open.
+            2. Modified run: close only the upper bound of {MISSION21_ETHANOL_EXPORT}.
 
-            Run B should change only one variable: oxygen availability.
-            Close the lower bound of {MISSION21_OXYGEN_REACTION} and run the simulation again.
-
-            After the second run, open Compare Runs in New Results and check how growth changed.
+            Compare modified minus reference for every tracked secretion. Submit the route with the largest positive increase. The final field expects one concise route, not an essay.
             """,
             max_char=-1,
             wordwrap=True,
             align=pygame_menu.locals.ALIGN_LEFT,
-            margin=(0, 0),
+            padding=(20, 20, 20, 20),
         )
-        menu_text.add.button('Back', pygame_menu.events.BACK, background_color=(70, 70, 70))
-        menu_text.add.vertical_margin(20)
+        briefing.add.button('Optional Hints', hint1, background_color=(230, 230, 180), font_color='black')
+        briefing.add.button('Back', pygame_menu.events.BACK, background_color=(70, 70, 70))
 
         menu.add.vertical_margin(20)
         menu.add.label(
-            'Mission 21: Controlled Comparison',
-            wordwrap=False,
+            'Mission 21: Compensatory Flux Comparison',
             align=pygame_menu.locals.ALIGN_CENTER,
             font_size=34,
         )
-
         menu.add.label(
-            f"""
-            Dr. Vega wants a simple controlled comparison.
-
-            Compare normal aerobic growth with oxygen-limited growth.
-            The goal is not to find a new strain; the goal is to compare two runs.
-
-            Run A — baseline:
-            - Method: {MISSION21_METHOD}
-            - Objective: {MISSION21_GROWTH_OBJECTIVE}
-            - Genes: no knockouts
-            - Environment: unchanged
-
-            Run B — modified setup:
-            - Method: {MISSION21_METHOD}
-            - Objective: {MISSION21_GROWTH_OBJECTIVE}
-            - Genes: no knockouts
-            - Environment: close only the lower bound of {MISSION21_OXYGEN_REACTION}
-
-            After the second simulation, open New Results -> Compare Runs.
-            Growth should decrease by at least {MISSION21_MIN_GROWTH_DROP:.1f}.
-            """,
+            'Compare an anaerobic reference with the same setup after ethanol export is closed, then identify the largest compensatory secretion increase.',
             wordwrap=True,
             align=pygame_menu.locals.ALIGN_CENTER,
-            font_size=30,
+            font_size=27,
         )
-
-        menu.add.button('Mission 21 Briefing', menu_text, font_color='black', background_color=(255, 215, 0, 255))
-        menu.add.vertical_margin(50)
+        menu.add.label(
+            f'Controlled setup:\nOxygen uptake: {MISSION21_OXYGEN_REACTION} lower bound closed in both runs\nChanged factor: {MISSION21_ETHANOL_EXPORT} upper bound open versus closed\nProduction Flux panel: {", ".join(MISSION21_REQUIRED_TRACKED_FLUXES)}',
+            wordwrap=True,
+            align=pygame_menu.locals.ALIGN_LEFT,
+            font_size=24,
+            padding=(5, 0, 0, 35),
+        )
+        menu.add.button('Mission 21 Briefing', briefing, font_color='black', background_color=(255, 215, 0))
+        menu.add.button('Optional Hints', hint1, font_color='black', background_color=(230, 230, 180))
+        menu.add.vertical_margin(25)
 
         if self.mission21:
-            menu.add.button('Deliver Comparison Report', action=self.deliver_results, background_color=(50, 100, 100))
-            menu.add.vertical_margin(50)
-            menu.add.label('Mission Activated', font_color=(150, 150, 150))
+            report = load_mission21_comparison_check()
+            if (
+                not isinstance(report, dict)
+                or report.get('mission_id') != '21'
+                or report.get('check_version') != MISSION21_CHECK_VERSION
+            ):
+                report = initialise_mission21_compensatory_comparison()
+            menu.add.label(
+                build_mission21_compensatory_report_text(report),
+                wordwrap=True,
+                align=pygame_menu.locals.ALIGN_LEFT,
+                padding=(20, 20, 20, 20),
+                background_color='white',
+                font_size=22,
+            )
             menu.add.vertical_margin(20)
+            menu.add.label(
+                'Question: Which tracked secretion showed the largest increase after ethanol export was closed?',
+                wordwrap=True,
+                align=pygame_menu.locals.ALIGN_LEFT,
+                font_size=24,
+            )
+            menu.add.text_input(
+                'Largest increase: ',
+                default='',
+                input_underline='_',
+                maxchar=60,
+                onreturn=self.deliver_results,
+            )
+            menu.add.label('Mission Activated', font_color=(150, 150, 150))
         else:
             menu.add.button('Activate Mission', action=self.activate_mission21, background_color=(50, 100, 100))
 
@@ -293,41 +300,69 @@ class Mission21_info:
         await run_menu(menu, self.display_surface)
 
     def activate_mission21(self):
+        if not is_mission21_unlocked(self.missions_completed):
+            self.failed.play()
+            animation_text_save('Complete Mission 20 before starting Mission 21.', time=3000)
+            return
+        if '21' in self.missions_completed:
+            return
+        if '21' in self.missions_activated:
+            self.mission21 = True
+            return
+
         clear_compare_runs()
         clear_mission21_comparison_check()
+        initialise_mission21_compensatory_comparison()
         self.mission21 = True
-        if '21' not in self.missions_activated:
-            self.missions_activated.insert(0, '21')
+        self.missions_activated.insert(0, '21')
         animation_text_save('Mission 21 Activated')
         save_file(self.player.get_save_data())
 
-    def deliver_results(self):
-        report_data = load_mission21_comparison_check()
-
-        if (not report_data
-                or report_data.get('mission_id') != '21'
-                or report_data.get('check_version') != 1):
+    def deliver_results(self, answer):
+        if not is_mission21_unlocked(self.missions_completed):
             self.failed.play()
-            animation_text_save('Run the Mission 21 comparison first!', time=2500)
+            animation_text_save('Complete Mission 20 first!', time=2500)
+            return
+        if '21' not in self.missions_activated:
+            self.failed.play()
+            animation_text_save('Activate Mission 21 before delivering a conclusion.', time=2800)
             return
 
-        if report_data.get('ready_to_deliver'):
-            self.success.play()
-            if '21' not in self.missions_completed:
-                self.missions_completed.insert(0, '21')
-            animation_text_save('Congratulations! Mission 21 completed!', time=2500)
-            save_file(self.player.get_save_data())
+        report = load_mission21_comparison_check()
+        if (
+            not report
+            or report.get('mission_id') != '21'
+            or report.get('check_version') != MISSION21_CHECK_VERSION
+        ):
+            self.failed.play()
+            animation_text_save('Record the two current-format Mission 21 runs first.', time=3000)
+            return
+        if not report.get('all_runs_recorded'):
+            self.failed.play()
+            animation_text_save('Record both the anaerobic reference and ethanol-closed run.', time=3000)
+            return
+        if not report.get('same_controlled_setup'):
+            self.failed.play()
+            animation_text_save('The two runs do not preserve the controlled setup.', time=3000)
+            return
+        if not report.get('relationship_supported'):
+            self.failed.play()
+            animation_text_save('The visible comparison does not support one unique largest secretion increase.', time=3000)
+            return
+        if len(normalise_mission21_answer(answer)) != 1:
+            self.failed.play()
+            animation_text_save('Enter exactly one tracked secretion route.', time=2800)
+            return
+        if not mission21_answer_matches(answer, report):
+            self.failed.play()
+            animation_text_save('That route is not supported by the recorded before-and-after differences.', time=3000)
             return
 
-        self.failed.play()
-        if not report_data.get('baseline_run_found'):
-            animation_text_save('Missing baseline. Run normal FBA with biomass objective first.', time=3000)
-        elif not report_data.get('oxygen_limited_run_found'):
-            animation_text_save('Missing modified run. Close only the oxygen lower bound and run again.', time=3000)
-        elif not report_data.get('growth_decreased'):
-            animation_text_save('The comparison does not show a clear growth decrease yet.', time=3000)
-        else:
-            animation_text_save('Almost there. Open Compare Runs and check the controlled comparison.', time=3000)
+        self.success.play()
+        if '21' not in self.missions_completed:
+            self.missions_completed.insert(0, '21')
+        animation_text_save('Congratulations! Mission 21 completed!', time=2500)
+        save_file(self.player.get_save_data())
 
     def input(self):
         keys = pygame.key.get_pressed()

@@ -871,68 +871,8 @@ def _build_mission01_text(compare_data):
     )
 
 
-def _build_mission21_text(compare_data):
-    if not compare_data:
-        return 'Mission 21 Controlled Comparison\n\nRun two simulations to generate a comparison.'
-
-    if compare_data.get('error') and not compare_data.get('run_a'):
-        return f"Mission 21 Controlled Comparison\n\n{compare_data.get('error')}"
-
-    baseline_status = (
-        'Baseline run: normal growth setup found.'
-        if compare_data.get('baseline_run_found')
-        else 'Baseline run: missing. Run FBA with biomass objective, no knockouts and unchanged environment.'
-    )
-    anaerobic_status = (
-        'Modified run: oxygen-limited setup found.'
-        if compare_data.get('oxygen_limited_run_found')
-        else 'Modified run: missing. Run the same setup but close the lower bound of oxygen.'
-    )
-    growth_status = (
-        'Comparison: growth decreases under oxygen limitation.'
-        if compare_data.get('growth_decreased')
-        else 'Comparison: growth difference is not clear enough yet.'
-    )
-    oxygen_status = (
-        'Oxygen evidence: oxygen uptake decreased in the modified run.'
-        if compare_data.get('oxygen_uptake_decreased')
-        else 'Oxygen evidence: use Compare Runs / Exchange Flux Report to inspect oxygen uptake.'
-    )
-
-    final_status = (
-        'Controlled comparison ready. Return to Dr. Vega and deliver the report.'
-        if compare_data.get('ready_to_deliver')
-        else 'Not ready yet. Run the baseline first, then the oxygen-limited setup.'
-    )
-
-    baseline_growth = compare_data.get('baseline_growth')
-    oxygen_growth = compare_data.get('oxygen_limited_growth')
-    growth_drop = compare_data.get('growth_drop')
-    baseline_o2 = compare_data.get('baseline_oxygen_uptake')
-    oxygen_o2 = compare_data.get('oxygen_limited_oxygen_uptake')
-
-    def fmt(value):
-        return 'not available' if value is None else f'{float(value):.3f}'
-
-    return (
-        'Mission 21 Controlled Comparison\n\n'
-        f"Target: aerobic baseline vs oxygen-limited growth\n"
-        f"Method: {compare_data.get('target_method')}\n"
-        f"Objective: {compare_data.get('growth_objective')}\n"
-        f"Oxygen reaction: {compare_data.get('oxygen_reaction')}\n\n"
-        f"Growth comparison:\n"
-        f"- Baseline growth: {fmt(baseline_growth)}\n"
-        f"- Oxygen-limited growth: {fmt(oxygen_growth)}\n"
-        f"- Growth drop: {fmt(growth_drop)}\n\n"
-        f"Oxygen uptake evidence:\n"
-        f"- Baseline oxygen uptake: {fmt(baseline_o2)}\n"
-        f"- Oxygen-limited oxygen uptake: {fmt(oxygen_o2)}\n\n"
-        f"{baseline_status}\n"
-        f"{anaerobic_status}\n"
-        f"{growth_status}\n"
-        f"{oxygen_status}\n\n"
-        f"{final_status}"
-    )
+def _build_mission21_text(report_data):
+    return build_mission21_compensatory_report_text(report_data)
 
 
 def _build_mission22_text(compare_data):
@@ -1831,7 +1771,10 @@ class Window:
 
             mission21_data = None
             if '21' in self.player.missions_activated and '21' not in self.player.missions_completed:
-                mission21_data = run_mission21_comparison_check(compare_runs)
+                if sys.platform == 'emscripten':
+                    mission21_data = run_mission21_comparison_check_remote(BACKEND_URL, self.results)
+                else:
+                    mission21_data = run_mission21_comparison_check(self.results)
 
             mission22_data = None
             if '22' in self.player.missions_activated and '22' not in self.player.missions_completed:

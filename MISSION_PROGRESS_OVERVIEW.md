@@ -114,3 +114,10 @@ Resumo curto das missões implementadas até agora, organizado por laboratório.
 **Tema:** matriz controlada de robustez entre contexto de oxigénio e uma upper-bound constraint de exportação.  
 **Explica:** a mesma closure do upper bound de acetato pode ser não-binding quando o ótimo baseline não exporta acetato e provocar uma redistribuição mensurável quando o contexto ambiental utiliza essa rota. A presença de uma constraint não demonstra, por si só, que ela limita a solução.  
 **Como passar:** depois da Missão 19, usar `pFBA`, objetivo `BIOMASS_Ecoli_core_w_GAM`, todos os genes ativos, glucose default e o painel `EX_ac_e`, `EX_etoh_e`, `EX_for_e`, `EX_succ_e`, `EX_lac__D_e`. Registar os quatro pares formados por oxigénio disponível/fechado e upper bound de `EX_ac_e` aberto/fechado, mantendo todos os restantes bounds default. No contexto com oxigénio, a closure deve preservar crescimento, perfil e diagnósticos aproximadamente iguais; no contexto com captação de oxigénio fechada, deve eliminar acetato, manter crescimento viável e redistribuir o perfil, sobretudo para etanol. Entregar o contexto de oxigénio suportado pela comparação.
+
+## Lab 7 — Dr. Vega
+
+### Mission 21 — Compensatory Flux Comparison
+**Tema:** comparação quantitativa antes/depois e identificação de um fluxo compensatório.  
+**Explica:** o maior valor final e o maior aumento não são a mesma medida. Ao fechar uma rota de exportação ativa, uma solução ainda viável pode redistribuir fluxo para outra secreção; a atribuição causal requer que apenas um bound mude entre os dois runs.  
+**Como passar:** depois da Missão 20, usar FBA com objetivo `BIOMASS_Ecoli_core_w_GAM`, todos os genes ativos, glucose default, apenas o lower bound de `EX_o2_e` fechado e o painel `EX_ac_e`, `EX_etoh_e`, `EX_for_e`, `EX_succ_e`, `EX_lac__D_e`. Registar uma referência com o upper bound de `EX_etoh_e` aberto e outro run fechando apenas esse upper bound. O segundo run deve permanecer viável e o relatório deve calcular as diferenças `modificado - referência`. Entregar a única rota com o maior aumento positivo.

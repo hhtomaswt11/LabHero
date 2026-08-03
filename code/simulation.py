@@ -584,12 +584,47 @@ MISSION20_FLUX_TOLERANCE = 0.01
 MISSION20_PRIMARY_TOLERANCE = 0.01
 MISSION20_EXPECTED_RESPONSE_CONTEXT = 'oxygen_closed'
 
+# Mission 21 starts Dr. Vega's compact comparison laboratory.  The player
+# records one anaerobic reference and repeats the same visible FBA experiment
+# after closing ethanol export.  The conclusion is derived from the largest
+# positive change in the complete tracked secretion profile.
+MISSION21_CHECK_VERSION = 2
 MISSION21_METHOD = 'FBA'
 MISSION21_GROWTH_OBJECTIVE = 'BIOMASS_Ecoli_core_w_GAM'
 MISSION21_OXYGEN_REACTION = 'EX_o2_e'
-MISSION21_TARGET_CONTEXT = 'controlled comparison: aerobic vs anaerobic growth'
-MISSION21_MIN_VIABLE_GROWTH = 0.1
-MISSION21_MIN_GROWTH_DROP = 1.0
+MISSION21_GLUCOSE_REACTION = 'EX_glc__D_e'
+MISSION21_ETHANOL_EXPORT = 'EX_etoh_e'
+MISSION21_TARGET_CONTEXT = 'compensatory flux comparison after ethanol export closure'
+MISSION21_REQUIRED_TRACKED_FLUXES = [
+    'EX_ac_e',
+    'EX_etoh_e',
+    'EX_for_e',
+    'EX_succ_e',
+    'EX_lac__D_e',
+]
+MISSION21_REQUIRED_MEDIUM_FLUXES = [
+    MISSION21_GLUCOSE_REACTION,
+    MISSION21_OXYGEN_REACTION,
+    *MISSION21_REQUIRED_TRACKED_FLUXES,
+]
+MISSION21_FLUX_NAMES = {
+    'EX_ac_e': 'Acetate',
+    'EX_etoh_e': 'Ethanol',
+    'EX_for_e': 'Formate',
+    'EX_succ_e': 'Succinate',
+    'EX_lac__D_e': 'D-Lactate',
+}
+MISSION21_EXPECTED_LARGEST_INCREASE = 'EX_lac__D_e'
+MISSION21_MIN_BASELINE_GROWTH = 0.05
+MISSION21_MIN_MODIFIED_VIABILITY_RATIO = 0.50
+MISSION21_MIN_ACTIVE_BASELINE_ETHANOL = 0.01
+MISSION21_MAX_CLOSED_ETHANOL_FLUX = 0.001
+MISSION21_MIN_COMPENSATORY_INCREASE = 0.10
+MISSION21_LARGEST_INCREASE_TOLERANCE = 0.01
+MISSION21_EXPECTED_GLUCOSE_UPTAKE = 10.0
+MISSION21_GLUCOSE_UPTAKE_TOLERANCE = 0.05
+MISSION21_FLUX_TOLERANCE = 0.01
+MISSION21_PRIMARY_TOLERANCE = 0.01
 
 MISSION22_METHOD = 'FBA'
 MISSION22_GROWTH_OBJECTIVE = 'BIOMASS_Ecoli_core_w_GAM'
@@ -10311,39 +10346,64 @@ def _bound_state_for_reaction(reactions, reaction_id):
 
 
 def _mission21_environment_status(reactions):
-    """Evaluate whether the setup is default or only oxygen-limited."""
-    reaction_values = list(reactions.values())
-    oxygen_lower_bound_closed = False
+    """Describe the two Mission 21 environments without dictionary-order assumptions.
+
+    Both valid runs close oxygen uptake.  The reference keeps ethanol export at
+    its model-default upper bound, while the modified run closes only that
+    upper bound.  Explicit-key payloads must contain every lower/upper pair;
+    legacy positional saves remain readable through ``_reaction_bound_open_states``.
+    """
+    bounds_complete = True
     unexpected_changes = []
+    oxygen_lower_bound_closed = False
+    ethanol_upper_bound_closed = False
 
-    try:
-        oxygen_index = list(REACTIONS.index).index(MISSION21_OXYGEN_REACTION)
-    except ValueError:
-        oxygen_index = None
+    for index in range(len(REACTIONS.index)):
+        reaction_id = REACTIONS.index[index]
+        lower_open, upper_open = _reaction_bound_open_states(reactions, index)
+        if lower_open is None or upper_open is None:
+            bounds_complete = False
+            continue
 
-    for i in range(len(REACTIONS.index)):
-        lb_index = i * 2
-        ub_index = lb_index + 1
-        if ub_index >= len(reaction_values):
-            break
+        default_lower_open = REACTIONS.lb.iloc[index] != 0
+        default_upper_open = REACTIONS.ub.iloc[index] != 0
+        lower_changed = lower_open != default_lower_open
+        upper_changed = upper_open != default_upper_open
 
-        reaction_id = REACTIONS.index[i]
-        lower_bound_open = bool(reaction_values[lb_index])
-        upper_bound_open = bool(reaction_values[ub_index])
-        default_lower_bound_open = REACTIONS.lb.iloc[i] != 0
-        default_upper_bound_open = REACTIONS.ub.iloc[i] != 0
-
-        if i == oxygen_index:
-            oxygen_lower_bound_closed = not lower_bound_open
-            if upper_bound_open != default_upper_bound_open:
+        if reaction_id == MISSION21_OXYGEN_REACTION:
+            oxygen_lower_bound_closed = not lower_open
+            if upper_changed:
                 unexpected_changes.append(f'{reaction_id} upper bound')
-        else:
-            if lower_bound_open != default_lower_bound_open:
+            continue
+
+        if reaction_id == MISSION21_ETHANOL_EXPORT:
+            ethanol_upper_bound_closed = not upper_open
+            if lower_changed:
                 unexpected_changes.append(f'{reaction_id} lower bound')
-            if upper_bound_open != default_upper_bound_open:
+            # Closing the upper bound is the controlled Mission 21 factor.
+            if upper_changed and upper_open:
                 unexpected_changes.append(f'{reaction_id} upper bound')
+            continue
 
-    return oxygen_lower_bound_closed, unexpected_changes
+        if lower_changed:
+            unexpected_changes.append(f'{reaction_id} lower bound')
+        if upper_changed:
+            unexpected_changes.append(f'{reaction_id} upper bound')
+
+    run_type = None
+    if bounds_complete and oxygen_lower_bound_closed and not unexpected_changes:
+        run_type = 'ethanol_closed' if ethanol_upper_bound_closed else 'baseline'
+
+    return {
+        'bounds_complete': bounds_complete,
+        'oxygen_lower_bound_closed': oxygen_lower_bound_closed,
+        'ethanol_upper_bound_closed': ethanol_upper_bound_closed,
+        'unexpected_environment_changes': unexpected_changes,
+        'controlled_environment': bool(
+            bounds_complete and oxygen_lower_bound_closed and not unexpected_changes
+        ),
+        'run_type': run_type,
+    }
 
 
 def _compare_run_name(snapshot):
@@ -10363,7 +10423,9 @@ def _build_compare_run_snapshot(slot, simulation_results=None):
         reactions,
         MISSION21_OXYGEN_REACTION,
     )
-    oxygen_lower_bound_closed, oxygen_unexpected_changes = _mission21_environment_status(reactions)
+    mission21_environment = _mission21_environment_status(reactions)
+    oxygen_lower_bound_closed = bool(mission21_environment.get('oxygen_lower_bound_closed'))
+    oxygen_unexpected_changes = list(mission21_environment.get('unexpected_environment_changes') or [])
 
     production_fluxes = None
     medium_fluxes = None
@@ -10384,6 +10446,12 @@ def _build_compare_run_snapshot(slot, simulation_results=None):
         run_kind = 'objective test: ' + objective_name
     elif not environment_changed:
         run_kind = 'default growth setup'
+    elif (
+        oxygen_lower_bound_closed
+        and mission21_environment.get('ethanol_upper_bound_closed')
+        and not oxygen_unexpected_changes
+    ):
+        run_kind = 'anaerobic medium + ethanol export blocked'
     elif oxygen_lower_bound_closed and not oxygen_unexpected_changes:
         run_kind = 'anaerobic medium (oxygen uptake blocked)'
     else:
@@ -10406,6 +10474,7 @@ def _build_compare_run_snapshot(slot, simulation_results=None):
         'oxygen_lower_bound_open': oxygen_lower_bound_open,
         'oxygen_upper_bound_open': oxygen_upper_bound_open,
         'oxygen_lower_bound_closed': oxygen_lower_bound_closed,
+        'ethanol_upper_bound_closed': bool(mission21_environment.get('ethanol_upper_bound_closed')),
         'oxygen_unexpected_changes': oxygen_unexpected_changes,
         'production_flux_values': {reaction_id: _clean_display_number(value) for reaction_id, value in production_values.items()},
         'exchange_raw_fluxes': {reaction_id: _clean_display_number(value) for reaction_id, value in raw_fluxes.items()},
@@ -10448,6 +10517,8 @@ def _clean_display_number(value, tolerance=DISPLAY_ZERO_TOLERANCE):
 
 
 def _fmt_compare_value(value):
+    if value is None:
+        return 'not available'
     try:
         return f'{_clean_display_number(value):.3f}'
     except Exception:
@@ -10480,9 +10551,18 @@ def _format_compare_knockouts(snapshot):
 def _format_compare_environment(snapshot):
     if not snapshot.get('environment_changed'):
         return 'unchanged'
-    if snapshot.get('oxygen_lower_bound_closed') and not snapshot.get('oxygen_unexpected_changes'):
-        return f"oxygen lower bound closed ({MISSION21_OXYGEN_REACTION})"
+    oxygen_closed = bool(snapshot.get('oxygen_lower_bound_closed'))
+    ethanol_closed = bool(snapshot.get('ethanol_upper_bound_closed'))
     unexpected = snapshot.get('oxygen_unexpected_changes') or []
+    if oxygen_closed and ethanol_closed and not unexpected:
+        return (
+            f"oxygen lower bound closed ({MISSION21_OXYGEN_REACTION}); "
+            f"ethanol upper bound closed ({MISSION21_ETHANOL_EXPORT})"
+        )
+    if oxygen_closed and not unexpected:
+        return f"oxygen lower bound closed ({MISSION21_OXYGEN_REACTION})"
+    if ethanol_closed and not unexpected:
+        return f"ethanol upper bound closed ({MISSION21_ETHANOL_EXPORT})"
     if unexpected:
         return 'modified: ' + ', '.join(unexpected)
     return 'modified'
@@ -10573,8 +10653,8 @@ def build_compare_runs_report_text(compare_runs=None):
     growth_delta = _safe_delta(growth_b, growth_a)
 
     oxygen_id = MISSION21_OXYGEN_REACTION
-    oxygen_a = (run_a.get('exchange_uptake_fluxes') or {}).get(oxygen_id, 0.0)
-    oxygen_b = (run_b.get('exchange_uptake_fluxes') or {}).get(oxygen_id, 0.0)
+    oxygen_a = (run_a.get('exchange_uptake_fluxes') or {}).get(oxygen_id)
+    oxygen_b = (run_b.get('exchange_uptake_fluxes') or {}).get(oxygen_id)
     oxygen_delta = _safe_delta(oxygen_b, oxygen_a)
 
     lines.extend([
@@ -10613,8 +10693,8 @@ def build_compare_runs_report_text(compare_runs=None):
         values_a = run_a.get('production_flux_values') or {}
         values_b = run_b.get('production_flux_values') or {}
         for reaction_id in tracked_ids:
-            val_a = values_a.get(reaction_id, 0.0)
-            val_b = values_b.get(reaction_id, 0.0)
+            val_a = values_a.get(reaction_id)
+            val_b = values_b.get(reaction_id)
             label = PRODUCTION_FLUX_LABELS.get(reaction_id, reaction_id)
             lines.append(
                 f"- {label}: {_fmt_compare_value(val_a)} -> {_fmt_compare_value(val_b)} "
@@ -11113,99 +11193,567 @@ def run_mission01_comparison_check(compare_runs=None):
     return _build_mission01_data(compare_runs)
 
 
-def _mission21_is_baseline_run(snapshot):
-    if not snapshot:
-        return False
-    return (
-        snapshot.get('method') == MISSION21_METHOD
-        and snapshot.get('objective') == MISSION21_GROWTH_OBJECTIVE
-        and not snapshot.get('knocked_out_genes')
-        and not snapshot.get('environment_changed')
-        and snapshot.get('growth_value', 0.0) >= MISSION21_MIN_VIABLE_GROWTH
+def is_mission21_unlocked(missions_completed):
+    """Mission 21 starts only after Dr. Rio's final mission."""
+    return '20' in (missions_completed or [])
+
+
+def _mission21_number_or_none(value):
+    numeric = _as_float_or_none(value)
+    return float(numeric) if numeric is not None else None
+
+
+def _mission21_clean_number(value, decimals=6):
+    numeric = float(value)
+    if abs(numeric) < DISPLAY_ZERO_TOLERANCE:
+        numeric = 0.0
+    return round(numeric, decimals)
+
+
+def _mission21_measured_medium_values(medium_fluxes):
+    """Read only complete numeric exchange rows from the visible solution."""
+    raw_fluxes = {}
+    uptake_fluxes = {}
+    secretion_fluxes = {}
+    if not isinstance(medium_fluxes, dict) or medium_fluxes.get('error'):
+        return raw_fluxes, uptake_fluxes, secretion_fluxes
+    for item in medium_fluxes.get('items') or []:
+        if not isinstance(item, dict) or item.get('error'):
+            continue
+        reaction_id = item.get('reaction_id')
+        raw_value = _mission21_number_or_none(item.get('raw_flux'))
+        uptake_value = _mission21_number_or_none(item.get('uptake_flux'))
+        secretion_value = _mission21_number_or_none(item.get('secretion_flux'))
+        if (
+            reaction_id
+            and raw_value is not None
+            and uptake_value is not None
+            and secretion_value is not None
+        ):
+            reaction_id = str(reaction_id)
+            raw_fluxes[reaction_id] = _mission21_clean_number(raw_value)
+            uptake_fluxes[reaction_id] = _mission21_clean_number(max(uptake_value, 0.0))
+            secretion_fluxes[reaction_id] = _mission21_clean_number(max(secretion_value, 0.0))
+    return raw_fluxes, uptake_fluxes, secretion_fluxes
+
+
+def _mission21_measured_production_values(production_fluxes):
+    """Read numeric secretion values from the visible Production Flux report."""
+    values = {}
+    if not isinstance(production_fluxes, dict) or production_fluxes.get('error'):
+        return values
+    for item in production_fluxes.get('items') or []:
+        if not isinstance(item, dict) or item.get('error'):
+            continue
+        reaction_id = item.get('reaction_id')
+        value = _mission21_number_or_none(item.get('production_flux'))
+        if reaction_id and value is not None:
+            values[str(reaction_id)] = _mission21_clean_number(max(value, 0.0))
+    return values
+
+
+def _normalise_mission21_text(value):
+    text = unicodedata.normalize('NFKD', str(value or ''))
+    return ''.join(char for char in text if not unicodedata.combining(char)).lower()
+
+
+def normalise_mission21_answer(answer):
+    """Extract tracked secretion identifiers from a concise player answer."""
+    text = _normalise_mission21_text(answer)
+    if not text.strip() or re.search(r'\b(?:all|every|todos|todas|both|ambos|ambas)\b', text):
+        return tuple()
+    patterns = {
+        'EX_ac_e': r'\b(?:ex[_\s-]*ac[_\s-]*e|acetate|acetato)\b',
+        'EX_etoh_e': r'\b(?:ex[_\s-]*etoh[_\s-]*e|ethanol|etanol)\b',
+        'EX_for_e': r'\b(?:ex[_\s-]*for[_\s-]*e|formate|formato)\b',
+        'EX_succ_e': r'\b(?:ex[_\s-]*succ[_\s-]*e|succinate|succinato)\b',
+        'EX_lac__D_e': r'\b(?:ex[_\s-]*lac[_\s-]*d[_\s-]*e|d[-\s]*lactate|lactate|lactato)\b',
+    }
+    found = {
+        reaction_id for reaction_id, pattern in patterns.items()
+        if re.search(pattern, text)
+    }
+    return tuple(
+        reaction_id for reaction_id in MISSION21_REQUIRED_TRACKED_FLUXES
+        if reaction_id in found
     )
 
 
-def _mission21_is_oxygen_limited_run(snapshot):
-    if not snapshot:
-        return False
-    return (
-        snapshot.get('method') == MISSION21_METHOD
-        and snapshot.get('objective') == MISSION21_GROWTH_OBJECTIVE
-        and not snapshot.get('knocked_out_genes')
-        and snapshot.get('oxygen_lower_bound_closed')
-        and not snapshot.get('oxygen_unexpected_changes')
-        and snapshot.get('growth_value', 0.0) >= MISSION21_MIN_VIABLE_GROWTH
+def mission21_answer_matches(answer, report_data=None):
+    if report_data is None:
+        report_data = load_mission21_comparison_check() or {}
+    expected = tuple(
+        reaction_id for reaction_id in MISSION21_REQUIRED_TRACKED_FLUXES
+        if reaction_id in set(report_data.get('largest_increase_candidates') or [])
+    )
+    return bool(
+        report_data.get('evidence_ready')
+        and report_data.get('relationship_supported')
+        and expected
+        and normalise_mission21_answer(answer) == expected
     )
 
 
-def _build_mission21_data(compare_runs=None, error=None):
-    compare_runs = compare_runs or load_compare_runs() or {}
-    run_a = compare_runs.get('run_a')
-    run_b = compare_runs.get('run_b')
-    available_runs = [run for run in (run_a, run_b) if run]
-
-    baseline_run = next((run for run in available_runs if _mission21_is_baseline_run(run)), None)
-    oxygen_limited_run = next((run for run in available_runs if _mission21_is_oxygen_limited_run(run)), None)
-
-    baseline_growth = baseline_run.get('growth_value') if baseline_run else None
-    oxygen_growth = oxygen_limited_run.get('growth_value') if oxygen_limited_run else None
-    growth_drop = None
-    growth_decreased = False
-    if baseline_growth is not None and oxygen_growth is not None:
-        growth_drop = round(float(baseline_growth) - float(oxygen_growth), 3)
-        growth_decreased = growth_drop >= MISSION21_MIN_GROWTH_DROP
-
-    oxygen_id = MISSION21_OXYGEN_REACTION
-    baseline_o2 = None
-    oxygen_limited_o2 = None
-    oxygen_uptake_decreased = False
-    if baseline_run:
-        baseline_o2 = (baseline_run.get('exchange_uptake_fluxes') or {}).get(oxygen_id)
-    if oxygen_limited_run:
-        oxygen_limited_o2 = (oxygen_limited_run.get('exchange_uptake_fluxes') or {}).get(oxygen_id)
-    if baseline_o2 is not None and oxygen_limited_o2 is not None:
-        try:
-            oxygen_uptake_decreased = float(baseline_o2) > float(oxygen_limited_o2) + 0.001
-        except Exception:
-            oxygen_uptake_decreased = False
-
-    mission21_data = {
+def initialise_mission21_compensatory_comparison():
+    data = {
         'mission_id': '21',
-        'check_version': 1,
-        'mission_title': 'Controlled Comparison',
+        'check_version': MISSION21_CHECK_VERSION,
+        'mission_title': 'Compensatory Flux Comparison',
         'target_context': MISSION21_TARGET_CONTEXT,
         'target_method': MISSION21_METHOD,
         'growth_objective': MISSION21_GROWTH_OBJECTIVE,
         'oxygen_reaction': MISSION21_OXYGEN_REACTION,
-        'run_a': run_a,
-        'run_b': run_b,
-        'baseline_run_found': baseline_run is not None,
-        'oxygen_limited_run_found': oxygen_limited_run is not None,
-        'baseline_growth': round(float(baseline_growth), 3) if baseline_growth is not None else None,
-        'oxygen_limited_growth': round(float(oxygen_growth), 3) if oxygen_growth is not None else None,
-        'growth_drop': growth_drop,
-        'growth_decreased': growth_decreased,
-        'baseline_oxygen_uptake': round(float(baseline_o2), 3) if baseline_o2 is not None else None,
-        'oxygen_limited_oxygen_uptake': round(float(oxygen_limited_o2), 3) if oxygen_limited_o2 is not None else None,
-        'oxygen_uptake_decreased': oxygen_uptake_decreased,
-        'ready_to_deliver': (
-            baseline_run is not None
-            and oxygen_limited_run is not None
-            and growth_decreased
-        ),
+        'ethanol_export': MISSION21_ETHANOL_EXPORT,
+        'required_tracked_fluxes': list(MISSION21_REQUIRED_TRACKED_FLUXES),
+        'required_medium_fluxes': list(MISSION21_REQUIRED_MEDIUM_FLUXES),
+        'baseline_run': None,
+        'ethanol_closed_run': None,
+        'recorded_run_count': 0,
+        'required_run_count': 2,
+        'missing_run_types': ['baseline', 'ethanol_closed'],
+        'all_runs_recorded': False,
+        'same_controlled_setup': False,
+        'growth_ratio': None,
+        'flux_differences': {},
+        'largest_increase': None,
+        'largest_increase_candidates': [],
+        'relationship_supported': False,
+        'evidence_ready': False,
+        'answer_ready': False,
+        'ready_to_deliver': False,
+        'current_run_valid': False,
+        'current_run_recorded': False,
+        'current_run_type': None,
+        'current_issues': [],
+        'latest_attempt': None,
     }
-    if error:
-        mission21_data['error'] = error
-    save_mission21_comparison_check(mission21_data)
-    return mission21_data
+    save_mission21_comparison_check(data)
+    return data
 
 
-def run_mission21_comparison_check(compare_runs=None):
-    compare_runs = compare_runs or load_compare_runs()
-    if not compare_runs or not compare_runs.get('run_a') or not compare_runs.get('run_b'):
-        return _build_mission21_data(compare_runs, error='Run two simulations before delivering Mission 21.')
-    return _build_mission21_data(compare_runs)
+def _build_mission21_data(
+    method_name,
+    selected_objective,
+    objective_result,
+    genes,
+    reactions,
+    production_fluxes=None,
+    medium_fluxes=None,
+    existing_report=None,
+    selected_fluxes=None,
+    objective_error=None,
+):
+    """Validate and accumulate one visible Mission 21 comparison run."""
+    existing_report = existing_report or {}
+    if (
+        existing_report.get('mission_id') != '21'
+        or existing_report.get('check_version') != MISSION21_CHECK_VERSION
+    ):
+        existing_report = {}
 
+    baseline_run = copy.deepcopy(existing_report.get('baseline_run'))
+    ethanol_closed_run = copy.deepcopy(existing_report.get('ethanol_closed_run'))
+
+    environment = _mission21_environment_status(reactions)
+    run_type = environment.get('run_type')
+    knocked_out_genes = _knocked_out_genes(genes)
+    objective_numeric = _mission21_number_or_none(objective_result)
+    result_infeasible = 'INFEASIBLE' in str(objective_result or '').upper()
+
+    measured_production = _mission21_measured_production_values(production_fluxes)
+    raw_fluxes, uptake_fluxes, secretion_fluxes = _mission21_measured_medium_values(medium_fluxes)
+    diagnostics = _method_diagnostics_from_production_data(production_fluxes)
+    biomass_raw = _mission21_number_or_none(_mission13_biomass_value(production_fluxes))
+    primary_flux = _mission21_number_or_none(diagnostics.get('primary_objective_flux'))
+    method_score = _mission21_number_or_none(diagnostics.get('method_score'))
+    method_score_name = diagnostics.get('method_score_name')
+    total_absolute_flux = _mission21_number_or_none(diagnostics.get('total_absolute_flux'))
+    try:
+        active_reaction_count = int(diagnostics.get('active_reaction_count'))
+    except Exception:
+        active_reaction_count = None
+
+    if selected_fluxes is None:
+        selected_fluxes = _read_selected_production_fluxes()
+    selected_fluxes = list(selected_fluxes or [])
+
+    missing_medium_fluxes = [
+        reaction_id for reaction_id in MISSION21_REQUIRED_MEDIUM_FLUXES
+        if reaction_id not in raw_fluxes
+    ]
+    missing_selected_fluxes = [
+        reaction_id for reaction_id in MISSION21_REQUIRED_TRACKED_FLUXES
+        if reaction_id not in selected_fluxes
+    ]
+    extra_selected_fluxes = [
+        reaction_id for reaction_id in selected_fluxes
+        if reaction_id not in MISSION21_REQUIRED_TRACKED_FLUXES
+    ]
+    missing_measured_fluxes = [
+        reaction_id for reaction_id in MISSION21_REQUIRED_TRACKED_FLUXES
+        if reaction_id not in measured_production
+    ]
+
+    glucose_uptake = _mission21_number_or_none(uptake_fluxes.get(MISSION21_GLUCOSE_REACTION))
+    oxygen_uptake = _mission21_number_or_none(uptake_fluxes.get(MISSION21_OXYGEN_REACTION))
+    ethanol_export = _mission21_number_or_none(measured_production.get(MISSION21_ETHANOL_EXPORT))
+
+    issues = []
+    if objective_error:
+        issues.append(objective_error)
+    if method_name != MISSION21_METHOD:
+        issues.append('Use FBA for both Mission 21 runs.')
+    if selected_objective != MISSION21_GROWTH_OBJECTIVE:
+        issues.append('Use the biomass objective for both Mission 21 runs.')
+    if knocked_out_genes:
+        issues.append('Keep every gene active; only ethanol export may change between the two runs.')
+    if not environment.get('bounds_complete'):
+        issues.append('The environmental-bound payload is incomplete.')
+    if not environment.get('oxygen_lower_bound_closed'):
+        issues.append('Close the oxygen lower bound in both Mission 21 runs.')
+    if environment.get('unexpected_environment_changes'):
+        issues.append('Keep glucose and every unrelated environmental bound at the model default.')
+    if run_type not in {'baseline', 'ethanol_closed'}:
+        issues.append('Use either the anaerobic reference or the same setup with only ethanol export closed.')
+
+    if result_infeasible or objective_numeric is None:
+        issues.append('Mission 21 requires a numeric viable biomass result in both runs.')
+    elif objective_numeric < MISSION21_MIN_BASELINE_GROWTH:
+        issues.append('The current run does not retain enough predicted growth for comparison.')
+
+    if medium_fluxes and medium_fluxes.get('error'):
+        issues.append('The Exchange Flux Report is unavailable for this run.')
+    elif missing_medium_fluxes:
+        issues.append('The Exchange Flux Report is missing required Mission 21 reactions.')
+    if production_fluxes and production_fluxes.get('error'):
+        issues.append('The Production Flux report is unavailable for this run.')
+    elif missing_measured_fluxes:
+        issues.append('The Production Flux report is missing numeric Mission 21 values.')
+    if missing_selected_fluxes or extra_selected_fluxes:
+        issues.append('Select exactly the complete Mission 21 product/byproduct panel.')
+
+    if glucose_uptake is None or oxygen_uptake is None:
+        issues.append('Numeric glucose and oxygen uptake evidence is required.')
+    else:
+        if abs(glucose_uptake - MISSION21_EXPECTED_GLUCOSE_UPTAKE) > MISSION21_GLUCOSE_UPTAKE_TOLERANCE:
+            issues.append('Keep the model-default glucose uptake protocol in both runs.')
+        if oxygen_uptake > MISSION21_FLUX_TOLERANCE:
+            issues.append('The Mission 21 comparison must remain in the oxygen-closed context.')
+
+    for reaction_id in MISSION21_REQUIRED_TRACKED_FLUXES:
+        if reaction_id not in raw_fluxes or reaction_id not in measured_production:
+            continue
+        expected_secretion = max(float(raw_fluxes[reaction_id]), 0.0)
+        if abs(float(measured_production[reaction_id]) - expected_secretion) > MISSION21_FLUX_TOLERANCE:
+            issues.append('Production Flux and Exchange Flux evidence do not describe the same visible solution.')
+            break
+
+    if diagnostics.get('method') != MISSION21_METHOD:
+        issues.append('The visible method diagnostics do not describe FBA.')
+    if diagnostics.get('objective_reaction') != selected_objective:
+        issues.append('The visible method diagnostics do not match the biomass objective.')
+    if method_score_name != 'primary_objective_flux':
+        issues.append('The FBA method score is not identified as the primary objective flux.')
+    if primary_flux is None or biomass_raw is None or method_score is None:
+        issues.append('The visible result is missing biomass or FBA objective diagnostics.')
+    else:
+        if abs(primary_flux - objective_numeric) > MISSION21_PRIMARY_TOLERANCE:
+            issues.append('The displayed objective value does not match the visible primary biomass flux.')
+        if abs(biomass_raw - primary_flux) > MISSION21_PRIMARY_TOLERANCE:
+            issues.append('The biomass value and primary objective flux describe different results.')
+        if abs(method_score - primary_flux) > MISSION21_PRIMARY_TOLERANCE:
+            issues.append('The FBA method score does not match the primary objective flux.')
+    if total_absolute_flux is None or active_reaction_count is None:
+        issues.append('The visible FBA result is missing flux-distribution diagnostics.')
+
+    if run_type == 'baseline' and ethanol_export is not None:
+        if ethanol_export <= MISSION21_MIN_ACTIVE_BASELINE_ETHANOL:
+            issues.append('The anaerobic reference must show active ethanol export before it is closed.')
+    if run_type == 'ethanol_closed' and ethanol_export is not None:
+        if ethanol_export > MISSION21_MAX_CLOSED_ETHANOL_FLUX:
+            issues.append('The ethanol-closed run still exports ethanol.')
+
+    current_run_valid = not issues
+    current_run_recorded = False
+    current_run = None
+    if current_run_valid:
+        current_run = {
+            'run_type': run_type,
+            'method': method_name,
+            'objective': selected_objective,
+            'growth': _mission21_clean_number(objective_numeric),
+            'knocked_out_genes': list(knocked_out_genes),
+            'oxygen_lower_bound_closed': bool(environment.get('oxygen_lower_bound_closed')),
+            'ethanol_upper_bound_closed': bool(environment.get('ethanol_upper_bound_closed')),
+            'glucose_uptake': _mission21_clean_number(glucose_uptake),
+            'oxygen_uptake': _mission21_clean_number(oxygen_uptake),
+            'tracked_flux_values': {
+                reaction_id: _mission21_clean_number(measured_production[reaction_id])
+                for reaction_id in MISSION21_REQUIRED_TRACKED_FLUXES
+            },
+            'selected_fluxes': list(selected_fluxes),
+            'method_diagnostics': {
+                'method': diagnostics.get('method'),
+                'objective_reaction': diagnostics.get('objective_reaction'),
+                'primary_objective_flux': _mission21_clean_number(primary_flux),
+                'method_score': _mission21_clean_number(method_score),
+                'method_score_name': method_score_name,
+                'total_absolute_flux': _mission21_clean_number(total_absolute_flux),
+                'active_reaction_count': active_reaction_count,
+            },
+        }
+        if run_type == 'baseline':
+            baseline_run = current_run
+        else:
+            ethanol_closed_run = current_run
+        current_run_recorded = True
+
+    all_runs_recorded = isinstance(baseline_run, dict) and isinstance(ethanol_closed_run, dict)
+    missing_run_types = []
+    if not isinstance(baseline_run, dict):
+        missing_run_types.append('baseline')
+    if not isinstance(ethanol_closed_run, dict):
+        missing_run_types.append('ethanol_closed')
+
+    same_controlled_setup = bool(
+        all_runs_recorded
+        and baseline_run.get('method') == MISSION21_METHOD
+        and ethanol_closed_run.get('method') == MISSION21_METHOD
+        and baseline_run.get('objective') == MISSION21_GROWTH_OBJECTIVE
+        and ethanol_closed_run.get('objective') == MISSION21_GROWTH_OBJECTIVE
+        and not baseline_run.get('knocked_out_genes')
+        and not ethanol_closed_run.get('knocked_out_genes')
+        and baseline_run.get('oxygen_lower_bound_closed')
+        and ethanol_closed_run.get('oxygen_lower_bound_closed')
+        and not baseline_run.get('ethanol_upper_bound_closed')
+        and ethanol_closed_run.get('ethanol_upper_bound_closed')
+        and set(baseline_run.get('selected_fluxes') or []) == set(MISSION21_REQUIRED_TRACKED_FLUXES)
+        and set(ethanol_closed_run.get('selected_fluxes') or []) == set(MISSION21_REQUIRED_TRACKED_FLUXES)
+        and abs(float(baseline_run.get('glucose_uptake')) - MISSION21_EXPECTED_GLUCOSE_UPTAKE)
+        <= MISSION21_GLUCOSE_UPTAKE_TOLERANCE
+        and abs(float(ethanol_closed_run.get('glucose_uptake')) - MISSION21_EXPECTED_GLUCOSE_UPTAKE)
+        <= MISSION21_GLUCOSE_UPTAKE_TOLERANCE
+        and float(baseline_run.get('oxygen_uptake')) <= MISSION21_FLUX_TOLERANCE
+        and float(ethanol_closed_run.get('oxygen_uptake')) <= MISSION21_FLUX_TOLERANCE
+    )
+
+    growth_ratio = None
+    flux_differences = {}
+    largest_increase = None
+    largest_increase_candidates = []
+    relationship_supported = False
+    if all_runs_recorded:
+        baseline_growth = _mission21_number_or_none(baseline_run.get('growth'))
+        modified_growth = _mission21_number_or_none(ethanol_closed_run.get('growth'))
+        if baseline_growth is not None and modified_growth is not None and baseline_growth > 0:
+            growth_ratio = _mission21_clean_number(modified_growth / baseline_growth)
+        for reaction_id in MISSION21_REQUIRED_TRACKED_FLUXES:
+            baseline_value = _mission21_number_or_none(
+                (baseline_run.get('tracked_flux_values') or {}).get(reaction_id)
+            )
+            modified_value = _mission21_number_or_none(
+                (ethanol_closed_run.get('tracked_flux_values') or {}).get(reaction_id)
+            )
+            if baseline_value is None or modified_value is None:
+                flux_differences = {}
+                break
+            flux_differences[reaction_id] = _mission21_clean_number(modified_value - baseline_value)
+
+        if flux_differences:
+            largest_increase = max(flux_differences.values())
+            if largest_increase >= MISSION21_MIN_COMPENSATORY_INCREASE:
+                largest_increase_candidates = [
+                    reaction_id for reaction_id in MISSION21_REQUIRED_TRACKED_FLUXES
+                    if abs(flux_differences[reaction_id] - largest_increase)
+                    <= MISSION21_LARGEST_INCREASE_TOLERANCE
+                ]
+
+        baseline_ethanol = _mission21_number_or_none(
+            (baseline_run.get('tracked_flux_values') or {}).get(MISSION21_ETHANOL_EXPORT)
+        )
+        closed_ethanol = _mission21_number_or_none(
+            (ethanol_closed_run.get('tracked_flux_values') or {}).get(MISSION21_ETHANOL_EXPORT)
+        )
+        relationship_supported = bool(
+            same_controlled_setup
+            and growth_ratio is not None
+            and growth_ratio >= MISSION21_MIN_MODIFIED_VIABILITY_RATIO
+            and baseline_ethanol is not None
+            and baseline_ethanol > MISSION21_MIN_ACTIVE_BASELINE_ETHANOL
+            and closed_ethanol is not None
+            and closed_ethanol <= MISSION21_MAX_CLOSED_ETHANOL_FLUX
+            and largest_increase_candidates == [MISSION21_EXPECTED_LARGEST_INCREASE]
+        )
+
+    latest_attempt = {
+        'method': method_name,
+        'objective': selected_objective,
+        'run_type': run_type,
+        'objective_result': str(objective_result),
+        'issues': list(issues),
+        'recorded': current_run_recorded,
+    }
+    report = {
+        'mission_id': '21',
+        'check_version': MISSION21_CHECK_VERSION,
+        'mission_title': 'Compensatory Flux Comparison',
+        'target_context': MISSION21_TARGET_CONTEXT,
+        'target_method': MISSION21_METHOD,
+        'growth_objective': MISSION21_GROWTH_OBJECTIVE,
+        'oxygen_reaction': MISSION21_OXYGEN_REACTION,
+        'ethanol_export': MISSION21_ETHANOL_EXPORT,
+        'required_tracked_fluxes': list(MISSION21_REQUIRED_TRACKED_FLUXES),
+        'required_medium_fluxes': list(MISSION21_REQUIRED_MEDIUM_FLUXES),
+        'baseline_run': baseline_run,
+        'ethanol_closed_run': ethanol_closed_run,
+        'recorded_run_count': int(isinstance(baseline_run, dict)) + int(isinstance(ethanol_closed_run, dict)),
+        'required_run_count': 2,
+        'missing_run_types': missing_run_types,
+        'all_runs_recorded': all_runs_recorded,
+        'same_controlled_setup': same_controlled_setup,
+        'growth_ratio': growth_ratio,
+        'flux_differences': flux_differences,
+        'largest_increase': _mission21_clean_number(largest_increase) if largest_increase is not None else None,
+        'largest_increase_candidates': largest_increase_candidates,
+        'expected_largest_increase': MISSION21_EXPECTED_LARGEST_INCREASE,
+        'relationship_supported': relationship_supported,
+        'evidence_ready': all_runs_recorded,
+        'answer_ready': relationship_supported,
+        'ready_to_deliver': relationship_supported,
+        'current_run_valid': current_run_valid,
+        'current_run_recorded': current_run_recorded,
+        'current_run_type': run_type,
+        'current_issues': issues,
+        'current_run': current_run,
+        'latest_attempt': latest_attempt,
+    }
+    save_mission21_comparison_check(report)
+    return report
+
+
+def run_mission21_comparison_check(simulation_results=None):
+    """Validate the already visible Mission 21 result without re-simulating."""
+    method_name, selected_objective, genes, reactions = _read_simulation_file()
+    objective_result = None
+    production_fluxes = None
+    medium_fluxes = None
+    objective_error = None
+    try:
+        if simulation_results is not None:
+            result_objective = simulation_results[0]
+            objective_result = simulation_results[1]
+            production_fluxes = simulation_results[2] if len(simulation_results) > 2 else None
+            medium_fluxes = simulation_results[3] if len(simulation_results) > 3 else None
+            if result_objective != selected_objective:
+                objective_error = 'The displayed simulation result does not match the currently selected objective.'
+        else:
+            objective_error = 'Run a visible Mission 21 simulation before recording evidence.'
+    except Exception:
+        objective_error = 'Could not read the current visible Mission 21 simulation result.'
+
+    return _build_mission21_data(
+        method_name,
+        selected_objective,
+        objective_result,
+        genes,
+        reactions,
+        production_fluxes=production_fluxes,
+        medium_fluxes=medium_fluxes,
+        existing_report=load_mission21_comparison_check() or {},
+        objective_error=objective_error,
+    )
+
+
+def run_mission21_comparison_check_remote(backend_url, simulation_results=None):
+    """Browser parity wrapper: validate the already visible backend result."""
+    del backend_url
+    return run_mission21_comparison_check(simulation_results)
+
+
+def build_mission21_compensatory_report_text(report):
+    if not report:
+        return 'Mission 21 Compensatory Flux Comparison\n\nActivate the mission and record the two controlled runs.'
+    if report.get('mission_id') != '21' or report.get('check_version') != MISSION21_CHECK_VERSION:
+        return 'Mission 21 Compensatory Flux Comparison\n\nCurrent-format evidence has not been recorded yet.'
+
+    lines = [
+        'Mission 21 Compensatory Flux Comparison',
+        '',
+        'Controlled protocol:',
+        '- FBA biomass objective; all genes active',
+        '- Model-default glucose; oxygen uptake lower bound closed in both runs',
+        '- Reference: ethanol export upper bound open',
+        '- Modified run: close only the ethanol export upper bound',
+        '- Complete product/byproduct panel measured from each visible solution',
+        '',
+        f"Controlled runs recorded: {report.get('recorded_run_count', 0)}/{report.get('required_run_count', 2)}",
+    ]
+
+    for title, key in (
+        ('Anaerobic reference', 'baseline_run'),
+        ('Ethanol-export closure', 'ethanol_closed_run'),
+    ):
+        run = report.get(key) or {}
+        if not run:
+            lines.append(f'- {title}: not recorded')
+            continue
+        lines.extend([
+            f'{title}:',
+            f"- Growth: {float(run.get('growth')):.3f}",
+            f"- Glucose uptake: {float(run.get('glucose_uptake')):.3f}",
+            f"- Oxygen uptake: {float(run.get('oxygen_uptake')):.3f}",
+            '- Export profile:',
+        ])
+        fluxes = run.get('tracked_flux_values') or {}
+        for reaction_id in MISSION21_REQUIRED_TRACKED_FLUXES:
+            lines.append(
+                f"  {MISSION21_FLUX_NAMES.get(reaction_id, reaction_id)} ({reaction_id}): "
+                f"{float(fluxes.get(reaction_id)):.3f}"
+            )
+        lines.append('')
+
+    if report.get('all_runs_recorded'):
+        lines.append('Before/after comparison:')
+        if report.get('growth_ratio') is not None:
+            lines.append(f"- Modified growth as fraction of reference: {float(report.get('growth_ratio')) * 100:.1f}%")
+        differences = report.get('flux_differences') or {}
+        for reaction_id in MISSION21_REQUIRED_TRACKED_FLUXES:
+            if reaction_id in differences:
+                value = float(differences[reaction_id])
+                prefix = '+' if value > 0 else ''
+                lines.append(
+                    f"- {MISSION21_FLUX_NAMES.get(reaction_id, reaction_id)} ({reaction_id}): {prefix}{value:.3f}"
+                )
+    else:
+        missing = report.get('missing_run_types') or []
+        if missing:
+            lines.append('Missing controlled runs: ' + ', '.join(missing) + '.')
+
+    if report.get('current_run_recorded'):
+        lines.extend(['', f"Latest valid visible run recorded: {str(report.get('current_run_type') or '').replace('_', ' ')}."])
+    elif report.get('current_issues'):
+        lines.extend(['', 'Latest run was not recorded:'])
+        lines.extend(f'- {issue}' for issue in report.get('current_issues') or [])
+        if report.get('baseline_run') or report.get('ethanol_closed_run'):
+            lines.append('Previously valid Mission 21 evidence remains available.')
+
+    lines.append('')
+    if report.get('evidence_ready'):
+        lines.extend([
+            'Evidence complete.',
+            'Compare the signed before/after changes and identify the tracked secretion with the largest increase.',
+            'Question: Which tracked secretion showed the largest increase after ethanol export was closed?',
+        ])
+    else:
+        lines.append('Evidence incomplete.')
+
+    lines.extend([
+        '',
+        'Interpretation note: a large final flux and a large increase are not the same quantity; use the recorded differences.',
+        'The observed compensation is conditional on this model, anaerobic glucose medium and biomass objective.',
+        'All growth and exchange values come from the same visible solver results. No hidden simulation is used.',
+    ])
+    return '\n'.join(lines)
 
 def _mission22_is_baseline_run(snapshot):
     if not snapshot:
