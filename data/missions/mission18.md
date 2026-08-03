@@ -1,19 +1,23 @@
-# Mission 18 — Export Bottleneck
+# Mission 18 — Binding Export Constraints
 
 ## Theme
-Medium engineering and exchange-bound interpretation.
+Controlled comparison of binding and non-binding exchange upper bounds.
 
 ## Learning goal
-This mission teaches that exchange reactions are not only about uptake. Lower bounds often control what the cell can import, while upper bounds can restrict what the cell is allowed to export.
+An upper bound restricts positive export, but the constraint only changes the optimum when the baseline solution uses that export direction. A bound can be present without being binding.
 
-## Scenario
-Dr. Rio wants to test a medium design where glucose is unavailable, pyruvate is used as an alternative carbon source, and acetate secretion is constrained.
+## Phase A — anaerobic baseline
+Use FBA with the biomass objective, all genes active, default glucose and only the oxygen lower bound closed. Select the complete panel `EX_ac_e`, `EX_etoh_e`, `EX_for_e`, `EX_succ_e`, `EX_lac__D_e` and record growth, glucose/oxygen uptake and all export values.
 
-The player must keep the strain unchanged, use the growth objective, and justify the result with both Medium Report and Production Flux evidence.
+## Phase B — two controlled trials
+Repeat the same setup twice, closing only one candidate upper bound per run:
 
-## Main concepts
-- Exchange reactions connect the model to the environment.
-- Negative exchange flux usually means uptake/import.
-- Positive exchange flux usually means secretion/export.
-- Upper bounds can create export bottlenecks.
-- A useful design should remain viable while the bottleneck is applied.
+- `EX_ac_e`
+- `EX_succ_e`
+
+The acetate closure removes an export that is active in the baseline, retains viable growth and redistributes the product profile. The succinate closure is a non-binding control because succinate export is already zero in the baseline.
+
+## Final question
+Which upper-bound closure created the binding export constraint in this controlled screen?
+
+The player submits one concise route name or reaction identifier. All evidence comes from the same visible solver results; no hidden simulation is used.

@@ -244,7 +244,7 @@ The current pygbag build keeps player and mission state in an in-memory web stor
 
 ### Browser-only simulation paths
 
-Normal visible simulations use the FastAPI service. A few later features still need dedicated web endpoints before the whole 28-mission campaign is browser-complete, notably Mission 19's perturbation helper and the bound-sweep workflow used by Missions 26-28. They must not attempt to instantiate MEWpy inside the browser build.
+Normal visible simulations, including Mission 19's FBA/lMOMA comparison, use the FastAPI service and validate the already visible structured result. For lMOMA, the backend computes an explicit wild-type FBA reference in the selected medium before applying the GPR-derived mutant constraints; the browser never runs MEWpy locally. The remaining dedicated browser work is the bound-sweep workflow used by Missions 26-28; it must not attempt to instantiate MEWpy inside the browser build.
 
 ### Dependency security
 

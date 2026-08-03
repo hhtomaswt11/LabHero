@@ -9,123 +9,180 @@ from functions import animation_text_save
 from async_menu import run_menu
 from utils import *
 from simulation import (
+    MISSION19_CHECK_VERSION,
+    MISSION19_BASELINE_METHOD,
     MISSION19_TARGET_METHOD,
     MISSION19_GROWTH_OBJECTIVE,
     MISSION19_TARGET_GENE,
     MISSION19_TARGET_GENE_NAME,
-    MISSION19_CANDIDATE_GENES,
+    MISSION19_EXPECTED_DISABLED_REACTIONS,
     MISSION19_REQUIRED_TRACKED_FLUXES,
-    MISSION19_MIN_GROWTH,
+    LMOMA_DISPLAY_NAME,
+    build_mission19_method_comparison_report_text,
+    initialise_mission19_method_comparison,
+    is_mission19_unlocked,
+    mission19_answer_matches,
+    normalise_mission19_answer,
 )
 
 
 class Mission19_info:
-    """Mission 19 — Perturbation Method Challenge.
-
-    Dr. Rio now introduces lMOMA as a method for studying the response to a
-    single-gene perturbation. Unlike FBA/pFBA missions, the focus is not only
-    the final optimum, but whether the mutant can still maintain a viable
-    metabolic response while the player records pathway evidence.
-    """
+    """Mission 19 — Re-optimisation vs Minimal Adjustment."""
 
     def __init__(self, toggle_menu, player) -> None:
         self.player = player
         self.missions_activated = self.player.missions_activated
         self.missions_completed = self.player.missions_completed
-
         self.toggle_menu = toggle_menu
         self.display_surface = pygame.display.get_surface()
-        font_path = get_resource_path('font/LycheeSoda.ttf')
-        self.font = pygame.font.Font(font_path, 30)
+        self.font = pygame.font.Font(get_resource_path('font/LycheeSoda.ttf'), 30)
         self.timer = Timer(200)
-
         self.mission19 = '19' in self.missions_activated
 
-        success_path = get_resource_path('audio/success_3.ogg')
-        self.success = pygame.mixer.Sound(success_path)
+        self.success = pygame.mixer.Sound(get_resource_path('audio/success_3.ogg'))
         self.success.set_volume(1.2)
-
-        failed_path = get_resource_path('audio/failed.ogg')
-        self.failed = pygame.mixer.Sound(failed_path)
+        self.failed = pygame.mixer.Sound(get_resource_path('audio/failed.ogg'))
         self.failed.set_volume(1.2)
 
     async def setup(self):
         menu = pygame_menu.Menu(
             height=720,
+            center_content=False,
             onclose=self.toggle_menu,
             theme=mytheme,
             title='Mission 19',
             width=1280,
         )
 
-        menu_text = pygame_menu.Menu(
-            height=720,
-            onclose=self.toggle_menu,
-            theme=mytheme,
-            title='Mission 19 Briefing',
-            width=1280,
+        if not is_mission19_unlocked(self.missions_completed):
+            menu.add.vertical_margin(40)
+            menu.add.label(
+                'Mission 19 is locked. Complete Mission 18 before beginning the method-comparison experiment.',
+                wordwrap=True,
+                align=pygame_menu.locals.ALIGN_CENTER,
+                padding=(25, 25, 25, 25),
+                background_color='white',
+                font_size=30,
+            )
+            menu.add.button('Back', pygame_menu.events.BACK, background_color=(70, 70, 70))
+            await run_menu(menu, self.display_surface)
+            return
+
+        hint3 = pygame_menu.Menu(
+            height=720, center_content=False, onclose=pygame_menu.events.BACK,
+            theme=mytheme, title='Mission 19 Hint 3', width=1280,
         )
+        hint3.add.label(
+            f'Technical hint: record a wild-type {MISSION19_BASELINE_METHOD} baseline, then use the single knockout {MISSION19_TARGET_GENE} / {MISSION19_TARGET_GENE_NAME} under FBA and {LMOMA_DISPLAY_NAME}. Keep the default medium, biomass objective and the full product panel unchanged.',
+            wordwrap=True,
+            align=pygame_menu.locals.ALIGN_LEFT,
+            padding=(20, 20, 20, 20),
+        )
+        hint3.add.button('Back', pygame_menu.events.BACK, background_color=(70, 70, 70))
 
-        menu_text.add.label(
+        hint2 = pygame_menu.Menu(
+            height=720, center_content=False, onclose=pygame_menu.events.BACK,
+            theme=mytheme, title='Mission 19 Hint 2', width=1280,
+        )
+        hint2.add.label(
+            'Experimental hint: isolate method choice. The two mutant runs must use the same gene, objective, medium and tracked fluxes; only FBA versus Linear MOMA (lMOMA) may change.',
+            wordwrap=True,
+            align=pygame_menu.locals.ALIGN_LEFT,
+            padding=(20, 20, 20, 20),
+        )
+        hint2.add.button('Reveal technical hint', hint3, background_color=(255, 215, 0), font_color='black')
+        hint2.add.button('Back', pygame_menu.events.BACK, background_color=(70, 70, 70))
+
+        hint1 = pygame_menu.Menu(
+            height=720, center_content=False, onclose=pygame_menu.events.BACK,
+            theme=mytheme, title='Mission 19 Hint 1', width=1280,
+        )
+        hint1.add.label(
+            'Conceptual hint: FBA re-optimises the selected objective after a perturbation. Linear MOMA (lMOMA) instead minimises total absolute flux adjustment from a reference state, so its method score is not biomass.',
+            wordwrap=True,
+            align=pygame_menu.locals.ALIGN_LEFT,
+            padding=(20, 20, 20, 20),
+        )
+        hint1.add.button('Reveal next hint', hint2, background_color=(255, 215, 0), font_color='black')
+        hint1.add.button('Back', pygame_menu.events.BACK, background_color=(70, 70, 70))
+
+        briefing = pygame_menu.Menu(
+            height=720, center_content=False, onclose=pygame_menu.events.BACK,
+            theme=mytheme, title='Mission 19 Briefing', width=1280,
+        )
+        briefing.add.label(
             f"""
-            Welcome to Mission 19: Perturbation Method Challenge.
+            Dr. Rio now wants a controlled comparison of two post-perturbation modelling questions.
 
-            FBA asks what the best possible flux distribution can be for a chosen objective.
-            lMOMA is useful after a perturbation because it represents a more conservative adjustment.
+            Phase A — wild-type reference:
+            Use {MISSION19_BASELINE_METHOD}, the biomass objective, every gene active, the completely default medium and the complete product/byproduct panel.
 
-            In this mission, the perturbation is genetic, not environmental.
-            Keep the medium unchanged, use one candidate knockout, and compare pathway evidence.
+            Phase B — re-optimised mutant:
+            Disable only {MISSION19_TARGET_GENE} / {MISSION19_TARGET_GENE_NAME}. Keep every other setting unchanged and use FBA.
 
-            Track products connected with central carbon metabolism so the result is not just a growth number.
+            Phase C — minimally adjusted mutant:
+            Repeat the same knockout and setup with {LMOMA_DISPLAY_NAME}. The visible report must include both biomass flux and the lMOMA adjustment score. The adjustment score is not biomass.
+
+            Compare the two mutant biomass predictions and answer with one method name. No hidden simulation is used.
             """,
             max_char=-1,
             wordwrap=True,
             align=pygame_menu.locals.ALIGN_LEFT,
-            margin=(0, 0),
+            padding=(20, 20, 20, 20),
         )
-        menu_text.add.button('Back', pygame_menu.events.BACK, background_color=(70, 70, 70))
-        menu_text.add.vertical_margin(20)
+        briefing.add.button('Optional Hints', hint1, background_color=(230, 230, 180), font_color='black')
+        briefing.add.button('Back', pygame_menu.events.BACK, background_color=(70, 70, 70))
 
         menu.add.vertical_margin(20)
+        menu.add.label('Mission 19: Re-optimisation vs Minimal Adjustment', align=pygame_menu.locals.ALIGN_CENTER, font_size=34)
         menu.add.label(
-            'Mission 19: Perturbation Method Challenge',
-            wordwrap=False,
-            align=pygame_menu.locals.ALIGN_CENTER,
-            font_size=34,
-        )
-
-        menu.add.label(
-            f"""
-            Dr. Rio perturbation-method challenge.
-
-            Study how E. coli responds to a single-gene perturbation using {MISSION19_TARGET_METHOD}.
-
-            Use the growth objective:
-            {MISSION19_GROWTH_OBJECTIVE}
-
-            Keep the environmental conditions unchanged.
-
-            Candidate genes:
-            {'  '.join(MISSION19_CANDIDATE_GENES)}
-
-            Production Flux evidence:
-            {'  '.join(MISSION19_REQUIRED_TRACKED_FLUXES)}
-
-            Find the useful perturbation and prove that the mutant response remains viable.
-            """,
+            'Record one wild-type reference and compare the same viable knockout under FBA and Linear MOMA (lMOMA) while changing only the simulation method.',
             wordwrap=True,
             align=pygame_menu.locals.ALIGN_CENTER,
-            font_size=30,
+            font_size=27,
         )
-
-        menu.add.button('Mission 19 Briefing', menu_text, font_color='black', background_color=(255, 215, 0, 255))
-        menu.add.vertical_margin(50)
+        menu.add.label(
+            f'Target knockout: {MISSION19_TARGET_GENE} / {MISSION19_TARGET_GENE_NAME}\nGPR-disabled reaction: {", ".join(MISSION19_EXPECTED_DISABLED_REACTIONS)}\nProduction Flux panel: {", ".join(MISSION19_REQUIRED_TRACKED_FLUXES)}',
+            wordwrap=True,
+            align=pygame_menu.locals.ALIGN_LEFT,
+            font_size=24,
+            padding=(5, 0, 0, 35),
+        )
+        menu.add.button('Mission 19 Briefing', briefing, font_color='black', background_color=(255, 215, 0))
+        menu.add.button('Optional Hints', hint1, font_color='black', background_color=(230, 230, 180))
+        menu.add.vertical_margin(25)
 
         if self.mission19:
-            menu.add.button('Deliver Perturbation Report', action=self.deliver_results, background_color=(50, 100, 100))
-            menu.add.vertical_margin(50)
-            menu.add.label('Mission Activated', font_color=(150, 150, 150))
+            report = load_mission19_perturbation_check()
+            if (
+                not isinstance(report, dict)
+                or report.get('mission_id') != '19'
+                or report.get('check_version') != MISSION19_CHECK_VERSION
+            ):
+                report = initialise_mission19_method_comparison()
+            menu.add.label(
+                build_mission19_method_comparison_report_text(report),
+                wordwrap=True,
+                align=pygame_menu.locals.ALIGN_LEFT,
+                padding=(20, 20, 20, 20),
+                background_color='white',
+                font_size=22,
+            )
             menu.add.vertical_margin(20)
+            menu.add.label(
+                'Question: Which method predicted the lower viable biomass response for the same b0728 knockout?',
+                wordwrap=True,
+                align=pygame_menu.locals.ALIGN_LEFT,
+                font_size=24,
+            )
+            menu.add.text_input(
+                'Method: ',
+                default='',
+                input_underline='_',
+                maxchar=50,
+                onreturn=self.deliver_results,
+            )
+            menu.add.label('Mission Activated', font_color=(150, 150, 150))
         else:
             menu.add.button('Activate Mission', action=self.activate_mission19, background_color=(50, 100, 100))
 
@@ -133,53 +190,72 @@ class Mission19_info:
         await run_menu(menu, self.display_surface)
 
     def activate_mission19(self):
+        if not is_mission19_unlocked(self.missions_completed):
+            self.failed.play()
+            animation_text_save('Complete Mission 18 before starting Mission 19.', time=3000)
+            return
+        if '19' in self.missions_completed:
+            return
+        if '19' in self.missions_activated:
+            self.mission19 = True
+            return
+
         clear_mission19_perturbation_check()
+        initialise_mission19_method_comparison()
         self.mission19 = True
-        if '19' not in self.missions_activated:
-            self.missions_activated.insert(0, '19')
+        self.missions_activated.insert(0, '19')
         animation_text_save('Mission 19 Activated')
         save_file(self.player.get_save_data())
 
-    def deliver_results(self):
-        report_data = load_mission19_perturbation_check()
-
-        if (not report_data
-                or report_data.get('mission_id') != '19'
-                or report_data.get('check_version') != 2):
+    def deliver_results(self, answer):
+        if not is_mission19_unlocked(self.missions_completed):
             self.failed.play()
-            animation_text_save('Run a Mission 19 simulation first!', time=2500)
+            animation_text_save('Complete Mission 18 first!', time=2500)
+            return
+        if '19' not in self.missions_activated:
+            self.failed.play()
+            animation_text_save('Activate Mission 19 before delivering a conclusion.', time=2800)
             return
 
-        if report_data.get('ready_to_deliver'):
-            self.success.play()
-            if '19' not in self.missions_completed:
-                self.missions_completed.insert(0, '19')
-            animation_text_save('Congratulations! Mission 19 completed!', time=2500)
-            save_file(self.player.get_save_data())
+        report = load_mission19_perturbation_check()
+        if (
+            not report
+            or report.get('mission_id') != '19'
+            or report.get('check_version') != MISSION19_CHECK_VERSION
+        ):
+            self.failed.play()
+            animation_text_save('Record the Mission 19 reference and method comparison first.', time=3000)
+            return
+        if not report.get('baseline_ready'):
+            self.failed.play()
+            animation_text_save('Record the wild-type FBA baseline first.', time=3000)
+            return
+        if not report.get('comparison_ready'):
+            self.failed.play()
+            animation_text_save('Record both b0728 mutant runs: FBA and lMOMA.', time=3000)
+            return
+        if not report.get('relationship_supported'):
+            self.failed.play()
+            animation_text_save('The visible comparison does not support one lower viable method response.', time=3000)
+            return
+        if len(normalise_mission19_answer(answer)) != 1:
+            self.failed.play()
+            animation_text_save('Enter exactly one simulation method.', time=2800)
+            return
+        if not mission19_answer_matches(answer, report):
+            self.failed.play()
+            animation_text_save('That method is not supported by the recorded biomass comparison.', time=3000)
             return
 
-        self.failed.play()
-        if not report_data.get('method_correct'):
-            animation_text_save(f"Use {MISSION19_TARGET_METHOD} for this perturbation-response test.", time=3000)
-        elif not report_data.get('objective_correct'):
-            animation_text_save('Use the biomass objective to evaluate mutant viability.', time=3000)
-        elif report_data.get('environment_changed'):
-            animation_text_save('Keep the medium unchanged. This mission isolates the genetic perturbation.', time=3000)
-        elif not report_data.get('exact_one_knockout'):
-            animation_text_save('Use exactly one candidate gene knockout.', time=3000)
-        elif not report_data.get('target_gene_found'):
-            animation_text_save('That perturbation is not the useful response yet. Test another candidate gene.', time=3000)
-        elif not report_data.get('tracking_ready'):
-            animation_text_save('Track the required pathway products in Production Flux.', time=3000)
-        elif not report_data.get('growth_ok'):
-            animation_text_save(f"The mutant response is not viable enough. Growth must be above {MISSION19_MIN_GROWTH:.1f}.", time=3000)
-        else:
-            animation_text_save('Almost there. Use the Mission 19 Perturbation Check to refine it.', time=3000)
+        self.success.play()
+        if '19' not in self.missions_completed:
+            self.missions_completed.insert(0, '19')
+        animation_text_save('Congratulations! Mission 19 completed!', time=2500)
+        save_file(self.player.get_save_data())
 
     def input(self):
         keys = pygame.key.get_pressed()
         self.timer.update()
-
         if keys[pygame.K_ESCAPE]:
             pass
 

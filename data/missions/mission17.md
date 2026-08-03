@@ -1,25 +1,31 @@
-# Mission 17 — Essential Medium Component
+# Mission 17 — Essential Uptake Routes
 
 ## Theme
-Medium engineering and nutrient essentiality.
+Controlled nutrient-uptake screening and interpretation of signed exchange fluxes.
 
 ## Learning goal
-Show that growth does not depend only on carbon sources. Some medium components are essential because they are needed for biomass, energy-related molecules and cellular building blocks.
+Show that closing an exchange lower bound blocks uptake capacity, but does not necessarily block positive secretion. Under the controlled default medium, the player identifies which candidate lower-bound closures collapse biomass growth.
 
-## Scenario
-Dr. Rio wants the player to test whether removing one candidate medium component can collapse growth. The mission focuses on phosphate availability as an example of an essential non-carbon nutrient.
+## Phase A — baseline
+Use FBA with `BIOMASS_Ecoli_core_w_GAM`, all genes active and every environmental bound at model default. Record predicted growth and the signed exchange fluxes for:
 
-## Player task
-Use FBA with the biomass objective. Keep the strain unchanged and remove exactly one candidate nutrient from the medium at a time. Use the Medium Report to connect nutrient availability with the growth response.
+- `EX_nh4_e`
+- `EX_pi_e`
+- `EX_h2o_e`
+- `EX_h_e`
+- `EX_co2_e`
 
-## Candidate medium components
-- EX_nh4_e
-- EX_pi_e
-- EX_h2o_e
-- EX_h_e
-- EX_co2_e
+Negative exchange flux represents uptake in the displayed solution; positive exchange flux represents secretion.
 
-## Briefing concept
-Exchange reactions define what the model can import or secrete. In medium-design problems, removing a nutrient changes what the organism is allowed to use. If a required component is unavailable, the model may no longer be able to produce biomass.
+## Phase B — five controlled trials
+Repeat the baseline setup five times. In each run, close only the lower bound of one candidate exchange and keep every other lower and upper bound at model default.
 
-This mission is not a knockout problem. It is a controlled medium perturbation that teaches nutrient dependence and growth collapse.
+The mission compares every growth result with the visible baseline. A value at or below 1% of baseline is classified as collapse; a value at or above 99% is classified as baseline-like preservation.
+
+## Final question
+`Which two candidate uptake routes caused growth to collapse when their lower bounds were closed?`
+
+The answer field accepts the two reaction identifiers or common names in either order, for example `nh4 and pi` or `ammonium and phosphate`. The report presents the numerical evidence but does not print the final pair as an answer.
+
+## Scientific scope
+The conclusion is specific to this model, biomass objective and controlled medium. It is not a universal experimental claim. All values come from visible solver results; no hidden simulation is used.

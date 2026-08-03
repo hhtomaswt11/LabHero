@@ -19,9 +19,14 @@ def _selected_menu_value(data, key):
     value = data.get(key)
 
     try:
-        return value[0][0]
+        selected = value[0][0]
     except Exception:
-        return str(value)
+        selected = str(value)
+    return normalise_method_name(selected) if key == 'method' else selected
+
+
+def _method_display_name(method_name):
+    return LMOMA_DISPLAY_NAME if normalise_method_name(method_name) == 'lMOMA' else method_name
 
 
 def _format_gene(gene_id):
@@ -498,6 +503,14 @@ def _build_simulation_results_text(results):
         if active_count is not None:
             text += f'\nActive reactions: {int(active_count)}'
         text += '\nThe secondary value is not the selected primary objective flux.'
+    elif method_name == 'lMOMA':
+        adjustment = diagnostics.get('method_score')
+        text += f'\n\n{LMOMA_DISPLAY_NAME} adjustment criterion:'
+        if adjustment is not None:
+            text += f'\nTotal absolute flux adjustment: {_clean_report_number(adjustment):.3f}'
+        else:
+            text += '\nTotal absolute flux adjustment: not available'
+        text += '\nThe adjustment score is not biomass; biomass is the selected reaction flux above.'
 
     biomass_flux = _visible_biomass_flux(results)
     if objective_name != MISSION07_BIOMASS_OBJECTIVE and biomass_flux is not None:
@@ -756,176 +769,11 @@ def _build_mission16_text(report_data):
 
 
 def _build_mission17_text(report_data):
-    if not report_data:
-        return ''
-
-    if report_data.get('error') and report_data.get('objective_result') in (None, 'None'):
-        return f"Mission 17 Essential Medium Check\nError: {report_data.get('error')}"
-
-    method_status = (
-        'Method: FBA selected for nutrient essentiality testing.'
-        if report_data.get('method_correct')
-        else 'Method: use FBA for this nutrient-essentiality test.'
-    )
-    objective_status = (
-        'Objective: biomass objective used to test growth dependence.'
-        if report_data.get('objective_correct')
-        else 'Objective: use the biomass objective to test whether growth is affected.'
-    )
-    nutrient_status = (
-        f"Medium component removed: {report_data.get('target_nutrient_name')} ({report_data.get('target_nutrient')})."
-        if report_data.get('target_nutrient_closed')
-        else 'Medium component: the expected essential nutrient has not been isolated yet.'
-    )
-    candidate_count_status = (
-        'Candidate test: exactly one nutrient was removed.'
-        if report_data.get('exactly_one_candidate_closed')
-        else 'Candidate test: remove exactly one candidate nutrient at a time.'
-    )
-    environment_status = (
-        'Extra medium changes: none.'
-        if not report_data.get('unexpected_environment_changes')
-        else 'Extra medium changes: too many changes. Keep only one nutrient removal.'
-    )
-    knockout_status = (
-        'Gene knockouts: none.'
-        if not report_data.get('knocked_out_genes')
-        else 'Gene knockouts detected. This is a medium-essentiality challenge.'
-    )
-    growth_status = (
-        'Growth response: growth collapsed after nutrient removal.'
-        if report_data.get('growth_collapsed')
-        else f"Growth response: still above the collapse threshold ({float(report_data.get('maximum_growth_after_removal', 0.0)):.1f})."
-    )
-
-    uptake_fluxes = report_data.get('medium_uptake_fluxes') or {}
-    candidate_nutrients = report_data.get('candidate_nutrients') or []
-    medium_lines = []
-    for reaction_id in candidate_nutrients:
-        medium_lines.append(f"- {reaction_id}: uptake {float(uptake_fluxes.get(reaction_id, 0.0)):.3f}")
-    medium_text = '\n'.join(medium_lines) if medium_lines else 'No medium fluxes available.'
-
-    closed = report_data.get('closed_candidate_nutrients') or []
-    final_status = (
-        'Essential medium component identified. Return to Dr. Rio and deliver the report.'
-        if report_data.get('ready_to_deliver')
-        else 'Not ready yet. Test one candidate nutrient at a time and check the growth response.'
-    )
-
-    return (
-        'Mission 17 Essential Medium Check\n\n'
-        f"Context: {report_data.get('target_context')}\n"
-        f"Selected method: {report_data.get('method')}\n"
-        f"Selected objective: {report_data.get('selected_objective')}\n"
-        f"Growth/objective flux: {report_data.get('objective_result')}\n"
-        f"Closed candidate nutrient(s): {', '.join(closed) if closed else 'none'}\n\n"
-        f"Medium uptake evidence:\n{medium_text}\n\n"
-        f"{method_status}\n"
-        f"{objective_status}\n"
-        f"{candidate_count_status}\n"
-        f"{nutrient_status}\n"
-        f"{environment_status}\n"
-        f"{knockout_status}\n"
-        f"{growth_status}\n\n"
-        f"{final_status}"
-    )
-
-
+    return build_mission17_essential_routes_report_text(report_data)
 
 
 def _build_mission18_text(report_data):
-    if not report_data:
-        return ''
-
-    if report_data.get('error') and report_data.get('objective_result') in (None, 'None'):
-        return f"Mission 18 Export Bottleneck Check\nError: {report_data.get('error')}"
-
-    method_status = (
-        'Method: FBA selected for export-bottleneck testing.'
-        if report_data.get('method_correct')
-        else 'Method: use FBA for this export-bottleneck test.'
-    )
-    objective_status = (
-        'Objective: biomass objective used to test viability.'
-        if report_data.get('objective_correct')
-        else 'Objective: use the biomass objective to test whether the design remains viable.'
-    )
-    carbon_status = (
-        'Carbon source: glucose uptake blocked and pyruvate uptake detected.'
-        if report_data.get('glucose_uptake_blocked') and report_data.get('pyruvate_uptake_detected')
-        else 'Carbon source: remove glucose uptake and confirm pyruvate uptake.'
-    )
-    bottleneck_status = (
-        f"Export bottleneck: {report_data.get('export_bottleneck_name')} export is constrained."
-        if report_data.get('acetate_export_blocked')
-        else f"Export bottleneck: {report_data.get('export_bottleneck_name')} can still be secreted. Check the upper bound."
-    )
-    environment_status = (
-        'Extra medium changes: none.'
-        if not report_data.get('unexpected_environment_changes')
-        else 'Extra medium changes: too many changes. Keep only the carbon-source swap and export bottleneck.'
-    )
-    knockout_status = (
-        'Gene knockouts: none.'
-        if not report_data.get('knocked_out_genes')
-        else 'Gene knockouts detected. This mission is about exchange bounds, not genes.'
-    )
-    tracking_status = (
-        'Evidence: required product/byproduct fluxes are being tracked.'
-        if report_data.get('tracking_ready')
-        else 'Evidence: track acetate and the competing fermentation products.'
-    )
-    growth_status = (
-        'Growth: viable under the bottleneck design.'
-        if report_data.get('growth_ok')
-        else f"Growth: below the viability threshold ({float(report_data.get('minimum_growth', 0.0)):.1f})."
-    )
-
-    uptake_fluxes = report_data.get('medium_uptake_fluxes') or {}
-    tracked_values = report_data.get('tracked_flux_values') or {}
-
-    medium_lines = []
-    for reaction_id in [
-        report_data.get('blocked_carbon_source'),
-        report_data.get('alternative_carbon_source'),
-        report_data.get('export_bottleneck'),
-    ]:
-        if reaction_id:
-            medium_lines.append(f"- {reaction_id}: uptake {float(uptake_fluxes.get(reaction_id, 0.0)):.3f}")
-    medium_text = '\n'.join(medium_lines) if medium_lines else 'No medium fluxes available.'
-
-    production_lines = []
-    for reaction_id in report_data.get('required_tracked_fluxes') or []:
-        production_lines.append(f"- {reaction_id}: production {float(tracked_values.get(reaction_id, 0.0)):.3f}")
-    production_text = '\n'.join(production_lines) if production_lines else 'No production fluxes selected.'
-
-    missing = report_data.get('missing_required_fluxes') or []
-    final_status = (
-        'Export bottleneck diagnosed. Return to Dr. Rio and deliver the report.'
-        if report_data.get('ready_to_deliver')
-        else 'Not ready yet. Check the medium setup, export bound and flux evidence.'
-    )
-
-    return (
-        'Mission 18 Export Bottleneck Check\n\n'
-        f"Context: {report_data.get('target_context')}\n"
-        f"Selected method: {report_data.get('method')}\n"
-        f"Selected objective: {report_data.get('selected_objective')}\n"
-        f"Growth/objective flux: {report_data.get('objective_result')}\n"
-        f"Export bottleneck target: {report_data.get('export_bottleneck')}\n"
-        f"Missing tracked fluxes: {', '.join(missing) if missing else 'none'}\n\n"
-        f"Medium uptake evidence:\n{medium_text}\n\n"
-        f"Production/export evidence:\n{production_text}\n\n"
-        f"{method_status}\n"
-        f"{objective_status}\n"
-        f"{carbon_status}\n"
-        f"{bottleneck_status}\n"
-        f"{environment_status}\n"
-        f"{knockout_status}\n"
-        f"{tracking_status}\n"
-        f"{growth_status}\n\n"
-        f"{final_status}"
-    )
+    return build_mission18_binding_export_report_text(report_data)
 
 def _build_mission04_text(production_data):
     return build_mission04_evidence_report_text(production_data)
@@ -952,82 +800,7 @@ def _add_summary_section(menu, title, text):
     menu.add.vertical_margin(25)
 
 def _build_mission19_text(report_data):
-    if not report_data:
-        return 'Mission 19 Perturbation Check\n\nRun a simulation to generate a perturbation report.'
-
-    if report_data.get('error'):
-        return f"Mission 19 Perturbation Check\nError: {report_data.get('error')}"
-
-    method_status = (
-        'Method: lMOMA selected for perturbation-response analysis.'
-        if report_data.get('method_correct')
-        else 'Method: use lMOMA to study the response after a knockout.'
-    )
-    objective_status = (
-        'Objective: biomass objective selected for viability.'
-        if report_data.get('objective_correct')
-        else 'Objective: use the biomass objective to evaluate mutant viability.'
-    )
-    environment_status = (
-        'Environment: unchanged.'
-        if not report_data.get('environment_changed')
-        else 'Environment: changed. Keep the medium unchanged for this perturbation test.'
-    )
-    knockout_status = (
-        f"Knockout: useful perturbation found ({report_data.get('target_gene')} / {report_data.get('target_gene_name')})."
-        if report_data.get('target_gene_found')
-        else 'Knockout: test one candidate gene at a time.'
-    )
-    evidence_status = (
-        'Evidence: required pathway product fluxes are being tracked.'
-        if report_data.get('tracking_ready')
-        else 'Evidence: incomplete. Track the required pathway products.'
-    )
-    growth_status = (
-        'Growth: mutant response remains viable.'
-        if report_data.get('growth_ok')
-        else 'Growth: mutant response is not viable enough yet.'
-    )
-
-    flux_lines = []
-    tracked_values = report_data.get('tracked_flux_values') or {}
-    for reaction_id in report_data.get('required_tracked_fluxes') or []:
-        flux_lines.append(f"- {reaction_id}: {float(tracked_values.get(reaction_id, 0.0)):.3f}")
-    flux_text = '\n'.join(flux_lines) if flux_lines else 'none'
-
-    missing = report_data.get('missing_required_fluxes') or []
-    missing_text = ', '.join(missing) if missing else 'none'
-
-    final_status = (
-        'Perturbation report ready. Return to Dr. Rio and deliver the results.'
-        if report_data.get('ready_to_deliver')
-        else 'Not ready yet. Keep testing method, knockout choice and flux evidence.'
-    )
-
-    knocked_out = ', '.join(report_data.get('knocked_out_genes') or []) or 'none'
-
-    return (
-        'Mission 19 Perturbation Check\n\n'
-        f"Target method: {report_data.get('target_method')}\n"
-        f"Selected method: {report_data.get('method')}\n"
-        f"Objective: {report_data.get('selected_objective')}\n"
-        f"Objective result shown by method: {report_data.get('objective_result')}\n"
-        f"Biomass flux used for viability: {report_data.get('biomass_flux')}\n"
-        f"Growth measure: {report_data.get('growth_measure')}\n\n"
-        f"Candidate genes: {', '.join(report_data.get('candidate_genes') or [])}\n"
-        f"Knocked-out genes: {knocked_out}\n\n"
-        f"Tracked pathway fluxes:\n{flux_text}\n"
-        f"Missing evidence: {missing_text}\n\n"
-        f"{method_status}\n"
-        f"{objective_status}\n"
-        f"{environment_status}\n"
-        f"{knockout_status}\n"
-        f"{evidence_status}\n"
-        f"{growth_status}\n\n"
-        f"{final_status}"
-    )
-
-
+    return build_mission19_method_comparison_report_text(report_data)
 
 def _build_mission20_text(report_data):
     if not report_data:
@@ -1719,6 +1492,7 @@ class Window:
             ('09', MISSION09_CANDIDATE_GENES),
             ('10', MISSION10_CANDIDATE_GENES),
             ('14', MISSION14_CANDIDATE_GENES),
+            ('19', [MISSION19_TARGET_GENE]),
         ]
         for mission_id, candidates in gene_mission_candidates:
             if mission_id in self.player.missions_activated and mission_id not in self.player.missions_completed:
@@ -2100,7 +1874,7 @@ class Window:
             _add_summary_section(
                 menu_summary,
                 'General setup',
-                f'Simulation method: {simulation_method}\nObjective: {objective_name}'
+                f'Simulation method: {_method_display_name(simulation_method)}\nObjective: {objective_name}'
             )
 
             _add_summary_section(
@@ -2343,15 +2117,24 @@ class Window:
 
             mission17_data = None
             if '17' in self.player.missions_activated and '17' not in self.player.missions_completed:
-                mission17_data = run_mission17_essential_medium_check(self.results)
+                if sys.platform == 'emscripten':
+                    mission17_data = run_mission17_essential_medium_check_remote(BACKEND_URL, self.results)
+                else:
+                    mission17_data = run_mission17_essential_medium_check(self.results)
 
             mission18_data = None
             if '18' in self.player.missions_activated and '18' not in self.player.missions_completed:
-                mission18_data = run_mission18_export_bottleneck_check(self.results)
+                if sys.platform == 'emscripten':
+                    mission18_data = run_mission18_export_bottleneck_check_remote(BACKEND_URL, self.results)
+                else:
+                    mission18_data = run_mission18_export_bottleneck_check(self.results)
 
             mission19_data = None
             if '19' in self.player.missions_activated and '19' not in self.player.missions_completed:
-                mission19_data = run_mission19_perturbation_check(self.results)
+                if sys.platform == 'emscripten':
+                    mission19_data = run_mission19_perturbation_check_remote(BACKEND_URL, self.results)
+                else:
+                    mission19_data = run_mission19_perturbation_check(self.results)
 
             mission20_data = None
             if '20' in self.player.missions_activated and '20' not in self.player.missions_completed:
@@ -2731,8 +2514,8 @@ class Window:
 
             mission19_viable_perturbation = (
                 mission19_data is not None
-                and mission19_data.get('method_correct')
-                and mission19_data.get('growth_ok')
+                and mission19_data.get('current_run_recorded')
+                and (mission19_data.get('current_biomass_flux') or 0.0) > MISSION07_FLUX_TOLERANCE
             )
             visible_biomass = _visible_biomass_flux(self.results)
             no_predicted_growth = (
@@ -2777,7 +2560,7 @@ class Window:
                             items=[('FBA', 'fba'),
                                    ('pFBA', 'pfba'),
                                 #    ('MOMA', 'moma'),
-                                   ('lMOMA', 'lmoma'),
+                                   (LMOMA_DISPLAY_NAME, 'lmoma'),
                                    ('ROOM','room')],
                                    default=0,
                                    selection_box_height=5, dropselect_id='method', background_color="white", font_color=(20,0,150))

@@ -55,16 +55,15 @@ These differences can be critical in bioprocess engineering and biotechnology. A
 
 ### lMOMA: Linear Minimization of Metabolic Adjustment
 
-lMOMA is like a flexible thinker. It helps you see how organisms adapt when conditions change. Picture it as an organism's strategy for staying fit and adjusting its metabolism on the fly.
+lMOMA predicts a post-perturbation flux distribution by minimizing the sum of absolute flux deviations from an explicit pre-perturbation reference state. In LabHero, that reference is an FBA solution computed in the selected medium before gene knockouts are applied. It therefore asks a different question from FBA, which re-optimizes the selected objective under the new constraints.
 
-In simple terms, lMOMA shows how microorganisms change their metabolic plans when the environment shifts. It's like switching from running to walking when the terrain changes, staying efficient while adapting.
+The lMOMA adjustment score measures distance from the reference solution; it is not a biomass value. To assess viability, inspect the biomass-reaction flux returned in the same solution.
 
 
 ### ROOM: Regulatory On/Off Minimization
 
-Lastly, meet ROOM, the optimal explorer! It helps you understand how organisms make choices, turning some genes on and others off, just like a smart thermostat adjusting your home's temperature.
+ROOM predicts a post-perturbation state while minimizing the number of significant flux changes relative to a reference. It operates on flux changes and should not be interpreted as directly turning genes on or off.
 
-ROOM reveals how microorganisms regulate their genes to optimize their metabolism. It's like a super-smart control system, ensuring that only the right switches are turned on and off to save energy and stay efficient.
 
 
 

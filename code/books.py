@@ -452,9 +452,9 @@ class Books:
 
             pFBA: This method is all about being efficient. It helps you find the most economical way for organisms to use nutrients.
 
-            lMOMA: like a flexible thinker. It helps you see how organisms adapt when conditions change.  lMOMA shows how microorganisms change their metabolic plans when the environment shifts.
+            Linear MOMA (lMOMA): predicts a post-perturbation flux distribution by minimizing the total absolute deviation from an explicit pre-perturbation reference state. Its adjustment score is not biomass; inspect the biomass reaction separately.
 
-            ROOM: the optimal explorer! It helps you understand how organisms make choices, turning some genes on and others off. ROOM reveals how microorganisms regulate their genes to optimize their metabolism.
+            ROOM: predicts a post-perturbation state while minimizing the number of significant flux changes relative to a reference. It does not directly switch genes on or off.
 
             """,
             max_char=-1,

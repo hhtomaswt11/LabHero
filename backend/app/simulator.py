@@ -1,5 +1,6 @@
 from pathlib import Path
 
+from cobra.flux_analysis import moma
 from cobra.io import read_sbml_model
 from mewpy.simulation import get_simulator
 
@@ -10,6 +11,15 @@ _MODEL_PATH = Path(__file__).resolve().parent.parent / "models" / "e_coli_core.x
 _model = read_sbml_model(str(_MODEL_PATH))
 _simul = get_simulator(_model)
 _genes = _simul.find_genes()
+_DISPLAY_ZERO_TOLERANCE = 0.0005
+
+
+def _clean_numeric(value: float, decimals: int) -> float:
+    """Round API numbers and avoid exposing negative zero to the browser."""
+    numeric = round(float(value), decimals)
+    if abs(numeric) < _DISPLAY_ZERO_TOLERANCE:
+        return 0.0
+    return numeric
 
 
 def _extract_fluxes(result) -> dict[str, float] | None:
@@ -38,7 +48,7 @@ def _extract_fluxes(result) -> dict[str, float] | None:
     clean_fluxes: dict[str, float] = {}
     for reaction_id, value in fluxes.items():
         try:
-            clean_fluxes[str(reaction_id)] = round(float(value), 6)
+            clean_fluxes[str(reaction_id)] = _clean_numeric(value, 6)
         except Exception:
             continue
     return clean_fluxes
@@ -56,23 +66,80 @@ def _method_score_name(method: str) -> str:
         return "total_absolute_flux"
     if method == "FBA":
         return "primary_objective_flux"
+    if method == "lMOMA":
+        return "total_absolute_flux_adjustment"
+    if method == "ROOM":
+        return "significant_flux_change_score"
     return "solver_objective_value"
+
+
+def _apply_constraints(cobra_model, constraints: dict[str, tuple[float, float]]) -> None:
+    """Apply request bounds to an isolated COBRApy model copy."""
+    for reaction_id, bounds in constraints.items():
+        lower_bound, upper_bound = bounds
+        reaction = cobra_model.reactions.get_by_id(str(reaction_id))
+        reaction.bounds = (float(lower_bound), float(upper_bound))
+
+
+def _simulate_lmoma_with_explicit_reference(
+    objective: str,
+    environmental_constraints: dict[str, tuple[float, float]],
+    disabled_reactions: list[str],
+):
+    """Run lMOMA against a wild-type FBA reference in the same medium.
+
+    Passing no reference to COBRApy after knockout bounds are applied makes its
+    fallback pFBA solution a mutant reference and collapses the adjustment score
+    to zero.  Both model copies here are independent of the shared MEWpy
+    simulator: the reference has no gene knockouts, while the mutant receives
+    the GPR-derived reaction closures.
+    """
+    reference_model = _model.copy()
+    reference_model.objective = objective
+    _apply_constraints(reference_model, environmental_constraints)
+    reference_solution = reference_model.optimize()
+    if str(reference_solution.status).lower() != "optimal":
+        raise RuntimeError(
+            f"Could not construct the wild-type FBA reference for lMOMA: {reference_solution.status}."
+        )
+
+    mutant_model = _model.copy()
+    mutant_model.objective = objective
+    _apply_constraints(mutant_model, environmental_constraints)
+    _apply_constraints(
+        mutant_model,
+        {reaction_id: (0.0, 0.0) for reaction_id in disabled_reactions},
+    )
+    result = moma(mutant_model, solution=reference_solution, linear=True)
+    if str(result.status).lower() != "optimal":
+        raise RuntimeError(f"Linear MOMA did not return an optimal solution: {result.status}.")
+    return result
 
 
 def simulate(req: SimulateRequest) -> SimulateResponse:
     try:
-        _simul.objective = req.objective
-
-        constraints = {k: tuple(v) for k, v in req.env_conditions.items()}
+        environmental_constraints = {k: tuple(v) for k, v in req.env_conditions.items()}
 
         known_knockouts = [
             gene_id for gene_id in req.gene_knockouts
             if gene_id in _genes.index
         ]
-        for reaction_id in disabled_reaction_ids(_model, known_knockouts):
-            constraints[reaction_id] = (0.0, 0.0)
+        disabled_reactions = disabled_reaction_ids(_model, known_knockouts)
 
-        result = _simul.simulate(method=req.method, constraints=constraints)
+        if req.method == "lMOMA":
+            result = _simulate_lmoma_with_explicit_reference(
+                req.objective,
+                environmental_constraints,
+                disabled_reactions,
+            )
+            solver_value = getattr(result, "objective_value", None)
+        else:
+            _simul.objective = req.objective
+            constraints = dict(environmental_constraints)
+            for reaction_id in disabled_reactions:
+                constraints[reaction_id] = (0.0, 0.0)
+            result = _simul.simulate(method=req.method, constraints=constraints)
+            solver_value = _parse_solver_value(result)
 
         text = str(result)
         lines = text.splitlines()
@@ -86,7 +153,6 @@ def simulate(req: SimulateRequest) -> SimulateResponse:
             )
 
         fluxes = _extract_fluxes(result) or {}
-        solver_value = _parse_solver_value(result)
         primary_objective_flux = fluxes.get(req.objective)
         if primary_objective_flux is None and req.method == "FBA":
             primary_objective_flux = solver_value
@@ -104,11 +170,11 @@ def simulate(req: SimulateRequest) -> SimulateResponse:
             objective=req.objective,
             objective_reaction=req.objective,
             method=req.method,
-            result=round(float(primary_objective_flux), 3),
-            primary_objective_flux=round(float(primary_objective_flux), 6),
-            method_score=round(float(solver_value), 6) if solver_value is not None else None,
+            result=_clean_numeric(primary_objective_flux, 3),
+            primary_objective_flux=_clean_numeric(primary_objective_flux, 6),
+            method_score=_clean_numeric(solver_value, 6) if solver_value is not None else None,
             method_score_name=_method_score_name(req.method),
-            total_absolute_flux=round(float(total_absolute_flux), 6) if total_absolute_flux is not None else None,
+            total_absolute_flux=_clean_numeric(total_absolute_flux, 6) if total_absolute_flux is not None else None,
             active_reaction_count=active_reaction_count,
             status="ok",
             fluxes=fluxes,

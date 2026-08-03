@@ -23,8 +23,7 @@ from simulation import (
     is_mission16_unlocked,
     mission16_answer_matches,
     normalise_mission16_answer,
-    MISSION17_TARGET_NUTRIENT_NAME,
-    MISSION18_EXPORT_BOTTLENECK_NAME,
+    MISSION19_BASELINE_METHOD,
     MISSION19_TARGET_METHOD,
     MISSION19_TARGET_GENE,
     MISSION19_TARGET_GENE_NAME,
@@ -82,44 +81,44 @@ class Mission16:
         ]
 
         self.m17_step1 = [
-            "Mission 17 is active. Test an essential medium component.",
-            f"Focus on {MISSION17_TARGET_NUTRIENT_NAME} availability and growth response.",
-            "Use the Medium Report to connect nutrient removal with viability."
+            "Mission 17 is active. Record one complete default-medium baseline.",
+            "Then close one candidate lower bound per run and compare growth.",
+            "Use signed exchange fluxes to distinguish uptake from secretion."
         ]
 
         self.m17_step2 = [
             f"Excellent work, {self.player.player_name}.",
-            "You showed that growth depends on more than carbon availability.",
-            "Some medium components are essential building blocks for the cell."
+            "You identified which lower-bound closures remove required uptake routes.",
+            "Next, use an upper bound to create a controlled export bottleneck."
         ]
 
         self.m18_step1 = [
             f"Great progress, {self.player.player_name}.",
-            "You have tested carbon sources and essential nutrients.",
-            "Now let's test what happens when an export route becomes a bottleneck."
+            "Lower bounds controlled uptake in the previous screen.",
+            "Now test how an upper bound can constrain secretion and export."
         ]
 
         self.m18_step2 = [
-            f"Mission 18 is active. Constrain {MISSION18_EXPORT_BOTTLENECK_NAME} export.",
-            "Use both Medium Report and Production Flux evidence.",
-            "Keep the strain unchanged and check that growth remains viable."
+            "Mission 18 is active. Record one anaerobic export baseline.",
+            "Then close two candidate upper bounds in separate controlled runs.",
+            "Compare growth and the complete visible product profile."
         ]
 
         self.m18_step3 = [
             f"Excellent work, {self.player.player_name}.",
-            "You showed that exchange bounds can control both uptake and secretion.",
+            "You showed that a constraint matters only when the baseline uses that flux.",
             "Now let's test how the model responds to a genetic perturbation."
         ]
 
         self.m19_step1 = [
-            "Mission 19 is active. Use a perturbation-response method.",
-            f"Select {MISSION19_TARGET_METHOD}, keep the medium unchanged, and test one gene.",
-            "Use Production Flux evidence to diagnose the mutant response."
+            f"Mission 19 is active. Record a wild-type {MISSION19_BASELINE_METHOD} baseline.",
+            f"Then compare the same {MISSION19_TARGET_GENE} knockout under FBA and {MISSION19_TARGET_METHOD}.",
+            "Keep every other setting fixed and compare visible biomass and method diagnostics."
         ]
 
         self.m19_step2 = [
-            f"Excellent perturbation analysis, {self.player.player_name}.",
-            f"You used {MISSION19_TARGET_METHOD} to study a single-gene response.",
+            f"Excellent method comparison, {self.player.player_name}.",
+            f"You separated re-optimised FBA from the minimal-adjustment {MISSION19_TARGET_METHOD} response.",
             "One final Dr. Rio robustness challenge remains."
         ]
 

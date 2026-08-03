@@ -440,7 +440,8 @@ class Mission13RegressionTests(unittest.TestCase):
         ):
             self.assertIn(field, schema_source)
             self.assertIn(field, simulator_source)
-        self.assertIn('result=round(float(primary_objective_flux), 3)', simulator_source)
+        self.assertIn('def _clean_numeric', simulator_source)
+        self.assertIn('result=_clean_numeric(primary_objective_flux, 3)', simulator_source)
 
     def test_ui_has_progression_guard_report_and_answer_input(self):
         source = (CODE_DIR / 'mission13.py').read_text(encoding='utf-8')
