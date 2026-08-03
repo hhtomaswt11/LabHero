@@ -803,111 +803,7 @@ def _build_mission19_text(report_data):
     return build_mission19_method_comparison_report_text(report_data)
 
 def _build_mission20_text(report_data):
-    if not report_data:
-        return 'Mission 20 Robustness Report\n\nRun a simulation to generate a final medium report.'
-
-    if report_data.get('error') and report_data.get('objective_result') in (None, 'None'):
-        return f"Mission 20 Robustness Report\nError: {report_data.get('error')}"
-
-    method_status = (
-        'Method: pFBA selected for a parsimonious robustness report.'
-        if report_data.get('method_correct')
-        else 'Method: use pFBA for the final robustness report.'
-    )
-    objective_status = (
-        'Objective: biomass objective selected for viability.'
-        if report_data.get('objective_correct')
-        else 'Objective: use the biomass objective to evaluate growth viability.'
-    )
-    carbon_status = (
-        'Carbon source: glucose blocked and pyruvate uptake detected in the Exchange Flux Report.'
-        if report_data.get('glucose_uptake_blocked') and report_data.get('pyruvate_uptake_detected')
-        else 'Carbon source: verify glucose removal and pyruvate uptake in the Exchange Flux Report.'
-    )
-    bottleneck_status = (
-        'Export stress: acetate export bottleneck detected.'
-        if report_data.get('acetate_export_blocked')
-        else 'Export stress: acetate export is not constrained enough yet.'
-    )
-    essential_status = (
-        'Essential uptake: required nutrient uptake evidence detected.'
-        if report_data.get('essential_uptake_ready')
-        else 'Essential uptake: Exchange Flux Report is missing required nutrient evidence.'
-    )
-    environment_status = (
-        'Extra medium changes: none.'
-        if not report_data.get('unexpected_environment_changes')
-        else 'Extra medium changes: too many changes. Keep the final stress design controlled.'
-    )
-    knockout_status = (
-        'Gene knockouts: none.'
-        if not report_data.get('knocked_out_genes')
-        else 'Gene knockouts detected. This final Rio report keeps the strain unchanged.'
-    )
-    evidence_status = (
-        'Production evidence: full byproduct panel tracked.'
-        if report_data.get('tracking_ready')
-        else 'Production evidence: incomplete. Track the full byproduct panel.'
-    )
-    growth_status = (
-        'Growth: design remains viable under the modified medium.'
-        if report_data.get('growth_ok')
-        else f"Growth: below the robustness threshold ({float(report_data.get('minimum_growth', 0.0)):.1f})."
-    )
-
-    uptake_fluxes = report_data.get('medium_uptake_fluxes') or {}
-    uptake_ids = [
-        report_data.get('blocked_carbon_source'),
-        report_data.get('alternative_carbon_source'),
-    ] + list(report_data.get('required_essential_uptakes') or []) + ['EX_o2_e']
-    medium_lines = []
-    for reaction_id in uptake_ids:
-        if not reaction_id:
-            continue
-        medium_lines.append(f"- {reaction_id}: uptake {float(uptake_fluxes.get(reaction_id, 0.0)):.3f}")
-    medium_text = '\n'.join(medium_lines) if medium_lines else 'No medium uptake evidence available.'
-
-    tracked_values = report_data.get('tracked_flux_values') or {}
-    flux_lines = []
-    for reaction_id in report_data.get('required_tracked_fluxes') or []:
-        flux_lines.append(f"- {reaction_id}: production {float(tracked_values.get(reaction_id, 0.0)):.3f}")
-    flux_text = '\n'.join(flux_lines) if flux_lines else 'No production fluxes tracked.'
-
-    missing_fluxes = report_data.get('missing_required_fluxes') or []
-    missing_fluxes_text = ', '.join(missing_fluxes) if missing_fluxes else 'none'
-    missing_uptakes = report_data.get('missing_essential_uptakes') or []
-    missing_uptakes_text = ', '.join(missing_uptakes) if missing_uptakes else 'none'
-
-    final_status = (
-        'Final medium robustness report ready. Return to Dr. Rio and deliver the results.'
-        if report_data.get('ready_to_deliver')
-        else 'Not ready yet. Refine method, medium changes, exchange stress and flux evidence.'
-    )
-
-    knocked_out = ', '.join(report_data.get('knocked_out_genes') or []) or 'none'
-
-    return (
-        'Mission 20 Robustness Report\n\n'
-        f"Context: {report_data.get('target_context')}\n"
-        f"Selected method: {report_data.get('method')}\n"
-        f"Selected objective: {report_data.get('selected_objective')}\n"
-        f"Growth/objective result: {report_data.get('objective_result')}\n"
-        f"Knocked-out genes: {knocked_out}\n\n"
-        f"Exchange Flux Report evidence:\n{medium_text}\n"
-        f"Missing essential uptake evidence: {missing_uptakes_text}\n\n"
-        f"Production/byproduct evidence:\n{flux_text}\n"
-        f"Missing production evidence: {missing_fluxes_text}\n\n"
-        f"{method_status}\n"
-        f"{objective_status}\n"
-        f"{carbon_status}\n"
-        f"{bottleneck_status}\n"
-        f"{essential_status}\n"
-        f"{environment_status}\n"
-        f"{knockout_status}\n"
-        f"{evidence_status}\n"
-        f"{growth_status}\n\n"
-        f"{final_status}"
-    )
+    return build_mission20_context_report_text(report_data)
 
 
 
@@ -2138,7 +2034,10 @@ class Window:
 
             mission20_data = None
             if '20' in self.player.missions_activated and '20' not in self.player.missions_completed:
-                mission20_data = run_mission20_robustness_report_check(self.results)
+                if sys.platform == 'emscripten':
+                    mission20_data = run_mission20_robustness_report_check_remote(BACKEND_URL, self.results)
+                else:
+                    mission20_data = run_mission20_robustness_report_check(self.results)
 
             mission05_data = None
             if '05' in self.player.missions_activated and '05' not in self.player.missions_completed:

@@ -28,8 +28,8 @@ from simulation import (
     MISSION19_TARGET_GENE,
     MISSION19_TARGET_GENE_NAME,
     MISSION20_TARGET_METHOD,
-    MISSION20_ALTERNATIVE_CARBON_SOURCE,
-    MISSION20_EXPORT_BOTTLENECK_NAME,
+    MISSION20_OXYGEN_REACTION,
+    MISSION20_ACETATE_EXPORT,
 )
 from mission17 import Mission17_info
 from mission18 import Mission18_info
@@ -123,15 +123,16 @@ class Mission16:
         ]
 
         self.m20_step1 = [
-            "Mission 20 is active. Build a final medium-robustness report.",
-            f"Use {MISSION20_TARGET_METHOD}, test {MISSION20_ALTERNATIVE_CARBON_SOURCE} uptake,",
-            f"and verify the {MISSION20_EXPORT_BOTTLENECK_NAME} export bottleneck with flux evidence."
+            "Mission 20 is active. Build a four-run context-robustness matrix.",
+            f"Use {MISSION20_TARGET_METHOD} and vary only {MISSION20_OXYGEN_REACTION} uptake",
+            f"and the {MISSION20_ACETATE_EXPORT} export upper bound between controlled runs."
         ]
 
         self.m20_step2 = [
             f"Excellent work, {self.player.player_name}.",
-            "You completed the Dr. Rio medium-engineering path.",
-            "Your designs now connect medium constraints, methods and exchange-flux evidence."
+            "You showed that one export constraint can behave differently",
+            "across controlled oxygen contexts.",
+            "Dr. Vega will formalise comparisons in the next laboratory."
         ]
 
         self.input()

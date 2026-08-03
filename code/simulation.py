@@ -540,27 +540,49 @@ MISSION19_EXPECTED_LOWER_BIOMASS_METHOD = 'lMOMA'
 MISSION19_LMOMA_SCORE_NAME = 'total_absolute_flux_adjustment'
 LMOMA_DISPLAY_NAME = 'Linear MOMA (lMOMA)'
 
+# Mission 20 closes Dr. Rio's laboratory with a controlled two-factor
+# robustness matrix.  The same acetate upper-bound closure is tested with
+# oxygen available and with oxygen uptake closed.  Every stored value comes
+# from the visible pFBA result and the accumulated state is JSON-safe.
+MISSION20_CHECK_VERSION = 2
 MISSION20_TARGET_METHOD = 'pFBA'
 MISSION20_GROWTH_OBJECTIVE = 'BIOMASS_Ecoli_core_w_GAM'
-MISSION20_TARGET_CONTEXT = 'final medium robustness report'
-MISSION20_BLOCKED_CARBON_SOURCE = 'EX_glc__D_e'
-MISSION20_ALTERNATIVE_CARBON_SOURCE = 'EX_pyr_e'
-MISSION20_EXPORT_BOTTLENECK = 'EX_ac_e'
+MISSION20_TARGET_CONTEXT = 'context-specific export robustness'
+MISSION20_OXYGEN_REACTION = 'EX_o2_e'
+MISSION20_GLUCOSE_REACTION = 'EX_glc__D_e'
+MISSION20_ACETATE_EXPORT = 'EX_ac_e'
+# Compatibility aliases retained for narrative/integration code that may still
+# use the former bottleneck names.  The obsolete pyruvate protocol is removed.
+MISSION20_EXPORT_BOTTLENECK = MISSION20_ACETATE_EXPORT
 MISSION20_EXPORT_BOTTLENECK_NAME = 'acetate'
-MISSION20_REQUIRED_ESSENTIAL_UPTAKES = ['EX_nh4_e', 'EX_pi_e']
-MISSION20_REQUIRED_MEDIUM_FLUXES = [
-    MISSION20_BLOCKED_CARBON_SOURCE,
-    MISSION20_ALTERNATIVE_CARBON_SOURCE,
-    MISSION20_EXPORT_BOTTLENECK,
-    'EX_nh4_e',
-    'EX_pi_e',
-    'EX_o2_e',
+MISSION20_REQUIRED_TRACKED_FLUXES = [
+    'EX_ac_e',
+    'EX_etoh_e',
+    'EX_for_e',
+    'EX_succ_e',
+    'EX_lac__D_e',
 ]
-MISSION20_REQUIRED_TRACKED_FLUXES = ['EX_ac_e', 'EX_etoh_e', 'EX_for_e', 'EX_succ_e', 'EX_lac__D_e']
-MISSION20_MIN_GROWTH = 1.0
-MISSION20_MIN_SOURCE_UPTAKE = 0.001
-MISSION20_MIN_ESSENTIAL_UPTAKE = 0.001
-MISSION20_MAX_BLOCKED_EXPORT_FLUX = 0.001
+MISSION20_REQUIRED_MEDIUM_FLUXES = [
+    MISSION20_GLUCOSE_REACTION,
+    MISSION20_OXYGEN_REACTION,
+    *MISSION20_REQUIRED_TRACKED_FLUXES,
+]
+MISSION20_EXPECTED_SECONDARY_CRITERION = 'total_absolute_flux'
+MISSION20_MIN_BASELINE_GROWTH = 0.05
+MISSION20_AEROBIC_BASELINE_LIKE_RATIO = 0.99
+MISSION20_ANAEROBIC_MIN_VIABILITY_RATIO = 0.80
+MISSION20_ANAEROBIC_MAX_GROWTH_RATIO = 0.98
+MISSION20_MIN_ACTIVE_BASELINE_EXPORT = 0.01
+MISSION20_MAX_CLOSED_EXPORT_FLUX = 0.001
+MISSION20_PROFILE_CHANGE_THRESHOLD = 0.10
+MISSION20_PROFILE_SIMILARITY_TOLERANCE = 0.01
+MISSION20_PARSIMONY_SIMILARITY_TOLERANCE = 0.05
+MISSION20_EXPECTED_GLUCOSE_UPTAKE = 10.0
+MISSION20_GLUCOSE_UPTAKE_TOLERANCE = 0.05
+MISSION20_MIN_AEROBIC_OXYGEN_UPTAKE = 0.01
+MISSION20_FLUX_TOLERANCE = 0.01
+MISSION20_PRIMARY_TOLERANCE = 0.01
+MISSION20_EXPECTED_RESPONSE_CONTEXT = 'oxygen_closed'
 
 MISSION21_METHOD = 'FBA'
 MISSION21_GROWTH_OBJECTIVE = 'BIOMASS_Ecoli_core_w_GAM'
@@ -8610,49 +8632,68 @@ def build_mission19_method_comparison_report_text(report):
     ])
     return '\n'.join(lines)
 
+def is_mission20_unlocked(missions_completed):
+    """Mission 20 starts only after the controlled Mission 19 comparison."""
+    return '19' in (missions_completed or [])
+
+
+def _mission20_clean_number(value, decimals=6):
+    numeric = round(float(value), int(decimals))
+    if abs(numeric) < DISPLAY_ZERO_TOLERANCE:
+        return 0.0
+    return numeric
+
+
+def _mission20_number_or_none(value):
+    """Return a finite float or ``None`` for incomplete/invalid evidence."""
+    try:
+        numeric = float(value)
+    except Exception:
+        return None
+    if numeric != numeric or numeric in (float('inf'), float('-inf')):
+        return None
+    return numeric
+
+
 def _mission20_environment_status(reactions):
-    """Evaluate the medium/stress setup required for Mission 20."""
-    reaction_values = list(reactions.values())
-    glucose_lower_bound_closed = False
-    pyruvate_lower_bound_open = False
+    """Describe the two-factor oxygen/acetate context for Mission 20.
+
+    Valid runs leave the complete glucose medium at model defaults and vary
+    only two toggles: the lower bound of oxygen uptake and the upper bound of
+    acetate export.  Explicit reaction-index keys are order-independent; the
+    positional fallback is retained only for legacy desktop saves.
+    """
+    bounds_complete = True
+    oxygen_lower_bound_closed = False
     acetate_upper_bound_closed = False
     unexpected_changes = []
 
     for i in range(len(REACTIONS.index)):
-        lb_index = i * 2
-        ub_index = lb_index + 1
-
-        if ub_index >= len(reaction_values):
-            break
-
         reaction_id = REACTIONS.index[i]
-        lower_bound_open = bool(reaction_values[lb_index])
-        upper_bound_open = bool(reaction_values[ub_index])
-
-        default_lower_bound_open = REACTIONS.lb.iloc[i] != 0
-        default_upper_bound_open = REACTIONS.ub.iloc[i] != 0
-
-        lower_changed = lower_bound_open != default_lower_bound_open
-        upper_changed = upper_bound_open != default_upper_bound_open
-
-        if reaction_id == MISSION20_BLOCKED_CARBON_SOURCE:
-            glucose_lower_bound_closed = not lower_bound_open
-            if upper_changed:
-                unexpected_changes.append(f'{reaction_id} upper bound')
+        lower_open, upper_open = _reaction_bound_open_states(reactions, i)
+        if lower_open is None or upper_open is None:
+            bounds_complete = False
             continue
 
-        if reaction_id == MISSION20_ALTERNATIVE_CARBON_SOURCE:
-            pyruvate_lower_bound_open = lower_bound_open
-            if not lower_changed or not lower_bound_open:
+        default_lower_open = REACTIONS.lb.iloc[i] != 0
+        default_upper_open = REACTIONS.ub.iloc[i] != 0
+        lower_changed = lower_open != default_lower_open
+        upper_changed = upper_open != default_upper_open
+
+        if reaction_id == MISSION20_OXYGEN_REACTION:
+            oxygen_lower_bound_closed = not lower_open
+            if upper_changed:
+                unexpected_changes.append(f'{reaction_id} upper bound')
+            if lower_changed and lower_open:
                 unexpected_changes.append(f'{reaction_id} lower bound')
-            if upper_changed:
-                unexpected_changes.append(f'{reaction_id} upper bound')
             continue
 
-        if reaction_id == MISSION20_EXPORT_BOTTLENECK:
-            acetate_upper_bound_closed = not upper_bound_open
+        if reaction_id == MISSION20_ACETATE_EXPORT:
+            acetate_upper_bound_closed = not upper_open
             if lower_changed:
                 unexpected_changes.append(f'{reaction_id} lower bound')
+            if upper_changed and upper_open:
+                unexpected_changes.append(f'{reaction_id} upper bound')
             continue
 
         if lower_changed:
@@ -8660,159 +8701,571 @@ def _mission20_environment_status(reactions):
         if upper_changed:
             unexpected_changes.append(f'{reaction_id} upper bound')
 
-    return (
-        glucose_lower_bound_closed,
-        pyruvate_lower_bound_open,
-        acetate_upper_bound_closed,
-        unexpected_changes,
+    context = 'oxygen_closed' if oxygen_lower_bound_closed else 'oxygen_available'
+    run_type = f"{context}_{'acetate_closed' if acetate_upper_bound_closed else 'baseline'}"
+    return {
+        'bounds_complete': bounds_complete,
+        'oxygen_lower_bound_closed': oxygen_lower_bound_closed,
+        'acetate_upper_bound_closed': acetate_upper_bound_closed,
+        'unexpected_environment_changes': unexpected_changes,
+        'context': context,
+        'run_type': run_type,
+        'controlled_environment': bounds_complete and not unexpected_changes,
+    }
+
+
+def _mission20_measured_medium_values(medium_fluxes):
+    """Return only complete numeric exchange measurements from one visible run."""
+    raw_fluxes = {}
+    uptake_fluxes = {}
+    secretion_fluxes = {}
+    if not isinstance(medium_fluxes, dict) or medium_fluxes.get('error'):
+        return raw_fluxes, uptake_fluxes, secretion_fluxes
+    for item in medium_fluxes.get('items') or []:
+        if not isinstance(item, dict) or item.get('error'):
+            continue
+        reaction_id = item.get('reaction_id')
+        raw_value = _mission20_number_or_none(item.get('raw_flux'))
+        uptake_value = _mission20_number_or_none(item.get('uptake_flux'))
+        secretion_value = _mission20_number_or_none(item.get('secretion_flux'))
+        if (
+            reaction_id
+            and raw_value is not None
+            and uptake_value is not None
+            and secretion_value is not None
+        ):
+            reaction_id = str(reaction_id)
+            raw_fluxes[reaction_id] = _mission20_clean_number(raw_value)
+            uptake_fluxes[reaction_id] = _mission20_clean_number(max(float(uptake_value), 0.0))
+            secretion_fluxes[reaction_id] = _mission20_clean_number(max(float(secretion_value), 0.0))
+    return raw_fluxes, uptake_fluxes, secretion_fluxes
+
+
+def _mission20_measured_production_values(production_fluxes):
+    """Return only numerically measured export values from the visible run."""
+    values = {}
+    if not isinstance(production_fluxes, dict) or production_fluxes.get('error'):
+        return values
+    for item in production_fluxes.get('items') or []:
+        if not isinstance(item, dict) or item.get('error'):
+            continue
+        reaction_id = item.get('reaction_id')
+        value = _mission20_number_or_none(item.get('production_flux'))
+        if reaction_id and value is not None:
+            values[str(reaction_id)] = _mission20_clean_number(max(float(value), 0.0))
+    return values
+
+
+def _mission20_pair_analysis(baseline_run, closed_run):
+    """Compare one oxygen context before and after acetate closure."""
+    if not isinstance(baseline_run, dict) or not isinstance(closed_run, dict):
+        return None
+
+    baseline_growth = _mission20_number_or_none(baseline_run.get('growth'))
+    closed_growth = _mission20_number_or_none(closed_run.get('growth'))
+    baseline_fluxes = baseline_run.get('tracked_flux_values') or {}
+    closed_fluxes = closed_run.get('tracked_flux_values') or {}
+    baseline_acetate = _mission20_number_or_none(baseline_fluxes.get(MISSION20_ACETATE_EXPORT))
+    closed_acetate = _mission20_number_or_none(closed_fluxes.get(MISSION20_ACETATE_EXPORT))
+    if (
+        baseline_growth is None
+        or closed_growth is None
+        or baseline_growth <= 0
+        or baseline_acetate is None
+        or closed_acetate is None
+    ):
+        return None
+
+    growth_ratio = max(0.0, float(closed_growth) / float(baseline_growth))
+    flux_changes = {}
+    for reaction_id in MISSION20_REQUIRED_TRACKED_FLUXES:
+        left = _mission20_number_or_none(baseline_fluxes.get(reaction_id))
+        right = _mission20_number_or_none(closed_fluxes.get(reaction_id))
+        if left is None or right is None:
+            return None
+        flux_changes[reaction_id] = _mission20_clean_number(float(right) - float(left))
+    maximum_profile_change = max((abs(value) for value in flux_changes.values()), default=0.0)
+
+    baseline_diagnostics = baseline_run.get('method_diagnostics') or {}
+    closed_diagnostics = closed_run.get('method_diagnostics') or {}
+    baseline_total = _mission20_number_or_none(baseline_diagnostics.get('total_absolute_flux'))
+    closed_total = _mission20_number_or_none(closed_diagnostics.get('total_absolute_flux'))
+    total_flux_change = None
+    if baseline_total is not None and closed_total is not None:
+        total_flux_change = _mission20_clean_number(float(closed_total) - float(baseline_total))
+
+    try:
+        active_reaction_change = int(closed_diagnostics.get('active_reaction_count')) - int(
+            baseline_diagnostics.get('active_reaction_count')
+        )
+    except Exception:
+        active_reaction_change = None
+
+    baseline_export_active = baseline_acetate > MISSION20_MIN_ACTIVE_BASELINE_EXPORT
+    export_closed = closed_acetate <= MISSION20_MAX_CLOSED_EXPORT_FLUX
+    profile_changed = maximum_profile_change >= MISSION20_PROFILE_CHANGE_THRESHOLD
+    profile_baseline_like = maximum_profile_change <= MISSION20_PROFILE_SIMILARITY_TOLERANCE
+    parsimony_baseline_like = (
+        total_flux_change is not None
+        and abs(total_flux_change) <= MISSION20_PARSIMONY_SIMILARITY_TOLERANCE
+    )
+
+    binding_response = bool(
+        baseline_export_active
+        and export_closed
+        and growth_ratio >= MISSION20_ANAEROBIC_MIN_VIABILITY_RATIO
+        and growth_ratio <= MISSION20_ANAEROBIC_MAX_GROWTH_RATIO
+        and profile_changed
+    )
+    nonbinding_response = bool(
+        not baseline_export_active
+        and export_closed
+        and growth_ratio >= MISSION20_AEROBIC_BASELINE_LIKE_RATIO
+        and profile_baseline_like
+        and parsimony_baseline_like
+        and active_reaction_change == 0
+    )
+    classification = (
+        'binding_response'
+        if binding_response
+        else 'nonbinding_response'
+        if nonbinding_response
+        else 'intermediate'
+    )
+    return {
+        'baseline_growth': _mission20_clean_number(baseline_growth),
+        'closed_growth': _mission20_clean_number(closed_growth),
+        'growth_ratio': _mission20_clean_number(growth_ratio),
+        'baseline_acetate_export': _mission20_clean_number(baseline_acetate),
+        'closed_acetate_export': _mission20_clean_number(closed_acetate),
+        'flux_changes': flux_changes,
+        'maximum_profile_change': _mission20_clean_number(maximum_profile_change),
+        'total_absolute_flux_change': total_flux_change,
+        'active_reaction_change': active_reaction_change,
+        'baseline_export_active': baseline_export_active,
+        'export_closed': export_closed,
+        'classification': classification,
+    }
+
+
+def _normalise_mission20_text(value):
+    text = unicodedata.normalize('NFKD', str(value or ''))
+    return ''.join(char for char in text if not unicodedata.combining(char)).lower()
+
+
+def normalise_mission20_answer(answer):
+    """Extract exactly one oxygen context from a concise answer."""
+    text = _normalise_mission20_text(answer)
+    if not text.strip() or re.search(r'\b(?:both|all|either|neither|ambos|ambas|todos|todas)\b', text):
+        return tuple()
+
+    anaerobic_patterns = [
+        r'\banaerobic\b',
+        r'\banaerobio\b',
+        r'\bwithout\s+(?:o2|oxygen)\b',
+        r'\bno\s+(?:o2|oxygen)\b',
+        r'\b(?:o2|oxygen)\s+(?:closed|unavailable|absent|removed|off)\b',
+        r'\bex[_\s-]*o2[_\s-]*e\s+(?:closed|off)\b',
+        r'\bsem\s+oxigenio\b',
+        r'\boxigenio\s+(?:fechado|indisponivel|ausente|removido)\b',
+    ]
+    aerobic_patterns = [
+        r'\baerobic\b',
+        r'\baerobio\b',
+        r'\bwith\s+(?:o2|oxygen)\b',
+        r'\b(?:o2|oxygen)\s+(?:available|open|present|on)\b',
+        r'\bex[_\s-]*o2[_\s-]*e\s+(?:open|on)\b',
+        r'\bcom\s+oxigenio\b',
+        r'\boxigenio\s+(?:aberto|disponivel|presente)\b',
+    ]
+    found = []
+    if any(re.search(pattern, text) for pattern in anaerobic_patterns):
+        found.append('oxygen_closed')
+    if any(re.search(pattern, text) for pattern in aerobic_patterns):
+        found.append('oxygen_available')
+    return tuple(found)
+
+
+def mission20_answer_matches(answer, report_data=None):
+    if report_data is None:
+        report_data = load_mission20_robustness_report_check() or {}
+    expected = tuple(report_data.get('responsive_contexts') or [])
+    return bool(
+        report_data.get('evidence_ready')
+        and report_data.get('relationship_supported')
+        and expected == (MISSION20_EXPECTED_RESPONSE_CONTEXT,)
+        and normalise_mission20_answer(answer) == expected
     )
 
 
-def _build_mission20_data(method_name, selected_objective, objective_result, genes, reactions, production_fluxes=None, medium_fluxes=None, objective_error=None):
-    """Evaluate Mission 20: final medium robustness report."""
-    knocked_out_genes = _knocked_out_genes(genes)
-    selected_fluxes = _read_selected_production_fluxes()
-    production_values = _production_flux_value_map(production_fluxes)
+def initialise_mission20_context_matrix():
+    data = {
+        'mission_id': '20',
+        'check_version': MISSION20_CHECK_VERSION,
+        'mission_title': 'Context-Specific Export Robustness',
+        'target_context': MISSION20_TARGET_CONTEXT,
+        'target_method': MISSION20_TARGET_METHOD,
+        'growth_objective': MISSION20_GROWTH_OBJECTIVE,
+        'oxygen_reaction': MISSION20_OXYGEN_REACTION,
+        'acetate_export': MISSION20_ACETATE_EXPORT,
+        'required_tracked_fluxes': list(MISSION20_REQUIRED_TRACKED_FLUXES),
+        'required_medium_fluxes': list(MISSION20_REQUIRED_MEDIUM_FLUXES),
+        'aerobic_baseline_run': None,
+        'aerobic_acetate_closed_run': None,
+        'anaerobic_baseline_run': None,
+        'anaerobic_acetate_closed_run': None,
+        'recorded_run_count': 0,
+        'required_run_count': 4,
+        'missing_run_types': [
+            'oxygen_available_baseline',
+            'oxygen_available_acetate_closed',
+            'oxygen_closed_baseline',
+            'oxygen_closed_acetate_closed',
+        ],
+        'all_runs_recorded': False,
+        'same_controlled_setup': False,
+        'aerobic_response': None,
+        'anaerobic_response': None,
+        'responsive_contexts': [],
+        'nonresponsive_contexts': [],
+        'relationship_supported': False,
+        'evidence_ready': False,
+        'answer_ready': False,
+        'ready_to_deliver': False,
+        'current_run_valid': False,
+        'current_run_recorded': False,
+        'current_run_type': None,
+        'current_issues': [],
+        'latest_attempt': None,
+    }
+    save_mission20_robustness_report_check(data)
+    return data
 
+
+def _build_mission20_data(
+    method_name,
+    selected_objective,
+    objective_result,
+    genes,
+    reactions,
+    production_fluxes=None,
+    medium_fluxes=None,
+    existing_report=None,
+    selected_fluxes=None,
+    objective_error=None,
+):
+    """Validate and accumulate one visible Mission 20 matrix run."""
+    existing_report = existing_report or {}
+    if (
+        existing_report.get('mission_id') != '20'
+        or existing_report.get('check_version') != MISSION20_CHECK_VERSION
+    ):
+        existing_report = {}
+
+    slots = {
+        'oxygen_available_baseline': copy.deepcopy(existing_report.get('aerobic_baseline_run')),
+        'oxygen_available_acetate_closed': copy.deepcopy(existing_report.get('aerobic_acetate_closed_run')),
+        'oxygen_closed_baseline': copy.deepcopy(existing_report.get('anaerobic_baseline_run')),
+        'oxygen_closed_acetate_closed': copy.deepcopy(existing_report.get('anaerobic_acetate_closed_run')),
+    }
+
+    environment = _mission20_environment_status(reactions)
+    run_type = environment.get('run_type')
     method_correct = method_name == MISSION20_TARGET_METHOD
     objective_correct = selected_objective == MISSION20_GROWTH_OBJECTIVE
-    objective_value = _as_float_or_none(objective_result)
-    result_available = objective_value is not None
-    growth_value = _numeric_result(objective_value)
-    growth_ok = result_available and growth_value >= MISSION20_MIN_GROWTH
+    knocked_out_genes = _knocked_out_genes(genes)
+    objective_numeric = _mission20_number_or_none(objective_result)
+    result_infeasible = 'INFEASIBLE' in str(objective_result or '').upper()
 
-    (
-        glucose_lower_bound_closed,
-        pyruvate_lower_bound_open,
-        acetate_upper_bound_closed,
-        unexpected_environment_changes,
-    ) = _mission20_environment_status(reactions)
+    measured_production = _mission20_measured_production_values(production_fluxes)
+    raw_fluxes, uptake_fluxes, secretion_fluxes = _mission20_measured_medium_values(medium_fluxes)
+    diagnostics = _method_diagnostics_from_production_data(production_fluxes)
+    biomass_raw = _mission20_number_or_none(_mission13_biomass_value(production_fluxes))
+    primary_flux = _mission20_number_or_none(diagnostics.get('primary_objective_flux'))
+    method_score = _mission20_number_or_none(diagnostics.get('method_score'))
+    total_absolute_flux = _mission20_number_or_none(diagnostics.get('total_absolute_flux'))
+    method_score_name = diagnostics.get('method_score_name')
+    try:
+        active_reaction_count = int(diagnostics.get('active_reaction_count'))
+    except Exception:
+        active_reaction_count = None
 
-    raw_fluxes, uptake_fluxes, secretion_fluxes = _medium_flux_maps(medium_fluxes)
-    glucose_uptake = uptake_fluxes.get(MISSION20_BLOCKED_CARBON_SOURCE, 0.0)
-    pyruvate_uptake = uptake_fluxes.get(MISSION20_ALTERNATIVE_CARBON_SOURCE, 0.0)
-    acetate_medium_secretion = secretion_fluxes.get(MISSION20_EXPORT_BOTTLENECK, 0.0)
-    acetate_production_flux = production_values.get(MISSION20_EXPORT_BOTTLENECK, 0.0)
+    if selected_fluxes is None:
+        selected_fluxes = _read_selected_production_fluxes()
+    selected_fluxes = list(selected_fluxes or [])
 
-    glucose_uptake_blocked = glucose_uptake <= MISSION20_MIN_SOURCE_UPTAKE
-    pyruvate_uptake_detected = pyruvate_uptake >= MISSION20_MIN_SOURCE_UPTAKE
-    acetate_export_blocked = acetate_upper_bound_closed and acetate_production_flux <= MISSION20_MAX_BLOCKED_EXPORT_FLUX
-
-    essential_uptake_values = {
-        reaction_id: uptake_fluxes.get(reaction_id, 0.0)
-        for reaction_id in MISSION20_REQUIRED_ESSENTIAL_UPTAKES
-    }
-    missing_essential_uptakes = [
-        reaction_id
-        for reaction_id, value in essential_uptake_values.items()
-        if value < MISSION20_MIN_ESSENTIAL_UPTAKE
+    missing_medium_fluxes = [
+        reaction_id for reaction_id in MISSION20_REQUIRED_MEDIUM_FLUXES
+        if reaction_id not in raw_fluxes
     ]
-    essential_uptake_ready = not missing_essential_uptakes
-
-    missing_required_fluxes = [
-        reaction_id
-        for reaction_id in MISSION20_REQUIRED_TRACKED_FLUXES
+    missing_selected_fluxes = [
+        reaction_id for reaction_id in MISSION20_REQUIRED_TRACKED_FLUXES
         if reaction_id not in selected_fluxes
     ]
-    tracking_ready = not missing_required_fluxes
-
-    tracked_byproduct_values = {
-        reaction_id: round(production_values.get(reaction_id, 0.0), 3)
-        for reaction_id in MISSION20_REQUIRED_TRACKED_FLUXES
-    }
-    positive_tracked_products = [
-        reaction_id
-        for reaction_id, value in tracked_byproduct_values.items()
-        if value > 0.001
+    missing_measured_fluxes = [
+        reaction_id for reaction_id in MISSION20_REQUIRED_TRACKED_FLUXES
+        if reaction_id not in measured_production
     ]
 
-    mission20_data = {
-        'mission_id': '20',
-        'check_version': 1,
-        'mission_title': 'Final Medium Robustness Report',
-        'target_context': MISSION20_TARGET_CONTEXT,
-        'method': method_name,
-        'target_method': MISSION20_TARGET_METHOD,
-        'method_correct': method_correct,
-        'selected_objective': selected_objective,
-        'growth_objective': MISSION20_GROWTH_OBJECTIVE,
-        'objective_correct': objective_correct,
-        'objective_result': round(growth_value, 3) if result_available else str(objective_result),
-        'blocked_carbon_source': MISSION20_BLOCKED_CARBON_SOURCE,
-        'alternative_carbon_source': MISSION20_ALTERNATIVE_CARBON_SOURCE,
-        'export_bottleneck': MISSION20_EXPORT_BOTTLENECK,
-        'export_bottleneck_name': MISSION20_EXPORT_BOTTLENECK_NAME,
-        'glucose_lower_bound_closed': glucose_lower_bound_closed,
-        'pyruvate_lower_bound_open': pyruvate_lower_bound_open,
-        'acetate_upper_bound_closed': acetate_upper_bound_closed,
-        'unexpected_environment_changes': unexpected_environment_changes,
-        'knocked_out_genes': knocked_out_genes,
-        'medium_fluxes': medium_fluxes or {},
-        'medium_uptake_fluxes': {reaction_id: round(value, 3) for reaction_id, value in uptake_fluxes.items()},
-        'medium_secretion_fluxes': {reaction_id: round(value, 3) for reaction_id, value in secretion_fluxes.items()},
-        'glucose_uptake': round(glucose_uptake, 3),
-        'pyruvate_uptake': round(pyruvate_uptake, 3),
-        'acetate_medium_secretion': round(acetate_medium_secretion, 3),
-        'essential_uptake_values': {reaction_id: round(value, 3) for reaction_id, value in essential_uptake_values.items()},
-        'required_essential_uptakes': MISSION20_REQUIRED_ESSENTIAL_UPTAKES,
-        'missing_essential_uptakes': missing_essential_uptakes,
-        'essential_uptake_ready': essential_uptake_ready,
-        'minimum_source_uptake': MISSION20_MIN_SOURCE_UPTAKE,
-        'minimum_essential_uptake': MISSION20_MIN_ESSENTIAL_UPTAKE,
-        'glucose_uptake_blocked': glucose_uptake_blocked,
-        'pyruvate_uptake_detected': pyruvate_uptake_detected,
-        'selected_fluxes': selected_fluxes,
-        'tracked_flux_values': tracked_byproduct_values,
-        'positive_tracked_products': positive_tracked_products,
-        'required_tracked_fluxes': MISSION20_REQUIRED_TRACKED_FLUXES,
-        'missing_required_fluxes': missing_required_fluxes,
-        'tracking_ready': tracking_ready,
-        'acetate_production_flux': round(acetate_production_flux, 3),
-        'maximum_blocked_export_flux': MISSION20_MAX_BLOCKED_EXPORT_FLUX,
-        'acetate_export_blocked': acetate_export_blocked,
-        'minimum_growth': MISSION20_MIN_GROWTH,
-        'growth_ok': growth_ok,
-        'result_available': result_available,
-        'ready_to_deliver': (
-            method_correct
-            and objective_correct
-            and glucose_lower_bound_closed
-            and glucose_uptake_blocked
-            and pyruvate_lower_bound_open
-            and pyruvate_uptake_detected
-            and acetate_upper_bound_closed
-            and acetate_export_blocked
-            and essential_uptake_ready
-            and not unexpected_environment_changes
-            and not knocked_out_genes
-            and tracking_ready
-            and growth_ok
-            and result_available
-        ),
-    }
+    glucose_uptake = _mission20_number_or_none(uptake_fluxes.get(MISSION20_GLUCOSE_REACTION))
+    oxygen_uptake = _mission20_number_or_none(uptake_fluxes.get(MISSION20_OXYGEN_REACTION))
+    acetate_export = _mission20_number_or_none(measured_production.get(MISSION20_ACETATE_EXPORT))
+
+    issues = []
     if objective_error:
-        mission20_data['error'] = objective_error
-    save_mission20_robustness_report_check(mission20_data)
-    return mission20_data
+        issues.append(objective_error)
+    if not method_correct:
+        issues.append('Use pFBA for every Mission 20 matrix run.')
+    if not objective_correct:
+        issues.append('Use the biomass objective for every Mission 20 matrix run.')
+    if knocked_out_genes:
+        issues.append('Keep every gene active; Mission 20 varies only oxygen and acetate export.')
+    if not environment.get('bounds_complete'):
+        issues.append('The environmental-bound payload is incomplete.')
+    if environment.get('unexpected_environment_changes'):
+        issues.append('Keep glucose and every unrelated environmental bound at the model default.')
+    if result_infeasible or objective_numeric is None:
+        issues.append('Mission 20 requires a numeric viable biomass result in every matrix cell.')
+    elif objective_numeric < MISSION20_MIN_BASELINE_GROWTH:
+        issues.append('The current context does not retain enough predicted growth for comparison.')
+
+    if medium_fluxes and medium_fluxes.get('error'):
+        issues.append('The Exchange Flux Report is unavailable for this run.')
+    elif missing_medium_fluxes:
+        issues.append('The Exchange Flux Report is missing required Mission 20 reactions.')
+    if production_fluxes and production_fluxes.get('error'):
+        issues.append('The Production Flux report is unavailable for this run.')
+    elif missing_measured_fluxes:
+        issues.append('The Production Flux report is missing numeric Mission 20 values.')
+    if missing_selected_fluxes:
+        issues.append('Select the complete Mission 20 product/byproduct panel.')
+
+    if glucose_uptake is None or oxygen_uptake is None:
+        issues.append('Numeric glucose and oxygen uptake evidence is required.')
+    else:
+        if abs(float(glucose_uptake) - MISSION20_EXPECTED_GLUCOSE_UPTAKE) > MISSION20_GLUCOSE_UPTAKE_TOLERANCE:
+            issues.append('Keep the model-default glucose uptake protocol in all four runs.')
+        if environment.get('oxygen_lower_bound_closed'):
+            if oxygen_uptake > MISSION20_FLUX_TOLERANCE:
+                issues.append('The oxygen-closed context is still consuming oxygen.')
+        elif oxygen_uptake < MISSION20_MIN_AEROBIC_OXYGEN_UPTAKE:
+            issues.append('The oxygen-available context must show measured oxygen uptake.')
+
+    for reaction_id in MISSION20_REQUIRED_TRACKED_FLUXES:
+        if reaction_id not in raw_fluxes or reaction_id not in measured_production:
+            continue
+        expected_secretion = max(float(raw_fluxes[reaction_id]), 0.0)
+        if abs(float(measured_production[reaction_id]) - expected_secretion) > MISSION20_FLUX_TOLERANCE:
+            issues.append('Production Flux and Exchange Flux evidence do not describe the same visible solution.')
+            break
+
+    if diagnostics.get('method') != MISSION20_TARGET_METHOD:
+        issues.append('The visible method diagnostics do not describe pFBA.')
+    if diagnostics.get('objective_reaction') != selected_objective:
+        issues.append('The visible method diagnostics do not match the biomass objective.')
+    if primary_flux is None:
+        issues.append('The primary biomass objective flux is missing from the visible result.')
+    if biomass_raw is None:
+        issues.append('The visible result does not contain a numeric biomass flux.')
+    if method_score is None:
+        issues.append('The pFBA secondary score is missing from the visible result.')
+    if method_score_name != MISSION20_EXPECTED_SECONDARY_CRITERION:
+        issues.append('The pFBA secondary criterion is not identified as total absolute flux.')
+    if total_absolute_flux is None:
+        issues.append('The total absolute flux is missing from the visible result.')
+    if active_reaction_count is None:
+        issues.append('The active-reaction count is missing from the visible result.')
+    if (
+        method_score is not None
+        and total_absolute_flux is not None
+        and abs(float(method_score) - float(total_absolute_flux)) > MISSION20_PARSIMONY_SIMILARITY_TOLERANCE
+    ):
+        issues.append('The pFBA score and total absolute flux are inconsistent.')
+    for left, right, message in (
+        (objective_numeric, primary_flux, 'The displayed objective value does not match the primary biomass flux.'),
+        (objective_numeric, biomass_raw, 'The displayed objective value does not match the measured biomass flux.'),
+        (primary_flux, biomass_raw, 'The primary objective flux does not match the measured biomass flux.'),
+    ):
+        if left is not None and right is not None and abs(float(left) - float(right)) > MISSION20_PRIMARY_TOLERANCE:
+            issues.append(message)
+
+    if environment.get('acetate_upper_bound_closed'):
+        if acetate_export is None:
+            issues.append('Numeric acetate export evidence is required for the closed-bound run.')
+        elif acetate_export > MISSION20_MAX_CLOSED_EXPORT_FLUX:
+            issues.append('The acetate upper-bound closure did not eliminate acetate export.')
+
+    current_run_valid = not issues
+    current_run_recorded = False
+    current_run = None
+    if current_run_valid:
+        current_run = {
+            'run_type': run_type,
+            'source': 'visible_simulation',
+            'context': environment.get('context'),
+            'oxygen_lower_bound_closed': bool(environment.get('oxygen_lower_bound_closed')),
+            'acetate_upper_bound_closed': bool(environment.get('acetate_upper_bound_closed')),
+            'method': method_name,
+            'objective': selected_objective,
+            'knocked_out_genes': [],
+            'growth': _mission20_clean_number(biomass_raw),
+            'glucose_uptake': _mission20_clean_number(glucose_uptake),
+            'oxygen_uptake': _mission20_clean_number(oxygen_uptake),
+            'tracked_flux_values': {
+                reaction_id: _mission20_clean_number(measured_production[reaction_id])
+                for reaction_id in MISSION20_REQUIRED_TRACKED_FLUXES
+            },
+            'medium_raw_fluxes': {
+                reaction_id: _mission20_clean_number(raw_fluxes[reaction_id])
+                for reaction_id in MISSION20_REQUIRED_MEDIUM_FLUXES
+            },
+            'selected_fluxes': list(MISSION20_REQUIRED_TRACKED_FLUXES),
+            'method_diagnostics': {
+                'method': MISSION20_TARGET_METHOD,
+                'objective_reaction': selected_objective,
+                'primary_objective_flux': _mission20_clean_number(primary_flux),
+                'method_score': _mission20_clean_number(method_score),
+                'method_score_name': method_score_name,
+                'total_absolute_flux': _mission20_clean_number(total_absolute_flux),
+                'active_reaction_count': int(active_reaction_count),
+            },
+        }
+        slots[run_type] = current_run
+        current_run_recorded = True
+
+    aerobic_response = _mission20_pair_analysis(
+        slots.get('oxygen_available_baseline'),
+        slots.get('oxygen_available_acetate_closed'),
+    )
+    anaerobic_response = _mission20_pair_analysis(
+        slots.get('oxygen_closed_baseline'),
+        slots.get('oxygen_closed_acetate_closed'),
+    )
+    missing_run_types = [run_id for run_id, run in slots.items() if not isinstance(run, dict)]
+    all_runs_recorded = not missing_run_types
+
+    runs = [slots[key] for key in slots if isinstance(slots.get(key), dict)]
+    same_controlled_setup = bool(
+        all_runs_recorded
+        and all(run.get('method') == MISSION20_TARGET_METHOD for run in runs)
+        and all(run.get('objective') == MISSION20_GROWTH_OBJECTIVE for run in runs)
+        and all(not run.get('knocked_out_genes') for run in runs)
+        and all(
+            set(run.get('selected_fluxes') or []) == set(MISSION20_REQUIRED_TRACKED_FLUXES)
+            for run in runs
+        )
+        and all(
+            abs(float(run.get('glucose_uptake', 0.0)) - MISSION20_EXPECTED_GLUCOSE_UPTAKE)
+            <= MISSION20_GLUCOSE_UPTAKE_TOLERANCE
+            for run in runs
+        )
+        and all(
+            (run.get('method_diagnostics') or {}).get('method_score_name')
+            == MISSION20_EXPECTED_SECONDARY_CRITERION
+            for run in runs
+        )
+    )
+
+    responsive_contexts = []
+    nonresponsive_contexts = []
+    if isinstance(aerobic_response, dict):
+        if aerobic_response.get('classification') == 'binding_response':
+            responsive_contexts.append('oxygen_available')
+        elif aerobic_response.get('classification') == 'nonbinding_response':
+            nonresponsive_contexts.append('oxygen_available')
+    if isinstance(anaerobic_response, dict):
+        if anaerobic_response.get('classification') == 'binding_response':
+            responsive_contexts.append('oxygen_closed')
+        elif anaerobic_response.get('classification') == 'nonbinding_response':
+            nonresponsive_contexts.append('oxygen_closed')
+
+    relationship_supported = bool(
+        same_controlled_setup
+        and responsive_contexts == [MISSION20_EXPECTED_RESPONSE_CONTEXT]
+        and nonresponsive_contexts == ['oxygen_available']
+        and isinstance(aerobic_response, dict)
+        and isinstance(anaerobic_response, dict)
+    )
+
+    latest_attempt = {
+        'method': method_name,
+        'objective': selected_objective,
+        'run_type': run_type,
+        'context': environment.get('context'),
+        'oxygen_lower_bound_closed': bool(environment.get('oxygen_lower_bound_closed')),
+        'acetate_upper_bound_closed': bool(environment.get('acetate_upper_bound_closed')),
+        'objective_result': str(objective_result),
+        'issues': list(issues),
+        'recorded': current_run_recorded,
+    }
+    report = {
+        'mission_id': '20',
+        'check_version': MISSION20_CHECK_VERSION,
+        'mission_title': 'Context-Specific Export Robustness',
+        'target_context': MISSION20_TARGET_CONTEXT,
+        'target_method': MISSION20_TARGET_METHOD,
+        'growth_objective': MISSION20_GROWTH_OBJECTIVE,
+        'oxygen_reaction': MISSION20_OXYGEN_REACTION,
+        'acetate_export': MISSION20_ACETATE_EXPORT,
+        'required_tracked_fluxes': list(MISSION20_REQUIRED_TRACKED_FLUXES),
+        'required_medium_fluxes': list(MISSION20_REQUIRED_MEDIUM_FLUXES),
+        'aerobic_baseline_run': slots.get('oxygen_available_baseline'),
+        'aerobic_acetate_closed_run': slots.get('oxygen_available_acetate_closed'),
+        'anaerobic_baseline_run': slots.get('oxygen_closed_baseline'),
+        'anaerobic_acetate_closed_run': slots.get('oxygen_closed_acetate_closed'),
+        'recorded_run_count': len(runs),
+        'required_run_count': 4,
+        'missing_run_types': missing_run_types,
+        'all_runs_recorded': all_runs_recorded,
+        'same_controlled_setup': same_controlled_setup,
+        'aerobic_response': aerobic_response,
+        'anaerobic_response': anaerobic_response,
+        'responsive_contexts': responsive_contexts,
+        'nonresponsive_contexts': nonresponsive_contexts,
+        'relationship_supported': relationship_supported,
+        'evidence_ready': all_runs_recorded,
+        'answer_ready': relationship_supported,
+        'ready_to_deliver': relationship_supported,
+        'current_run_valid': current_run_valid,
+        'current_run_recorded': current_run_recorded,
+        'current_run_type': run_type,
+        'current_issues': issues,
+        'current_run': current_run,
+        'latest_attempt': latest_attempt,
+        'current_primary_objective_flux': _mission20_clean_number(primary_flux) if primary_flux is not None else None,
+        'current_method_score': _mission20_clean_number(method_score) if method_score is not None else None,
+        'current_total_absolute_flux': _mission20_clean_number(total_absolute_flux) if total_absolute_flux is not None else None,
+        'current_active_reaction_count': active_reaction_count,
+        'minimum_baseline_growth': MISSION20_MIN_BASELINE_GROWTH,
+        'aerobic_baseline_like_ratio': MISSION20_AEROBIC_BASELINE_LIKE_RATIO,
+        'anaerobic_min_viability_ratio': MISSION20_ANAEROBIC_MIN_VIABILITY_RATIO,
+        'anaerobic_max_growth_ratio': MISSION20_ANAEROBIC_MAX_GROWTH_RATIO,
+        'minimum_active_baseline_export': MISSION20_MIN_ACTIVE_BASELINE_EXPORT,
+        'maximum_closed_export_flux': MISSION20_MAX_CLOSED_EXPORT_FLUX,
+    }
+    save_mission20_robustness_report_check(report)
+    return report
 
 
 def run_mission20_robustness_report_check(simulation_results=None):
+    """Validate the already visible Mission 20 result without re-simulating."""
     method_name, selected_objective, genes, reactions = _read_simulation_file()
-
     objective_result = None
     production_fluxes = None
     medium_fluxes = None
     objective_error = None
     try:
-        if simulation_results and simulation_results[0] == selected_objective:
+        if simulation_results is not None:
+            result_objective = simulation_results[0]
             objective_result = simulation_results[1]
             production_fluxes = simulation_results[2] if len(simulation_results) > 2 else None
             medium_fluxes = simulation_results[3] if len(simulation_results) > 3 else None
+            if result_objective != selected_objective:
+                objective_error = 'The displayed simulation result does not match the currently selected objective.'
+        else:
+            objective_error = 'Run a visible Mission 20 simulation before recording evidence.'
     except Exception:
-        objective_result = None
-
-    if objective_result is None:
-        objective_error = 'Run the simulation before delivering Mission 20.'
+        objective_error = 'Could not read the current visible Mission 20 simulation result.'
 
     return _build_mission20_data(
         method_name,
@@ -8822,12 +9275,110 @@ def run_mission20_robustness_report_check(simulation_results=None):
         reactions,
         production_fluxes=production_fluxes,
         medium_fluxes=medium_fluxes,
+        existing_report=load_mission20_robustness_report_check() or {},
         objective_error=objective_error,
     )
 
 
+def run_mission20_robustness_report_check_remote(backend_url, simulation_results=None):
+    """Browser parity wrapper: validate the already visible backend result."""
+    del backend_url
+    return run_mission20_robustness_report_check(simulation_results)
 
 
+def build_mission20_context_report_text(report):
+    if not report:
+        return 'Mission 20 Context-Specific Export Robustness\n\nActivate the mission and record the four-run matrix.'
+    if report.get('mission_id') != '20' or report.get('check_version') != MISSION20_CHECK_VERSION:
+        return 'Mission 20 Context-Specific Export Robustness\n\nCurrent-format evidence has not been recorded yet.'
+
+    lines = [
+        'Mission 20 Context-Specific Export Robustness',
+        '',
+        'Controlled two-factor protocol:',
+        '- pFBA biomass objective; all genes active; model-default glucose',
+        '- Factor 1: oxygen uptake available or lower bound closed',
+        '- Factor 2: acetate export upper bound open or closed',
+        '- Every unrelated environmental bound remains at model default',
+        '- Complete product/byproduct panel and pFBA diagnostics come from each visible solution',
+        '',
+    ]
+
+    run_specs = [
+        ('Oxygen available; acetate export open', 'aerobic_baseline_run'),
+        ('Oxygen available; acetate export closed', 'aerobic_acetate_closed_run'),
+        ('Oxygen uptake closed; acetate export open', 'anaerobic_baseline_run'),
+        ('Oxygen uptake closed; acetate export closed', 'anaerobic_acetate_closed_run'),
+    ]
+    for title, key in run_specs:
+        run = report.get(key) or {}
+        if not run:
+            lines.append(f'{title}: not recorded.')
+            lines.append('')
+            continue
+        diagnostics = run.get('method_diagnostics') or {}
+        lines.extend([
+            f'{title}:',
+            f"- Biomass flux: {float(run.get('growth', 0.0)):.3f}",
+            f"- Glucose uptake: {float(run.get('glucose_uptake', 0.0)):.3f}",
+            f"- Oxygen uptake: {float(run.get('oxygen_uptake', 0.0)):.3f}",
+            f"- Total absolute flux: {float(diagnostics.get('total_absolute_flux', 0.0)):.3f}",
+            f"- Active reactions: {int(diagnostics.get('active_reaction_count', 0))}",
+            '- Export profile:',
+        ])
+        fluxes = run.get('tracked_flux_values') or {}
+        for reaction_id in MISSION20_REQUIRED_TRACKED_FLUXES:
+            lines.append(f"  {reaction_id}: {float(fluxes.get(reaction_id, 0.0)):.3f}")
+        lines.append('')
+
+    def add_pair(title, response):
+        if not isinstance(response, dict):
+            lines.append(f'{title}: incomplete.')
+            return
+        lines.extend([
+            f'{title}:',
+            f"- Growth after/before closure: {float(response.get('growth_ratio', 0.0)) * 100:.1f}%",
+            f"- Acetate export before: {float(response.get('baseline_acetate_export', 0.0)):.3f}",
+            f"- Acetate export after: {float(response.get('closed_acetate_export', 0.0)):.3f}",
+            f"- Largest tracked-profile change: {float(response.get('maximum_profile_change', 0.0)):.3f}",
+            f"- Total absolute flux change: {float(response.get('total_absolute_flux_change') or 0.0):+.3f}",
+            f"- Active-reaction change: {int(response.get('active_reaction_change') or 0):+d}",
+        ])
+
+    add_pair('Oxygen-available pair comparison', report.get('aerobic_response'))
+    lines.append('')
+    add_pair('Oxygen-closed pair comparison', report.get('anaerobic_response'))
+
+    if report.get('current_run_recorded'):
+        lines.extend(['', f"Latest valid visible run recorded: {str(report.get('current_run_type', '')).replace('_', ' ')}."])
+    elif report.get('current_issues'):
+        lines.extend(['', 'Latest run was not recorded:'])
+        lines.extend(f'- {issue}' for issue in report.get('current_issues') or [])
+        if report.get('recorded_run_count', 0):
+            lines.append('Previously valid Mission 20 evidence remains available.')
+
+    lines.append('')
+    if report.get('evidence_ready') and report.get('relationship_supported'):
+        lines.extend([
+            'Evidence complete.',
+            'Compare the two before/after pairs and identify the oxygen context with a changed predicted phenotype.',
+            'Question: In which oxygen context did closing acetate export change the predicted phenotype?',
+        ])
+    elif report.get('evidence_ready'):
+        lines.append('Evidence complete, but the four visible runs do not support one context-specific response.')
+    else:
+        missing = report.get('missing_run_types') or []
+        lines.append('Evidence incomplete.')
+        if missing:
+            lines.append('Missing matrix runs: ' + ', '.join(item.replace('_', ' ') for item in missing) + '.')
+
+    lines.extend([
+        '',
+        'Interpretation note: the same upper-bound closure can be non-binding in one environment and alter the optimum in another.',
+        'The observed response is conditional on this model, glucose medium, biomass objective and oxygen context.',
+        'All biomass, medium, export and pFBA diagnostic values come from the same visible solver results. No hidden simulation is used.',
+    ])
+    return '\n'.join(lines)
 
 def is_mission04_unlocked(missions_completed):
     """Mission 04 follows the conditional-essentiality investigation."""

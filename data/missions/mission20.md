@@ -1,27 +1,32 @@
-# Mission 20 — Final Medium Robustness Report
+# Mission 20 — Context-Specific Export Robustness
 
 ## Scientist
 Dr. Rio
 
 ## Theme
-Media Engineering & Stress Robustness
+Medium Engineering, Binding Constraints & Context Robustness
 
 ## Learning goal
-Show that a metabolic design should be evaluated using both uptake evidence and production evidence, not only the objective value.
+Show that the same exchange upper-bound closure can be non-binding in one environmental context and alter the predicted phenotype in another.
 
 ## Concept
-A robust medium design must remain viable under a modified environment. Exchange reactions can represent what the model imports from the medium and what it exports as products or byproducts.
+A constraint should not be interpreted from its presence alone. Its effect depends on whether the unconstrained solution uses the restricted flux direction and on the rest of the environmental context. Robustness therefore requires controlled comparisons across more than one condition.
 
 ## Challenge
-Build a viable E. coli design under exchange-bound stress. Use a different carbon source, create a controlled export bottleneck, and justify the result with both Medium Report and Production Flux evidence.
+Build a four-run pFBA matrix in which only oxygen availability and the acetate export upper bound vary. Compare acetate-open and acetate-closed runs with oxygen available, then repeat the same pair after closing oxygen uptake.
 
-## Briefing
-- Use a method suitable for a parsimonious final report.
-- Keep the strain unchanged.
-- Replace the original carbon source with an alternative one.
-- Add one export-related stress.
-- Track enough production fluxes to describe the byproduct profile.
-- Use the Medium Report to verify uptake of the alternative carbon source and essential nutrients.
+## Controlled protocol
+- Use pFBA with the biomass objective.
+- Keep every gene active.
+- Keep glucose and every unrelated environmental bound at model default.
+- Track `EX_ac_e`, `EX_etoh_e`, `EX_for_e`, `EX_succ_e` and `EX_lac__D_e` in every run.
+- Record all four combinations of:
+  - `EX_o2_e` lower bound open or closed;
+  - `EX_ac_e` upper bound open or closed.
+- Use the same visible solver result for biomass, Exchange Flux, Production Flux and pFBA diagnostics.
+
+## Final interpretation
+Identify the oxygen context in which closing acetate export changes the predicted growth and export profile. The answer field expects one concise context rather than a free-form essay.
 
 ## Pedagogical role
-This closes Dr. Rio's arc by combining carbon-source design, exchange-bound stress, simulation method choice, uptake interpretation, byproduct tracking and growth viability.
+This closes Dr. Rio's laboratory by combining environmental context, lower- and upper-bound reasoning, pFBA diagnostics, controlled before/after comparisons and a short evidence-based conclusion. It prepares the transition to Dr. Vega's formal comparison laboratory.
