@@ -1,0 +1,12 @@
+Mission 23 — Nutrient Sensitivity Curve
+
+Changed files:
+- MISSION_PROGRESS_OVERVIEW.md
+- code/mission23.py
+- code/simulation.py
+- code/window.py
+- data/missions/mission23.md
+- data/missions/mission25.md
+- tests/test_mission23.py
+
+The patch reconstructs Mission 23 around a four-point ammonium lower-bound pFBA sweep, adds local/browser sweep parity, robust persisted evidence, direct-answer validation and regression tests.

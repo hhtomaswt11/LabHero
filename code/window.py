@@ -298,7 +298,7 @@ def _build_bound_sweep_report_text(sweep_data):
     if not sweep_data:
         return 'Bound Sweep Report\n\nRun a Bound Sweep to generate sensitivity data.'
 
-    if sweep_data.get('error'):
+    if sweep_data.get('error') and not sweep_data.get('rows'):
         return f"Bound Sweep Report\n\nError: {sweep_data.get('error')}"
 
     reaction_id = sweep_data.get('reaction_id')
@@ -330,12 +330,12 @@ def _build_bound_sweep_report_text(sweep_data):
         product_parts = []
         for flux_id in tracked_fluxes:
             label = PRODUCTION_FLUX_NAMES.get(flux_id, flux_id)
-            product_parts.append(f"{label}: {_format_sweep_number(values.get(flux_id, 0.0))}")
+            product_parts.append(f"{label}: {_format_sweep_number(values.get(flux_id))}")
         product_text = '; '.join(product_parts) if product_parts else 'none'
         tested_uptake = row.get('tested_reaction_uptake')
         if tested_uptake is None:
             tested_uptake = row.get('oxygen_uptake')
-        status_note = ' infeasible' if row.get('status') == 'infeasible' else ''
+        status_note = '' if row.get('status') == 'ok' else f" {row.get('status', 'unknown')}"
         lines.append(
             f"{_format_sweep_number(row.get('bound_value'))} | "
             f"{_format_sweep_number(row.get('growth_value'))}{status_note} | "
@@ -360,7 +360,13 @@ def _build_bound_sweep_report_text(sweep_data):
         except Exception:
             pass
 
-    if reaction_id == 'EX_glc__D_e':
+    if reaction_id == 'EX_nh4_e':
+        guide_lines = [
+            '- Lower bound closer to 0 means less ammonium can be consumed.',
+            '- Compare the non-limiting point with the first point where growth decreases.',
+            '- A secretion may appear at the onset of limitation and then change non-linearly across tighter bounds.',
+        ]
+    elif reaction_id == 'EX_glc__D_e':
         guide_lines = [
             '- Lower bound closer to 0 means less glucose can be consumed.',
             '- When carbon intake becomes limiting, growth and secretion should fall together.',
@@ -878,74 +884,8 @@ def _build_mission21_text(report_data):
 def _build_mission22_text(report_data):
     return build_mission22_phenotype_equivalence_report_text(report_data)
 
-def _build_mission23_text(compare_data):
-    if not compare_data:
-        return 'Mission 23 Objective Comparison\n\nRun two simulations to generate a comparison.'
-
-    if compare_data.get('error') and not compare_data.get('run_a'):
-        return f"Mission 23 Objective Comparison\n\n{compare_data.get('error')}"
-
-    growth_run_status = (
-        'Run with biomass objective found.'
-        if compare_data.get('growth_objective_run_found')
-        else 'Missing growth-objective run. Use FBA, biomass objective, no knockouts and unchanged environment.'
-    )
-    product_run_status = (
-        'Run with product objective found.'
-        if compare_data.get('product_objective_run_found')
-        else f"Missing product-objective run. Use {compare_data.get('target_objective')} as the objective."
-    )
-    objective_status = (
-        'Objective change detected: growth objective vs product objective.'
-        if compare_data.get('objective_changed')
-        else 'Objective change not detected yet. The two runs must use different objectives.'
-    )
-    tracking_status = (
-        f"Evidence: {compare_data.get('target_flux')} was tracked in both runs."
-        if compare_data.get('target_flux_tracked')
-        else f"Evidence: track {compare_data.get('target_flux')} in Production Flux for both runs."
-    )
-    production_status = (
-        'Comparison: target product increased when the product objective was used.'
-        if compare_data.get('production_increased')
-        else 'Comparison: product increase is not clear enough yet.'
-    )
-    final_status = (
-        'Objective comparison ready. Return to Dr. Vega and deliver the report.'
-        if compare_data.get('ready_to_deliver')
-        else 'Not ready yet. Compare the growth objective with the ethanol objective.'
-    )
-
-    growth_objective_value = compare_data.get('growth_objective_value')
-    product_objective_value = compare_data.get('product_objective_value')
-    baseline_flux = compare_data.get('baseline_product_flux')
-    product_flux = compare_data.get('product_objective_flux')
-    production_increase = compare_data.get('production_increase')
-
-    def fmt(value):
-        return 'not available' if value is None else f'{float(value):.3f}'
-
-    return (
-        'Mission 23 Objective Comparison\n\n'
-        f"Target: growth objective vs ethanol objective\n"
-        f"Method: {compare_data.get('target_method')}\n"
-        f"Growth objective: {compare_data.get('baseline_objective')}\n"
-        f"Product objective: {compare_data.get('target_objective')}\n"
-        f"Target product: {compare_data.get('target_product')} ({compare_data.get('target_flux')})\n\n"
-        f"Objective values:\n"
-        f"- Biomass objective run: {fmt(growth_objective_value)}\n"
-        f"- Product objective run: {fmt(product_objective_value)}\n\n"
-        f"Production comparison:\n"
-        f"- Product flux with biomass objective: {fmt(baseline_flux)}\n"
-        f"- Product flux with product objective: {fmt(product_flux)}\n"
-        f"- Production increase: {fmt(production_increase)}\n\n"
-        f"{growth_run_status}\n"
-        f"{product_run_status}\n"
-        f"{objective_status}\n"
-        f"{tracking_status}\n"
-        f"{production_status}\n\n"
-        f"{final_status}"
-    )
+def _build_mission23_text(report_data):
+    return build_mission23_nutrient_sensitivity_report_text(report_data)
 
 
 def _build_mission24_text(compare_data):
@@ -1557,6 +1497,7 @@ class Window:
         menu_bound_sweep.add.dropselect(
             title='Sweep variable: ',
             items=[
+                ('Ammonium lower bound (EX_nh4_e)', 'EX_nh4_e:lower'),
                 ('Oxygen lower bound (EX_o2_e)', 'EX_o2_e:lower'),
                 ('D-Glucose lower bound (EX_glc__D_e)', 'EX_glc__D_e:lower'),
                 ('Acetate lower bound (EX_ac_e)', 'EX_ac_e:lower'),
@@ -1564,7 +1505,6 @@ class Window:
                 ('L-Malate lower bound (EX_mal__L_e)', 'EX_mal__L_e:lower'),
                 ('Fumarate lower bound (EX_fum_e)', 'EX_fum_e:lower'),
                 ('2-Oxoglutarate lower bound (EX_akg_e)', 'EX_akg_e:lower'),
-                # Future Dr. Luna missions can add nutrient sweeps here.
             ],
             default=0,
             selection_box_height=4,
@@ -1577,10 +1517,10 @@ class Window:
         menu_bound_sweep.add.dropselect(
             title='Sweep values: ',
             items=[
+                ('Ammonium sensitivity: -5, -4, -2, -1', 'ammonium_sensitivity'),
                 ('O2 transition: -20, -10, -5, 0', 'oxygen_transition'),
                 ('Glucose limitation: -1000, -500, -100, -50, -10, 0', 'glucose_limitation'),
                 ('Alternative carbon: -20, -10, -5, -1, 0', 'alternative_carbon_limitation'),
-                # Future presets can be added here without changing the report UI.
             ],
             default=0,
             selection_box_height=4,
@@ -1718,8 +1658,6 @@ class Window:
                     mission22_data = run_mission22_comparison_check(self.results)
 
             mission23_data = None
-            if '23' in self.player.missions_activated and '23' not in self.player.missions_completed:
-                mission23_data = run_mission23_comparison_check(compare_runs)
 
             mission24_data = None
             if '24' in self.player.missions_activated and '24' not in self.player.missions_completed:
@@ -1735,18 +1673,26 @@ class Window:
             mission27_data = None
             mission28_data = None
             luna_sweep_active = (
-                ('26' in self.player.missions_activated and '26' not in self.player.missions_completed)
+                ('23' in self.player.missions_activated and '23' not in self.player.missions_completed)
+                or ('26' in self.player.missions_activated and '26' not in self.player.missions_completed)
                 or ('27' in self.player.missions_activated and '27' not in self.player.missions_completed)
                 or ('28' in self.player.missions_activated and '28' not in self.player.missions_completed)
             )
             if luna_sweep_active:
                 if sys.platform == 'emscripten':
-                    bound_sweep_data = {
-                        'error': 'Bound Sweep is not available in this web build yet.'
-                    }
+                    bound_sweep_data = run_bound_sweep_remote(
+                        BACKEND_URL, menu_bound_sweep.get_input_data()
+                    )
                 else:
                     bound_sweep_data = run_bound_sweep(menu_bound_sweep.get_input_data())
 
+                if '23' in self.player.missions_activated and '23' not in self.player.missions_completed:
+                    if sys.platform == 'emscripten':
+                        mission23_data = run_mission23_sensitivity_check_remote(
+                            BACKEND_URL, bound_sweep_data
+                        )
+                    else:
+                        mission23_data = run_mission23_sensitivity_check(bound_sweep_data)
                 if '26' in self.player.missions_activated and '26' not in self.player.missions_completed:
                     mission26_data = run_mission26_bound_sweep_check(bound_sweep_data)
                 if '27' in self.player.missions_activated and '27' not in self.player.missions_completed:

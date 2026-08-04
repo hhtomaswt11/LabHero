@@ -11,12 +11,18 @@ from async_menu import run_menu
 from mission24 import Mission24_info
 from utils import *
 from simulation import (
+    MISSION23_CHECK_VERSION,
     MISSION23_METHOD,
-    MISSION23_BASELINE_OBJECTIVE,
-    MISSION23_TARGET_OBJECTIVE,
-    MISSION23_TARGET_PRODUCT,
-    MISSION23_TARGET_FLUX,
-    MISSION23_MIN_PRODUCTION_INCREASE,
+    MISSION23_GROWTH_OBJECTIVE,
+    MISSION23_SWEEP_REACTION,
+    MISSION23_SWEEP_VALUES,
+    MISSION23_REQUIRED_TRACKED_FLUXES,
+    MISSION23_REQUIRED_MEDIUM_FLUXES,
+    build_mission23_nutrient_sensitivity_report_text,
+    initialise_mission23_nutrient_sensitivity_curve,
+    is_mission23_unlocked,
+    mission23_answer_matches,
+    normalise_mission23_answer,
 )
 
 
@@ -48,28 +54,28 @@ class Mission23:
     async def update(self):
         intro23_dialogue = [
             f"Hello {self.player.player_name}. I'm Dr. Luna.",
-            "Dr. Vega showed that two interventions can share one observed phenotype.",
-            "Now we will study how predicted responses change across controlled perturbations."
+            "Dr. Vega compared isolated endpoints. I study what happens between them.",
+            "Begin with a nutrient-sensitivity curve across controlled ammonium levels.",
         ]
         active23_dialogue = [
-            "Mission 23 is active. Build the controlled comparison described in the briefing.",
-            "Keep every unrelated variable fixed and use the visible evidence.",
-            "Return with the supported interpretation when the report is complete."
+            "Mission 23 is active. Configure the ammonium Bound Sweep.",
+            "Keep the base model unchanged and inspect every response row.",
+            "Submit the secretion supported by the onset of nutrient limitation.",
         ]
         intro24_dialogue = [
             f"Good work, {self.player.player_name}.",
-            "You completed the first Luna comparison.",
-            "Mission 24 will extend the same laboratory with a second controlled analysis."
+            "You identified a response that emerged along a graded nutrient perturbation.",
+            "Mission 24 will extend Dr. Luna's sensitivity laboratory with a harder analysis.",
         ]
         active24_dialogue = [
-            "Mission 24 is active. Follow the shared protocol and isolate its intended factor.",
-            "Use the complete visible result rather than a single summary value.",
-            "Deliver only after the comparison evidence is complete."
+            "Mission 24 is active. Follow its controlled sensitivity protocol.",
+            "Use every visible result rather than one isolated endpoint.",
+            "Deliver only after the complete evidence supports your conclusion.",
         ]
         completed24_dialogue = [
             f"Excellent analysis, {self.player.player_name}.",
-            "You completed Dr. Luna's two missions.",
-            "Dr. Smith will continue the campaign in Mission 25."
+            "You completed Dr. Luna's sensitivity laboratory.",
+            "Dr. Smith will continue the campaign in Mission 25.",
         ]
 
         self.input()
@@ -120,173 +126,240 @@ class Mission23:
 
 
 class Mission23_info:
-    """Mission 23 — Objective Comparison.
-
-    First Dr. Luna mission in the revised campaign ownership.  Its scientific
-    protocol will be audited independently before manual validation.
-    """
+    """Mission 23 — Nutrient Sensitivity Curve."""
 
     def __init__(self, toggle_menu, player) -> None:
         self.player = player
         self.missions_activated = self.player.missions_activated
         self.missions_completed = self.player.missions_completed
-
         self.toggle_menu = toggle_menu
         self.display_surface = pygame.display.get_surface()
-        font_path = get_resource_path('font/LycheeSoda.ttf')
-        self.font = pygame.font.Font(font_path, 30)
+        self.font = pygame.font.Font(get_resource_path('font/LycheeSoda.ttf'), 30)
         self.timer = Timer(200)
-
         self.mission23 = '23' in self.missions_activated
 
-        success_path = get_resource_path('audio/success_3.ogg')
-        self.success = pygame.mixer.Sound(success_path)
+        self.success = pygame.mixer.Sound(get_resource_path('audio/success_3.ogg'))
         self.success.set_volume(1.2)
-
-        failed_path = get_resource_path('audio/failed.ogg')
-        self.failed = pygame.mixer.Sound(failed_path)
+        self.failed = pygame.mixer.Sound(get_resource_path('audio/failed.ogg'))
         self.failed.set_volume(1.2)
 
     async def setup(self):
         menu = pygame_menu.Menu(
             height=720,
+            center_content=False,
             onclose=self.toggle_menu,
             theme=mytheme,
             title='Mission 23',
             width=1280,
         )
 
-        menu_text = pygame_menu.Menu(
+        if not is_mission23_unlocked(self.missions_completed):
+            menu.add.vertical_margin(40)
+            menu.add.label(
+                "Mission 23 is locked. Complete Mission 22 before beginning Dr. Luna's sensitivity laboratory.",
+                wordwrap=True,
+                align=pygame_menu.locals.ALIGN_CENTER,
+                padding=(25, 25, 25, 25),
+                background_color='white',
+                font_size=30,
+            )
+            menu.add.button('Back', pygame_menu.events.BACK, background_color=(70, 70, 70))
+            await run_menu(menu, self.display_surface)
+            return
+
+        hint3 = pygame_menu.Menu(
+            height=720, center_content=False, onclose=pygame_menu.events.BACK,
+            theme=mytheme, title='Mission 23 Hint 3', width=1280,
+        )
+        hint3.add.label(
+            f"Technical hint: use {MISSION23_METHOD}, objective {MISSION23_GROWTH_OBJECTIVE}, every gene active and a completely default base environment. In Bound Sweep Setup select {MISSION23_SWEEP_REACTION} lower bound and values -5, -4, -2, -1. In Production Flux select " + ', '.join(MISSION23_REQUIRED_TRACKED_FLUXES) + '.',
+            wordwrap=True,
+            align=pygame_menu.locals.ALIGN_LEFT,
+            padding=(20, 20, 20, 20),
+        )
+        hint3.add.button('Back', pygame_menu.events.BACK, background_color=(70, 70, 70))
+
+        hint2 = pygame_menu.Menu(
+            height=720, center_content=False, onclose=pygame_menu.events.BACK,
+            theme=mytheme, title='Mission 23 Hint 2', width=1280,
+        )
+        hint2.add.label(
+            'Experimental hint: the first sweep point is deliberately less restrictive than the realised wild-type ammonium uptake. Find the first tighter point where growth falls, then compare which tracked secretion changed from absent to active.',
+            wordwrap=True,
+            align=pygame_menu.locals.ALIGN_LEFT,
+            padding=(20, 20, 20, 20),
+        )
+        hint2.add.button('Reveal technical hint', hint3, background_color=(255, 215, 0), font_color='black')
+        hint2.add.button('Back', pygame_menu.events.BACK, background_color=(70, 70, 70))
+
+        hint1 = pygame_menu.Menu(
+            height=720, center_content=False, onclose=pygame_menu.events.BACK,
+            theme=mytheme, title='Mission 23 Hint 1', width=1280,
+        )
+        hint1.add.label(
+            'Conceptual hint: a lower bound defines uptake capacity, not necessarily the flux the optimum will use. A response curve helps distinguish a non-binding point from the onset of nutrient limitation.',
+            wordwrap=True,
+            align=pygame_menu.locals.ALIGN_LEFT,
+            padding=(20, 20, 20, 20),
+        )
+        hint1.add.button('Reveal next hint', hint2, background_color=(255, 215, 0), font_color='black')
+        hint1.add.button('Back', pygame_menu.events.BACK, background_color=(70, 70, 70))
+
+        briefing = pygame_menu.Menu(
             height=720,
-            onclose=self.toggle_menu,
+            center_content=False,
+            onclose=pygame_menu.events.BACK,
             theme=mytheme,
             title='Mission 23 Briefing',
             width=1280,
         )
-
-        menu_text.add.label(
+        briefing.add.label(
             f"""
-            Mission 23: Objective Comparison.
+            Dr. Luna studies graded responses rather than only two endpoints.
 
-            In the previous missions you compared environment and gene changes.
-            Now compare the effect of changing only the simulation objective.
+            Configure one four-point Bound Sweep:
+            - Method: {MISSION23_METHOD}
+            - Objective: {MISSION23_GROWTH_OBJECTIVE}
+            - Genes: all active
+            - Base environment: every lower and upper bound at model default
+            - Sweep variable: {MISSION23_SWEEP_REACTION} lower bound
+            - Sweep values: {', '.join(f'{value:g}' for value in MISSION23_SWEEP_VALUES)}
+            - Production Flux: {', '.join(MISSION23_REQUIRED_TRACKED_FLUXES)}
 
-            The objective tells the model what it is trying to maximize.
-            If the objective is biomass, the model prioritizes growth.
-            If the objective is {MISSION23_TARGET_FLUX}, the model prioritizes
-            {MISSION23_TARGET_PRODUCT} secretion.
+            The sweep report also records {', '.join(MISSION23_REQUIRED_MEDIUM_FLUXES)} and the pFBA diagnostics for every row.
 
-            Keep method, genes and environment unchanged in both runs.
-            Track {MISSION23_TARGET_FLUX} in Production Flux so the comparison
-            shows the product change clearly.
+            Identify the tracked secretion that is absent at the non-limiting point but becomes active at the first ammonium-limited point. Submit one concise route, not an essay.
             """,
             max_char=-1,
             wordwrap=True,
             align=pygame_menu.locals.ALIGN_LEFT,
-            margin=(0, 0),
+            padding=(20, 20, 20, 20),
         )
-        menu_text.add.button('Back', pygame_menu.events.BACK, background_color=(70, 70, 70))
-        menu_text.add.vertical_margin(20)
+        briefing.add.button('Optional Hints', hint1, background_color=(230, 230, 180), font_color='black')
+        briefing.add.button('Back', pygame_menu.events.BACK, background_color=(70, 70, 70))
 
         menu.add.vertical_margin(20)
         menu.add.label(
-            'Mission 23: Objective Comparison',
+            'Mission 23: Nutrient Sensitivity Curve',
             wordwrap=False,
             align=pygame_menu.locals.ALIGN_CENTER,
             font_size=34,
         )
-
         menu.add.label(
-            f"""
-            Dr. Luna now wants an objective-function comparison.
-
-            Question:
-            What changes when the same cell is optimized for growth versus
-            optimized for {MISSION23_TARGET_PRODUCT} production?
-
-            Run A — growth objective:
-            - Method: {MISSION23_METHOD}
-            - Objective: {MISSION23_BASELINE_OBJECTIVE}
-            - Genes: no knockouts
-            - Environment: unchanged
-            - Production Flux: track {MISSION23_TARGET_FLUX}
-
-            Run B — product objective:
-            - Method: {MISSION23_METHOD}
-            - Objective: {MISSION23_TARGET_OBJECTIVE}
-            - Genes: no knockouts
-            - Environment: unchanged
-            - Production Flux: track {MISSION23_TARGET_FLUX}
-
-            After the second simulation, open New Results -> Compare Runs.
-            {MISSION23_TARGET_PRODUCT.capitalize()} should increase by at least
-            {MISSION23_MIN_PRODUCTION_INCREASE:.1f} when the product objective is used.
-            """,
+            'Build one ammonium response curve and determine which tracked secretion emerges at the onset of limitation.',
             wordwrap=True,
             align=pygame_menu.locals.ALIGN_CENTER,
-            font_size=30,
+            font_size=28,
         )
+        menu.add.button('Mission 23 Briefing', briefing, font_color='black', background_color=(255, 215, 0))
+        menu.add.button('Optional Hints', hint1, font_color='black', background_color=(230, 230, 180))
+        menu.add.vertical_margin(25)
 
-        menu.add.button('Mission 23 Briefing', menu_text, font_color='black', background_color=(255, 215, 0, 255))
-        menu.add.vertical_margin(50)
+        report = load_mission23_comparison_check()
+        report_label_options = {
+            'wordwrap': True,
+            'align': pygame_menu.locals.ALIGN_LEFT,
+            'padding': (20, 20, 20, 20),
+            'font_size': 22,
+        }
+        # Before activation there is no experimental report yet.  Keep the
+        # introductory status as plain text instead of drawing an empty report
+        # card.  Once a real Mission 23 report exists, retain the white panel
+        # used to separate the sweep evidence from the rest of the menu.
+        if report:
+            report_label_options['background_color'] = 'white'
 
-        if self.mission23:
-            menu.add.button('Deliver Objective Comparison', action=self.deliver_results, background_color=(50, 100, 100))
-            menu.add.vertical_margin(50)
+        menu.add.label(
+            build_mission23_nutrient_sensitivity_report_text(report),
+            **report_label_options,
+        )
+        menu.add.vertical_margin(20)
+
+        if '23' in self.missions_completed:
+            menu.add.label('Mission Completed', font_color=(40, 120, 40))
+        elif self.mission23 or '23' in self.missions_activated:
+            self.mission23 = True
+            menu.add.label(
+                'Question: Which tracked secretion was absent at the non-limiting point but became active when ammonium first became limiting?',
+                wordwrap=True,
+                align=pygame_menu.locals.ALIGN_LEFT,
+                font_size=24,
+            )
+            menu.add.text_input(
+                'New secretion: ',
+                default='',
+                input_underline='_',
+                maxchar=80,
+                onreturn=self.deliver_results,
+            )
             menu.add.label('Mission Activated', font_color=(150, 150, 150))
-            menu.add.vertical_margin(20)
         else:
-            if '22' in self.missions_completed:
-                menu.add.button('Activate Mission', action=self.activate_mission23, background_color=(50, 100, 100))
-            else:
-                menu.add.label('Complete Mission 22 before activating this mission.', font_color=(150, 40, 40))
+            menu.add.button('Activate Mission', action=self.activate_mission23, background_color=(50, 100, 100))
 
         menu.add.vertical_margin(20)
         await run_menu(menu, self.display_surface)
 
     def activate_mission23(self):
-        if '22' not in self.missions_completed:
+        if not is_mission23_unlocked(self.missions_completed):
             self.failed.play()
-            animation_text_save('Complete Mission 22 first.', time=2500)
+            animation_text_save('Complete Mission 22 before starting Mission 23.', time=3000)
+            return
+        if '23' in self.missions_completed:
+            return
+        if '23' in self.missions_activated:
+            self.mission23 = True
             return
 
         clear_compare_runs()
+        clear_bound_sweep()
         clear_mission23_comparison_check()
+        initialise_mission23_nutrient_sensitivity_curve()
         self.mission23 = True
-        if '23' not in self.missions_activated:
-            self.missions_activated.insert(0, '23')
+        self.missions_activated.insert(0, '23')
         animation_text_save('Mission 23 Activated')
         save_file(self.player.get_save_data())
 
-    def deliver_results(self):
-        report_data = load_mission23_comparison_check()
-
-        if (not report_data
-                or report_data.get('mission_id') != '23'
-                or report_data.get('check_version') != 1):
+    def deliver_results(self, answer):
+        if not is_mission23_unlocked(self.missions_completed):
             self.failed.play()
-            animation_text_save('Run the Mission 23 comparison first!', time=2500)
+            animation_text_save('Complete Mission 22 first!', time=2500)
+            return
+        if '23' not in self.missions_activated:
+            self.failed.play()
+            animation_text_save('Activate Mission 23 before delivering a conclusion.', time=2800)
             return
 
-        if report_data.get('ready_to_deliver'):
-            self.success.play()
-            if '23' not in self.missions_completed:
-                self.missions_completed.insert(0, '23')
-            animation_text_save('Congratulations! Mission 23 completed!', time=2500)
-            save_file(self.player.get_save_data())
+        report = load_mission23_comparison_check()
+        if (
+            not report
+            or report.get('mission_id') != '23'
+            or report.get('check_version') != MISSION23_CHECK_VERSION
+        ):
+            self.failed.play()
+            animation_text_save('Record the current-format Mission 23 Bound Sweep first.', time=3000)
+            return
+        if not report.get('all_points_recorded'):
+            self.failed.play()
+            animation_text_save('Record all four required ammonium sweep points.', time=3000)
+            return
+        if not report.get('relationship_supported'):
+            self.failed.play()
+            animation_text_save('The visible sweep does not yet support the required sensitivity interpretation.', time=3000)
+            return
+        if normalise_mission23_answer(answer) is None:
+            self.failed.play()
+            animation_text_save('Enter one unambiguous tracked secretion only.', time=2800)
+            return
+        if not mission23_answer_matches(answer, report):
+            self.failed.play()
+            animation_text_save('That secretion is not supported by the recorded onset of limitation.', time=3000)
             return
 
-        self.failed.play()
-        if not report_data.get('growth_objective_run_found'):
-            animation_text_save('Missing Run A. Use biomass objective with unchanged setup.', time=3000)
-        elif not report_data.get('product_objective_run_found'):
-            animation_text_save(f'Missing Run B. Use {MISSION23_TARGET_OBJECTIVE} as objective.', time=3000)
-        elif not report_data.get('target_flux_tracked'):
-            animation_text_save(f'Track {MISSION23_TARGET_FLUX} in Production Flux for both runs.', time=3000)
-        elif not report_data.get('production_increased'):
-            animation_text_save('The product objective has not increased ethanol enough yet.', time=3000)
-        else:
-            animation_text_save('Almost there. Open Compare Runs and check the objective comparison.', time=3000)
+        self.success.play()
+        if '23' not in self.missions_completed:
+            self.missions_completed.insert(0, '23')
+        animation_text_save('Congratulations! Mission 23 completed!', time=2500)
+        save_file(self.player.get_save_data())
 
     def input(self):
         keys = pygame.key.get_pressed()

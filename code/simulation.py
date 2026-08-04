@@ -689,15 +689,44 @@ MISSION22_TARGET_GENE = MISSION22_TARGET_GENES[0]
 MISSION22_TARGET_GENE_NAME = MISSION22_TARGET_GENE_NAMES[MISSION22_TARGET_GENE]
 MISSION22_CANDIDATE_GENES = list(MISSION22_TARGET_GENES)
 
-MISSION23_METHOD = 'FBA'
-MISSION23_TARGET_CONTEXT = 'controlled comparison: biomass objective vs product objective'
-MISSION23_BASELINE_OBJECTIVE = 'BIOMASS_Ecoli_core_w_GAM'
-MISSION23_TARGET_OBJECTIVE = 'EX_etoh_e'
-MISSION23_TARGET_PRODUCT = 'ethanol'
-MISSION23_TARGET_FLUX = 'EX_etoh_e'
-MISSION23_MIN_BASELINE_OBJECTIVE_VALUE = 0.1
-MISSION23_MIN_TARGET_OBJECTIVE_VALUE = 1.0
-MISSION23_MIN_PRODUCTION_INCREASE = 20.0
+# Mission 23 begins Dr. Luna's sensitivity laboratory.  One structured
+# pFBA bound sweep records a non-limiting ammonium point and three progressively
+# tighter lower bounds.  The mission validates only the visible sweep table and
+# derives the onset of a new secretion from those rows; it never launches a
+# hidden validation simulation.
+MISSION23_CHECK_VERSION = 2
+MISSION23_METHOD = 'pFBA'
+MISSION23_GROWTH_OBJECTIVE = 'BIOMASS_Ecoli_core_w_GAM'
+MISSION23_TARGET_CONTEXT = 'ammonium nutrient sensitivity curve and secretion onset'
+MISSION23_SWEEP_REACTION = 'EX_nh4_e'
+MISSION23_SWEEP_REACTION_NAME = 'Ammonium exchange'
+MISSION23_SWEEP_BOUND = 'lower'
+MISSION23_SWEEP_BOUND_LABEL = 'lower bound'
+MISSION23_SWEEP_VALUES = [-5.0, -4.0, -2.0, -1.0]
+MISSION23_REQUIRED_TRACKED_FLUXES = ['EX_ac_e', 'EX_co2_e']
+MISSION23_REQUIRED_MEDIUM_FLUXES = [
+    'EX_nh4_e',
+    'EX_glc__D_e',
+    'EX_o2_e',
+    'EX_pi_e',
+]
+MISSION23_FLUX_NAMES = {
+    'EX_ac_e': 'Acetate',
+    'EX_co2_e': 'Carbon dioxide',
+}
+MISSION23_EXPECTED_NEW_SECRETION = 'EX_ac_e'
+MISSION23_EXPECTED_SECONDARY_CRITERION = 'total_absolute_flux'
+MISSION23_MIN_REFERENCE_GROWTH = 0.05
+MISSION23_MAX_REFERENCE_ACETATE = 0.001
+MISSION23_MIN_LIMITING_ACETATE = 0.01
+MISSION23_MIN_GROWTH_CHANGE = 0.01
+MISSION23_MONOTONIC_TOLERANCE = 0.01
+MISSION23_FLUX_TOLERANCE = 0.01
+MISSION23_PRIMARY_TOLERANCE = 0.01
+
+# Removed Mission 23 objective-comparison aliases are intentionally not kept:
+# the redesigned mission must not be confused with the earlier ethanol
+# objective exercise or with the generic Compare Runs state.
 
 MISSION24_BASELINE_METHOD = 'FBA'
 MISSION24_TARGET_METHOD = 'pFBA'
@@ -12428,118 +12457,461 @@ def build_mission22_phenotype_equivalence_report_text(report):
     return '\n'.join(lines)
 
 
-def _mission23_is_growth_objective_run(snapshot):
-    if not snapshot:
-        return False
-    selected_fluxes = snapshot.get('selected_production_fluxes') or []
-    return (
-        snapshot.get('method') == MISSION23_METHOD
-        and snapshot.get('objective') == MISSION23_BASELINE_OBJECTIVE
-        and not snapshot.get('knocked_out_genes')
-        and not snapshot.get('environment_changed')
-        and MISSION23_TARGET_FLUX in selected_fluxes
-        and snapshot.get('objective_value', snapshot.get('growth_value', 0.0)) >= MISSION23_MIN_BASELINE_OBJECTIVE_VALUE
-    )
+def is_mission23_unlocked(missions_completed):
+    """Mission 23 begins only after Dr. Vega's final mission."""
+    return '22' in (missions_completed or [])
 
 
-def _mission23_is_product_objective_run(snapshot):
-    if not snapshot:
-        return False
-    selected_fluxes = snapshot.get('selected_production_fluxes') or []
-    return (
-        snapshot.get('method') == MISSION23_METHOD
-        and snapshot.get('objective') == MISSION23_TARGET_OBJECTIVE
-        and not snapshot.get('knocked_out_genes')
-        and not snapshot.get('environment_changed')
-        and MISSION23_TARGET_FLUX in selected_fluxes
-        and snapshot.get('objective_value', snapshot.get('growth_value', 0.0)) >= MISSION23_MIN_TARGET_OBJECTIVE_VALUE
-    )
+def _mission23_clean_number(value):
+    numeric = float(value)
+    if abs(numeric) < DISPLAY_ZERO_TOLERANCE:
+        numeric = 0.0
+    return round(numeric, 6)
 
 
-def _build_mission23_data(compare_runs=None, error=None):
-    compare_runs = compare_runs or load_compare_runs() or {}
-    run_a = compare_runs.get('run_a')
-    run_b = compare_runs.get('run_b')
-    available_runs = [run for run in (run_a, run_b) if run]
+def _mission23_number_or_none(value):
+    numeric = _as_float_or_none(value)
+    return _mission23_clean_number(numeric) if numeric is not None else None
 
-    growth_objective_run = next((run for run in available_runs if _mission23_is_growth_objective_run(run)), None)
-    product_objective_run = next((run for run in available_runs if _mission23_is_product_objective_run(run)), None)
 
-    growth_objective_value = None
-    product_objective_value = None
-    if growth_objective_run:
-        growth_objective_value = growth_objective_run.get('objective_value', growth_objective_run.get('growth_value'))
-    if product_objective_run:
-        product_objective_value = product_objective_run.get('objective_value', product_objective_run.get('growth_value'))
+def _mission23_base_environment_status(reactions):
+    """Require a complete model-default environment without relying on key order."""
+    reactions = reactions or {}
+    bounds_complete = True
+    unexpected_changes = []
+    for index in range(len(REACTIONS.index)):
+        reaction_id = REACTIONS.index[index]
+        lower_open, upper_open = _reaction_bound_open_states(reactions, index)
+        if lower_open is None or upper_open is None:
+            bounds_complete = False
+            continue
+        default_lower_open = REACTIONS.lb.iloc[index] != 0
+        default_upper_open = REACTIONS.ub.iloc[index] != 0
+        if lower_open != default_lower_open:
+            unexpected_changes.append(f'{reaction_id} lower bound')
+        if upper_open != default_upper_open:
+            unexpected_changes.append(f'{reaction_id} upper bound')
+    return {
+        'bounds_complete': bounds_complete,
+        'unexpected_environment_changes': unexpected_changes,
+        'environment_default': bool(bounds_complete and not unexpected_changes),
+    }
 
-    baseline_flux = None
-    product_flux = None
-    if growth_objective_run:
-        baseline_flux = (growth_objective_run.get('production_flux_values') or {}).get(MISSION23_TARGET_FLUX)
-    if product_objective_run:
-        product_flux = (product_objective_run.get('production_flux_values') or {}).get(MISSION23_TARGET_FLUX)
 
-    production_increase = None
-    production_increased = False
-    if baseline_flux is not None and product_flux is not None:
-        production_increase = round(float(product_flux) - float(baseline_flux), 3)
-        production_increased = production_increase >= MISSION23_MIN_PRODUCTION_INCREASE
-
-    target_flux_tracked = False
-    if growth_objective_run and product_objective_run:
-        target_flux_tracked = (
-            MISSION23_TARGET_FLUX in (growth_objective_run.get('selected_production_fluxes') or [])
-            and MISSION23_TARGET_FLUX in (product_objective_run.get('selected_production_fluxes') or [])
-        )
-
-    objective_changed = (
-        growth_objective_run is not None
-        and product_objective_run is not None
-        and growth_objective_run.get('objective') != product_objective_run.get('objective')
-    )
-
-    mission23_data = {
+def _mission23_empty_report():
+    return {
         'mission_id': '23',
-        'check_version': 1,
-        'mission_title': 'Objective Comparison',
+        'check_version': MISSION23_CHECK_VERSION,
+        'mission_title': 'Nutrient Sensitivity Curve',
         'target_context': MISSION23_TARGET_CONTEXT,
         'target_method': MISSION23_METHOD,
-        'baseline_objective': MISSION23_BASELINE_OBJECTIVE,
-        'target_objective': MISSION23_TARGET_OBJECTIVE,
-        'target_product': MISSION23_TARGET_PRODUCT,
-        'target_flux': MISSION23_TARGET_FLUX,
-        'minimum_production_increase': MISSION23_MIN_PRODUCTION_INCREASE,
-        'run_a': run_a,
-        'run_b': run_b,
-        'growth_objective_run_found': growth_objective_run is not None,
-        'product_objective_run_found': product_objective_run is not None,
-        'growth_objective_value': round(float(growth_objective_value), 3) if growth_objective_value is not None else None,
-        'product_objective_value': round(float(product_objective_value), 3) if product_objective_value is not None else None,
-        'baseline_product_flux': round(float(baseline_flux), 3) if baseline_flux is not None else None,
-        'product_objective_flux': round(float(product_flux), 3) if product_flux is not None else None,
-        'production_increase': production_increase,
-        'production_increased': production_increased,
-        'target_flux_tracked': target_flux_tracked,
-        'objective_changed': objective_changed,
-        'ready_to_deliver': (
-            growth_objective_run is not None
-            and product_objective_run is not None
-            and objective_changed
-            and target_flux_tracked
-            and production_increased
-        ),
+        'growth_objective': MISSION23_GROWTH_OBJECTIVE,
+        'sweep_reaction': MISSION23_SWEEP_REACTION,
+        'sweep_bound': MISSION23_SWEEP_BOUND,
+        'required_bound_values': list(MISSION23_SWEEP_VALUES),
+        'required_tracked_fluxes': list(MISSION23_REQUIRED_TRACKED_FLUXES),
+        'required_medium_fluxes': list(MISSION23_REQUIRED_MEDIUM_FLUXES),
+        'sweep_data': None,
+        'sweep_rows': [],
+        'recorded_bound_values': [],
+        'recorded_point_count': 0,
+        'required_point_count': len(MISSION23_SWEEP_VALUES),
+        'missing_bound_values': list(MISSION23_SWEEP_VALUES),
+        'all_points_recorded': False,
+        'nonlimiting_reference': None,
+        'first_limiting_point': None,
+        'growth_trend': False,
+        'ammonium_uptake_trend': False,
+        'tracked_flux_trends': {},
+        'new_secretion_candidates': [],
+        'relationship_supported': False,
+        'evidence_ready': False,
+        'answer_ready': False,
+        'ready_to_deliver': False,
+        'current_sweep_valid': False,
+        'current_sweep_recorded': False,
+        'current_issues': [],
+        'latest_attempt': None,
     }
-    if error:
-        mission23_data['error'] = error
-    save_mission23_comparison_check(mission23_data)
-    return mission23_data
 
 
-def run_mission23_comparison_check(compare_runs=None):
-    compare_runs = compare_runs or load_compare_runs()
-    if not compare_runs or not compare_runs.get('run_a') or not compare_runs.get('run_b'):
-        return _build_mission23_data(compare_runs, error='Run two simulations before delivering Mission 23.')
-    return _build_mission23_data(compare_runs)
+def initialise_mission23_nutrient_sensitivity_curve():
+    report = _mission23_empty_report()
+    save_mission23_comparison_check(report)
+    return report
+
+
+def _mission23_value_key(value):
+    numeric = _as_float_or_none(value)
+    return round(float(numeric), 6) if numeric is not None else None
+
+
+def _mission23_row_map(rows):
+    mapped = {}
+    for row in rows or []:
+        key = _mission23_value_key(row.get('bound_value'))
+        if key is not None:
+            mapped[key] = row
+    return mapped
+
+
+def _mission23_complete_numeric_mapping(mapping, required_ids):
+    if not isinstance(mapping, dict):
+        return False
+    return all(_as_float_or_none(mapping.get(reaction_id)) is not None for reaction_id in required_ids)
+
+
+def _mission23_validate_sweep(sweep_data):
+    """Validate one visible bound-sweep result and return normalised rows/issues."""
+    issues = []
+    if not isinstance(sweep_data, dict) or not sweep_data:
+        return False, [], ['Run the Mission 23 Bound Sweep before recording evidence.']
+    if sweep_data.get('error'):
+        issues.append(str(sweep_data.get('error')))
+
+    if sweep_data.get('method') != MISSION23_METHOD:
+        issues.append('Use pFBA for the Mission 23 sensitivity sweep.')
+    if sweep_data.get('objective') != MISSION23_GROWTH_OBJECTIVE:
+        issues.append('Use the biomass objective for the Mission 23 sensitivity sweep.')
+    if sweep_data.get('knocked_out_genes'):
+        issues.append('Keep every gene active during the Mission 23 sensitivity sweep.')
+
+    environment = _mission23_base_environment_status(sweep_data.get('base_reactions') or {})
+    if not environment['bounds_complete']:
+        issues.append('The explicit environmental-bound payload is incomplete.')
+    elif not environment['environment_default']:
+        issues.append('Keep every base environmental bound at the model default before the sweep.')
+
+    if sweep_data.get('reaction_id') != MISSION23_SWEEP_REACTION or sweep_data.get('bound') != MISSION23_SWEEP_BOUND:
+        issues.append('Sweep only the lower bound of EX_nh4_e.')
+
+    got_values = [_mission23_value_key(value) for value in (sweep_data.get('values') or [])]
+    expected_values = [_mission23_value_key(value) for value in MISSION23_SWEEP_VALUES]
+    if sorted(value for value in got_values if value is not None) != sorted(expected_values):
+        issues.append('Use the four required ammonium lower-bound values: -5, -4, -2 and -1.')
+
+    selected_fluxes = set(sweep_data.get('selected_production_fluxes') or [])
+    missing_selected = [
+        reaction_id for reaction_id in MISSION23_REQUIRED_TRACKED_FLUXES
+        if reaction_id not in selected_fluxes
+    ]
+    if missing_selected:
+        issues.append('Select EX_ac_e and EX_co2_e in Production Flux before running the sweep.')
+
+    rows_by_value = _mission23_row_map(sweep_data.get('rows') or [])
+    normalised_rows = []
+    for bound_value in MISSION23_SWEEP_VALUES:
+        key = _mission23_value_key(bound_value)
+        row = rows_by_value.get(key)
+        if not isinstance(row, dict):
+            issues.append(f'Missing the visible sweep row for ammonium lower bound {bound_value:g}.')
+            continue
+        if row.get('status') != 'ok':
+            issues.append(f'The sweep row at ammonium lower bound {bound_value:g} did not return an optimal measurable result.')
+            continue
+
+        growth = _mission23_number_or_none(row.get('growth_value'))
+        raw_fluxes = row.get('exchange_raw_fluxes') or {}
+        tracked = row.get('tracked_flux_values') or {}
+        diagnostics = row.get('method_diagnostics') or {}
+        if growth is None:
+            issues.append(f'Biomass is missing from the row at ammonium lower bound {bound_value:g}.')
+        if not _mission23_complete_numeric_mapping(raw_fluxes, MISSION23_REQUIRED_MEDIUM_FLUXES):
+            issues.append(f'The Exchange Flux evidence is incomplete at ammonium lower bound {bound_value:g}.')
+        if not _mission23_complete_numeric_mapping(tracked, MISSION23_REQUIRED_TRACKED_FLUXES):
+            issues.append(f'The Production Flux evidence is incomplete at ammonium lower bound {bound_value:g}.')
+
+        primary = _mission23_number_or_none(diagnostics.get('primary_objective_flux'))
+        method_score = _mission23_number_or_none(diagnostics.get('method_score'))
+        total_absolute_flux = _mission23_number_or_none(diagnostics.get('total_absolute_flux'))
+        active_reactions = diagnostics.get('active_reaction_count')
+        if diagnostics.get('method') != MISSION23_METHOD:
+            issues.append(f'The visible method diagnostics do not describe pFBA at ammonium lower bound {bound_value:g}.')
+        if diagnostics.get('objective_reaction') != MISSION23_GROWTH_OBJECTIVE:
+            issues.append(f'The visible method diagnostics use the wrong objective at ammonium lower bound {bound_value:g}.')
+        if diagnostics.get('method_score_name') != MISSION23_EXPECTED_SECONDARY_CRITERION:
+            issues.append(f'The pFBA secondary criterion is missing at ammonium lower bound {bound_value:g}.')
+        if primary is None or growth is None or abs(float(primary) - float(growth)) > MISSION23_PRIMARY_TOLERANCE:
+            issues.append(f'The pFBA primary objective flux does not match biomass at ammonium lower bound {bound_value:g}.')
+        if method_score is None or total_absolute_flux is None:
+            issues.append(f'The pFBA total-flux diagnostic is missing at ammonium lower bound {bound_value:g}.')
+        elif abs(float(method_score) - float(total_absolute_flux)) > MISSION23_FLUX_TOLERANCE:
+            issues.append(f'The pFBA method score does not match total absolute flux at ammonium lower bound {bound_value:g}.')
+        try:
+            active_reactions = int(active_reactions)
+        except Exception:
+            active_reactions = None
+            issues.append(f'The active-reaction count is missing at ammonium lower bound {bound_value:g}.')
+
+        if growth is not None and _mission23_complete_numeric_mapping(raw_fluxes, MISSION23_REQUIRED_MEDIUM_FLUXES) and _mission23_complete_numeric_mapping(tracked, MISSION23_REQUIRED_TRACKED_FLUXES):
+            clean_raw = {
+                reaction_id: _mission23_clean_number(raw_fluxes[reaction_id])
+                for reaction_id in MISSION23_REQUIRED_MEDIUM_FLUXES
+            }
+            clean_tracked = {
+                reaction_id: _mission23_clean_number(tracked[reaction_id])
+                for reaction_id in MISSION23_REQUIRED_TRACKED_FLUXES
+            }
+            normalised_rows.append({
+                'bound_value': float(bound_value),
+                'status': 'ok',
+                'growth_value': _mission23_clean_number(growth),
+                'ammonium_raw_flux': clean_raw[MISSION23_SWEEP_REACTION],
+                'ammonium_uptake': _mission23_clean_number(max(-clean_raw[MISSION23_SWEEP_REACTION], 0.0)),
+                'glucose_uptake': _mission23_clean_number(max(-clean_raw['EX_glc__D_e'], 0.0)),
+                'oxygen_uptake': _mission23_clean_number(max(-clean_raw['EX_o2_e'], 0.0)),
+                'phosphate_uptake': _mission23_clean_number(max(-clean_raw['EX_pi_e'], 0.0)),
+                'exchange_raw_fluxes': clean_raw,
+                'tracked_flux_values': clean_tracked,
+                'method_diagnostics': {
+                    'method': diagnostics.get('method'),
+                    'objective_reaction': diagnostics.get('objective_reaction'),
+                    'primary_objective_flux': primary,
+                    'method_score': method_score,
+                    'method_score_name': diagnostics.get('method_score_name'),
+                    'total_absolute_flux': total_absolute_flux,
+                    'active_reaction_count': active_reactions,
+                },
+            })
+
+    valid = not issues and len(normalised_rows) == len(MISSION23_SWEEP_VALUES)
+    return valid, normalised_rows, issues
+
+
+def _mission23_derive_relationship(rows):
+    rows_by_value = _mission23_row_map(rows)
+    reference = rows_by_value.get(_mission23_value_key(MISSION23_SWEEP_VALUES[0]))
+    first_limiting = rows_by_value.get(_mission23_value_key(MISSION23_SWEEP_VALUES[1]))
+    ordered = [rows_by_value.get(_mission23_value_key(value)) for value in MISSION23_SWEEP_VALUES]
+    ordered = [row for row in ordered if row]
+
+    growth_values = [float(row['growth_value']) for row in ordered]
+    ammonium_values = [float(row['ammonium_uptake']) for row in ordered]
+    growth_trend = bool(
+        len(growth_values) == len(MISSION23_SWEEP_VALUES)
+        and all(after < before - MISSION23_MONOTONIC_TOLERANCE for before, after in zip(growth_values, growth_values[1:]))
+    )
+    ammonium_uptake_trend = bool(
+        len(ammonium_values) == len(MISSION23_SWEEP_VALUES)
+        and all(after < before - MISSION23_MONOTONIC_TOLERANCE for before, after in zip(ammonium_values, ammonium_values[1:]))
+    )
+
+    tracked_flux_trends = {
+        reaction_id: [
+            _mission23_clean_number((row.get('tracked_flux_values') or {}).get(reaction_id, 0.0))
+            for row in ordered
+        ]
+        for reaction_id in MISSION23_REQUIRED_TRACKED_FLUXES
+    }
+    new_candidates = []
+    if reference and first_limiting:
+        for reaction_id in MISSION23_REQUIRED_TRACKED_FLUXES:
+            reference_value = float((reference.get('tracked_flux_values') or {}).get(reaction_id, 0.0))
+            limiting_value = float((first_limiting.get('tracked_flux_values') or {}).get(reaction_id, 0.0))
+            if reference_value <= MISSION23_MAX_REFERENCE_ACETATE and limiting_value >= MISSION23_MIN_LIMITING_ACETATE:
+                new_candidates.append(reaction_id)
+
+    relationship_supported = bool(
+        reference
+        and first_limiting
+        and float(reference['growth_value']) >= MISSION23_MIN_REFERENCE_GROWTH
+        and float(first_limiting['growth_value']) <= float(reference['growth_value']) - MISSION23_MIN_GROWTH_CHANGE
+        and growth_trend
+        and ammonium_uptake_trend
+        and new_candidates == [MISSION23_EXPECTED_NEW_SECRETION]
+    )
+    return {
+        'nonlimiting_reference': reference,
+        'first_limiting_point': first_limiting,
+        'growth_trend': growth_trend,
+        'ammonium_uptake_trend': ammonium_uptake_trend,
+        'tracked_flux_trends': tracked_flux_trends,
+        'new_secretion_candidates': new_candidates,
+        'relationship_supported': relationship_supported,
+    }
+
+
+def _build_mission23_data(sweep_data=None, existing_report=None):
+    existing_report = existing_report if isinstance(existing_report, dict) else {}
+    if existing_report.get('mission_id') != '23' or existing_report.get('check_version') != MISSION23_CHECK_VERSION:
+        existing_report = _mission23_empty_report()
+
+    current_valid, current_rows, issues = _mission23_validate_sweep(sweep_data)
+    retained_sweep = copy.deepcopy(existing_report.get('sweep_data')) if existing_report.get('evidence_ready') else None
+    retained_rows = copy.deepcopy(existing_report.get('sweep_rows') or []) if retained_sweep else []
+    current_recorded = False
+    if current_valid:
+        retained_sweep = copy.deepcopy(sweep_data)
+        retained_rows = current_rows
+        current_recorded = True
+
+    relation = _mission23_derive_relationship(retained_rows) if retained_rows else {
+        'nonlimiting_reference': None,
+        'first_limiting_point': None,
+        'growth_trend': False,
+        'ammonium_uptake_trend': False,
+        'tracked_flux_trends': {},
+        'new_secretion_candidates': [],
+        'relationship_supported': False,
+    }
+    recorded_values = [float(row['bound_value']) for row in retained_rows]
+    expected_keys = {_mission23_value_key(value) for value in MISSION23_SWEEP_VALUES}
+    recorded_keys = {_mission23_value_key(value) for value in recorded_values}
+    missing_values = [value for value in MISSION23_SWEEP_VALUES if _mission23_value_key(value) not in recorded_keys]
+    all_points = bool(recorded_keys == expected_keys and len(retained_rows) == len(MISSION23_SWEEP_VALUES))
+    evidence_ready = bool(all_points and retained_sweep)
+    relationship_supported = bool(evidence_ready and relation['relationship_supported'])
+
+    latest_attempt = {
+        'method': (sweep_data or {}).get('method') if isinstance(sweep_data, dict) else None,
+        'objective': (sweep_data or {}).get('objective') if isinstance(sweep_data, dict) else None,
+        'reaction_id': (sweep_data or {}).get('reaction_id') if isinstance(sweep_data, dict) else None,
+        'bound': (sweep_data or {}).get('bound') if isinstance(sweep_data, dict) else None,
+        'values': list((sweep_data or {}).get('values') or []) if isinstance(sweep_data, dict) else [],
+        'issues': list(issues),
+        'recorded': current_recorded,
+    }
+    report = _mission23_empty_report()
+    report.update({
+        'sweep_data': retained_sweep,
+        'sweep_rows': retained_rows,
+        'recorded_bound_values': recorded_values,
+        'recorded_point_count': len(retained_rows),
+        'missing_bound_values': missing_values,
+        'all_points_recorded': all_points,
+        **relation,
+        'relationship_supported': relationship_supported,
+        'evidence_ready': evidence_ready,
+        'answer_ready': relationship_supported,
+        'ready_to_deliver': relationship_supported,
+        'current_sweep_valid': current_valid,
+        'current_sweep_recorded': current_recorded,
+        'current_issues': list(issues),
+        'latest_attempt': latest_attempt,
+    })
+    save_mission23_comparison_check(report)
+    return report
+
+
+def run_mission23_sensitivity_check(sweep_data=None):
+    """Validate the visible sweep table; never invoke the solver from the validator."""
+    if sweep_data is None:
+        sweep_data = load_bound_sweep()
+    return _build_mission23_data(
+        sweep_data=sweep_data,
+        existing_report=load_mission23_comparison_check() or {},
+    )
+
+
+def run_mission23_sensitivity_check_remote(backend_url, sweep_data=None):
+    """Browser parity wrapper for the already visible remote sweep result."""
+    del backend_url
+    return run_mission23_sensitivity_check(sweep_data)
+
+
+def _mission23_answer_mentions(answer):
+    text = unicodedata.normalize('NFKD', str(answer or '')).encode('ascii', 'ignore').decode('ascii').lower()
+    mentions = set()
+    patterns = {
+        'EX_ac_e': [r'\bex[_\s-]*ac[_\s-]*e\b', r'\bacetate\b', r'\bacetato\b', r'\bacetic acid\b'],
+        'EX_co2_e': [r'\bex[_\s-]*co2[_\s-]*e\b', r'\bco2\b', r'\bcarbon dioxide\b', r'\bdioxido(?: de)? carbono\b'],
+    }
+    for reaction_id, aliases in patterns.items():
+        if any(re.search(pattern, text) for pattern in aliases):
+            mentions.add(reaction_id)
+    return mentions
+
+
+def normalise_mission23_answer(answer):
+    mentions = _mission23_answer_mentions(answer)
+    return next(iter(mentions)) if len(mentions) == 1 else None
+
+
+def mission23_answer_matches(answer, report_data=None):
+    report_data = report_data if report_data is not None else (load_mission23_comparison_check() or {})
+    return bool(
+        report_data.get('mission_id') == '23'
+        and report_data.get('check_version') == MISSION23_CHECK_VERSION
+        and report_data.get('answer_ready')
+        and normalise_mission23_answer(answer) == MISSION23_EXPECTED_NEW_SECRETION
+    )
+
+
+def build_mission23_nutrient_sensitivity_report_text(report):
+    if not report:
+        return 'Mission 23 Nutrient Sensitivity Curve\n\nActivate the mission and run the four-point ammonium sweep.'
+    if report.get('mission_id') != '23' or report.get('check_version') != MISSION23_CHECK_VERSION:
+        return 'Mission 23 Nutrient Sensitivity Curve\n\nCurrent-format sensitivity evidence has not been recorded yet.'
+
+    lines = [
+        'Mission 23 Nutrient Sensitivity Curve',
+        '',
+        'Controlled sweep protocol:',
+        '- pFBA biomass objective; all genes active',
+        '- Model-default environment before the sweep',
+        '- Only the EX_nh4_e lower bound changes: -5, -4, -2, -1',
+        '- Production Flux panel: EX_ac_e and EX_co2_e',
+        '- Exchange evidence: EX_nh4_e, EX_glc__D_e, EX_o2_e and EX_pi_e',
+        '- Every row includes the pFBA primary flux and total-absolute-flux diagnostic',
+        '',
+        f"Sweep points recorded: {report.get('recorded_point_count', 0)}/{report.get('required_point_count', len(MISSION23_SWEEP_VALUES))}",
+    ]
+    rows = report.get('sweep_rows') or []
+    if rows:
+        lines.extend([
+            'LB | growth | NH4 uptake | glucose uptake | oxygen uptake | acetate | CO2 | total abs flux | active reactions',
+        ])
+        for row in rows:
+            tracked = row.get('tracked_flux_values') or {}
+            diagnostics = row.get('method_diagnostics') or {}
+            lines.append(
+                f"{float(row.get('bound_value')):.0f} | "
+                f"{float(row.get('growth_value')):.3f} | "
+                f"{float(row.get('ammonium_uptake')):.3f} | "
+                f"{float(row.get('glucose_uptake')):.3f} | "
+                f"{float(row.get('oxygen_uptake')):.3f} | "
+                f"{float(tracked.get('EX_ac_e')):.3f} | "
+                f"{float(tracked.get('EX_co2_e')):.3f} | "
+                f"{float(diagnostics.get('total_absolute_flux')):.3f} | "
+                f"{int(diagnostics.get('active_reaction_count'))}"
+            )
+    else:
+        lines.append('No current-format sweep rows recorded.')
+
+    if report.get('missing_bound_values'):
+        lines.append('Missing bound values: ' + ', '.join(f'{float(value):g}' for value in report.get('missing_bound_values') or []))
+
+    if report.get('current_sweep_recorded'):
+        lines.extend(['', 'Latest valid visible Bound Sweep recorded.'])
+    elif report.get('current_issues'):
+        lines.extend(['', 'Latest sweep was not recorded:'])
+        lines.extend(f"- {issue}" for issue in report.get('current_issues') or [])
+        if report.get('evidence_ready'):
+            lines.append('Previously valid Mission 23 evidence remains available.')
+
+    lines.append('')
+    if report.get('evidence_ready'):
+        lines.extend([
+            'Evidence complete.',
+            'Compare the non-limiting row with the first row where ammonium limits growth.',
+            'Question: Which tracked secretion was absent at the non-limiting point but became active when ammonium first became limiting?',
+        ])
+    else:
+        lines.append('Evidence incomplete.')
+
+    lines.extend([
+        '',
+        'Interpretation note: a lower bound sets uptake capacity; the realised uptake may be smaller when the bound is not limiting.',
+        'A secretion that appears during this sweep is a conditional prediction of this model, medium, objective and ammonium protocol, not a universal experimental rule.',
+        'All growth, exchange, production and pFBA diagnostic values come from the visible Bound Sweep results. No hidden validation simulation is used.',
+    ])
+    return '\n'.join(lines)
+
+
+# Backwards-compatible name retained for older window imports.  It now validates
+# the redesigned sensitivity sweep rather than the removed objective comparison.
+def run_mission23_comparison_check(sweep_data=None):
+    return run_mission23_sensitivity_check(sweep_data)
 
 
 def _mission24_same_base_setup(snapshot):
@@ -12805,14 +13177,7 @@ def run_mission25_comparison_check(compare_runs=None):
 
 
 def _selected_sweep_value(menu_data, key, default_value):
-    """Return the internal value selected in a pygame_menu dropselect.
-
-    pygame_menu can return dropselect data as [(label, internal_value)].
-    Earlier code was reading index [0][0], which gives the visible label.
-    That broke Mission 27 because the visible label
-    "D-Glucose lower bound (EX_glc__D_e)" is not the internal id
-    "EX_glc__D_e:lower" used by the Bound Sweep validator.
-    """
+    """Return the internal pygame_menu dropselect value, not its label."""
     try:
         value = menu_data.get(key)
         selected = value[0]
@@ -12822,25 +13187,24 @@ def _selected_sweep_value(menu_data, key, default_value):
     candidates = list(selected) if isinstance(selected, (list, tuple)) else [selected]
     preferred_values = {
         'sweep_variable': {
+            f'{MISSION23_SWEEP_REACTION}:lower',
             f'{MISSION26_SWEEP_REACTION}:lower',
             f'{MISSION27_SWEEP_REACTION}:lower',
             *[f'{reaction_id}:lower' for reaction_id in MISSION28_CANDIDATE_CARBON_SOURCES],
         },
         'sweep_values': {
+            'ammonium_sensitivity',
             'oxygen_transition',
             'glucose_limitation',
             'alternative_carbon_limitation',
         },
     }
-
     for candidate in candidates:
         if candidate in preferred_values.get(key, set()):
             return candidate
-
     for candidate in reversed(candidates):
         if isinstance(candidate, str):
             return candidate
-
     return default_value
 
 
@@ -12849,17 +13213,22 @@ def _normalise_sweep_config(sweep_menu_data=None):
     variable = _selected_sweep_value(
         sweep_menu_data,
         'sweep_variable',
-        f'{MISSION26_SWEEP_REACTION}:lower'
+        f'{MISSION23_SWEEP_REACTION}:lower',
     )
     preset = _selected_sweep_value(
         sweep_menu_data,
         'sweep_values',
-        'oxygen_transition'
+        'ammonium_sensitivity',
     )
 
-    # Keep this data-driven: each new Dr. Luna sweep adds one entry here and
-    # the generic sweep runner/report can stay unchanged.
     sweep_options = {
+        f'{MISSION23_SWEEP_REACTION}:lower': {
+            'reaction_id': MISSION23_SWEEP_REACTION,
+            'reaction_name': MISSION23_SWEEP_REACTION_NAME,
+            'bound': MISSION23_SWEEP_BOUND,
+            'bound_label': MISSION23_SWEEP_BOUND_LABEL,
+            'default_preset': 'ammonium_sensitivity',
+        },
         f'{MISSION26_SWEEP_REACTION}:lower': {
             'reaction_id': MISSION26_SWEEP_REACTION,
             'reaction_name': MISSION26_SWEEP_REACTION_NAME,
@@ -12883,34 +13252,26 @@ def _normalise_sweep_config(sweep_menu_data=None):
             'bound_label': MISSION28_SWEEP_BOUND_LABEL,
             'default_preset': 'alternative_carbon_limitation',
         }
+
     preset_values = {
+        'ammonium_sensitivity': list(MISSION23_SWEEP_VALUES),
         'oxygen_transition': list(MISSION26_SWEEP_VALUES),
         'glucose_limitation': list(MISSION27_SWEEP_VALUES),
         'alternative_carbon_limitation': list(MISSION28_SWEEP_VALUES),
     }
-
-    config = sweep_options.get(variable, sweep_options[f'{MISSION26_SWEEP_REACTION}:lower']).copy()
-
-    # If the preset and variable do not match, keep the variable selected by the
-    # player but use its matching default values. This avoids confusing results.
-    if preset not in preset_values:
+    config = sweep_options.get(variable, sweep_options[f'{MISSION23_SWEEP_REACTION}:lower']).copy()
+    if preset not in preset_values or preset != config['default_preset']:
         preset = config['default_preset']
-    if variable == f'{MISSION26_SWEEP_REACTION}:lower' and preset != 'oxygen_transition':
-        preset = 'oxygen_transition'
-    if variable == f'{MISSION27_SWEEP_REACTION}:lower' and preset != 'glucose_limitation':
-        preset = 'glucose_limitation'
-    if variable in [f'{reaction_id}:lower' for reaction_id in MISSION28_CANDIDATE_CARBON_SOURCES] and preset != 'alternative_carbon_limitation':
-        preset = 'alternative_carbon_limitation'
-
     return {
-        'variable': variable,
+        'variable': variable if variable in sweep_options else f'{MISSION23_SWEEP_REACTION}:lower',
         'preset': preset,
         'reaction_id': config.get('reaction_id'),
         'reaction_name': config.get('reaction_name'),
         'bound': config.get('bound'),
         'bound_label': config.get('bound_label'),
-        'values': preset_values[preset],
+        'values': list(preset_values[preset]),
     }
+
 
 def _apply_numeric_bound_to_constraints(constraints, reaction_id, bound, value):
     current_lb, current_ub = constraints.get(reaction_id, (-1000, 1000))
@@ -12934,109 +13295,211 @@ def _bound_sweep_flux_values(production_fluxes):
         return values
     for item in production_fluxes.get('items') or []:
         reaction_id = item.get('reaction_id')
-        if reaction_id:
-            try:
-                values[reaction_id] = float(item.get('production_flux', 0.0))
-            except Exception:
-                values[reaction_id] = 0.0
+        numeric = _as_float_or_none(item.get('production_flux'))
+        if reaction_id and numeric is not None and not item.get('error'):
+            values[str(reaction_id)] = float(numeric)
     return values
 
 
 def _bound_sweep_default_tracked_fluxes():
-    tracked = []
-    for reaction_id in list(MISSION26_REQUIRED_TRACKED_FLUXES) + list(MISSION27_REQUIRED_TRACKED_FLUXES) + list(MISSION28_REQUIRED_TRACKED_FLUXES):
-        if reaction_id in PRODUCTION_FLUX_REACTION_IDS and reaction_id not in tracked:
-            tracked.append(reaction_id)
-    return tracked
+    """Compatibility helper; sweeps now expose only explicitly selected fluxes."""
+    return []
 
 
-def run_bound_sweep(sweep_menu_data=None):
-    """Run a one-variable bound sweep using the current simulator setup.
+def _bound_sweep_exchange_maps(flux_getter):
+    raw, uptake, secretion = {}, {}, {}
+    for reaction_id in list(REACTIONS.index):
+        numeric = _as_float_or_none(flux_getter(reaction_id))
+        if numeric is None:
+            continue
+        numeric = float(numeric)
+        raw[reaction_id] = round(numeric, 6)
+        uptake[reaction_id] = round(max(-numeric, 0.0), 6)
+        secretion[reaction_id] = round(max(numeric, 0.0), 6)
+    return raw, uptake, secretion
 
-    Dr. Luna missions use this to test sensitivity to medium bounds. The runner
-    is generic: the menu chooses the reaction/bound/preset, while each mission
-    validates whether the selected sweep is the correct experiment.
-    """
-    method_name, objective_name, genes, reactions = _read_simulation_file()
-    config = _normalise_sweep_config(sweep_menu_data)
 
-    selected_fluxes = _read_selected_production_fluxes()
-    tracked_fluxes = []
-    for reaction_id in list(selected_fluxes) + _bound_sweep_default_tracked_fluxes():
-        if reaction_id in PRODUCTION_FLUX_REACTION_IDS and reaction_id not in tracked_fluxes:
-            tracked_fluxes.append(reaction_id)
+def _build_bound_sweep_row(bound_value, config, method_name, objective_name, tracked_fluxes, flux_getter, diagnostics):
+    raw_fluxes, uptake_fluxes, secretion_fluxes = _bound_sweep_exchange_maps(flux_getter)
+    primary = _as_float_or_none((diagnostics or {}).get('primary_objective_flux'))
+    biomass = _as_float_or_none(raw_fluxes.get(MISSION07_BIOMASS_OBJECTIVE))
+    if biomass is None:
+        biomass = _as_float_or_none(flux_getter(MISSION07_BIOMASS_OBJECTIVE))
+    production_fluxes = _build_production_flux_data(tracked_fluxes, flux_getter=flux_getter)
+    tested_raw = _as_float_or_none(raw_fluxes.get(config.get('reaction_id')))
+    oxygen_raw = _as_float_or_none(raw_fluxes.get('EX_o2_e'))
+    return {
+        'bound_value': float(bound_value),
+        'status': 'ok',
+        'objective_result': round(float(primary), 6) if primary is not None else None,
+        'growth_value': round(float(biomass), 6) if biomass is not None else None,
+        'tested_reaction_raw_flux': round(float(tested_raw), 6) if tested_raw is not None else None,
+        'tested_reaction_uptake': round(max(-float(tested_raw), 0.0), 6) if tested_raw is not None else None,
+        'oxygen_raw_flux': round(float(oxygen_raw), 6) if oxygen_raw is not None else None,
+        'oxygen_uptake': round(max(-float(oxygen_raw), 0.0), 6) if oxygen_raw is not None else None,
+        'tracked_flux_values': {
+            reaction_id: round(float(value), 6)
+            for reaction_id, value in _bound_sweep_flux_values(production_fluxes).items()
+        },
+        'exchange_raw_fluxes': raw_fluxes,
+        'exchange_uptake_fluxes': uptake_fluxes,
+        'exchange_secretion_fluxes': secretion_fluxes,
+        'method_diagnostics': copy.deepcopy(diagnostics or {}),
+    }
 
-    knocked_out_genes = _knocked_out_genes(genes)
-    environment_changed = _environment_has_changes(reactions)
 
-    data = {
+def _bound_sweep_infeasible_row(bound_value, message=None):
+    row = {
+        'bound_value': float(bound_value),
+        'status': 'infeasible',
+        'objective_result': None,
+        'growth_value': None,
+        'tested_reaction_raw_flux': None,
+        'tested_reaction_uptake': None,
+        'oxygen_raw_flux': None,
+        'oxygen_uptake': None,
+        'tracked_flux_values': {},
+        'exchange_raw_fluxes': {},
+        'exchange_uptake_fluxes': {},
+        'exchange_secretion_fluxes': {},
+        'method_diagnostics': {},
+    }
+    if message:
+        row['message'] = str(message)
+    return row
+
+
+def _bound_sweep_error_row(bound_value, message):
+    row = _bound_sweep_infeasible_row(bound_value, message=message)
+    row['status'] = 'error'
+    return row
+
+
+def _new_bound_sweep_data(method_name, objective_name, genes, reactions, config, selected_fluxes):
+    return {
         'sweep_id': 'bound_sweep',
-        'check_version': 2,
+        'check_version': 3,
         'method': method_name,
         'objective': objective_name,
-        'knocked_out_genes': knocked_out_genes,
-        'environment_changed': environment_changed,
-        'base_genes': genes,
-        'base_reactions': reactions,
+        'knocked_out_genes': _knocked_out_genes(genes),
+        'environment_changed': _environment_has_changes(reactions),
+        'base_genes': copy.deepcopy(genes),
+        'base_reactions': copy.deepcopy(reactions),
         'variable': config.get('variable'),
         'preset': config.get('preset'),
         'reaction_id': config.get('reaction_id'),
         'reaction_name': config.get('reaction_name'),
         'bound': config.get('bound'),
         'bound_label': config.get('bound_label'),
-        'values': config.get('values'),
-        'tracked_fluxes': tracked_fluxes,
-        'selected_production_fluxes': selected_fluxes,
+        'values': list(config.get('values') or []),
+        'tracked_fluxes': list(selected_fluxes),
+        'selected_production_fluxes': list(selected_fluxes),
         'rows': [],
     }
 
-    try:
-        for bound_value in config.get('values') or []:
+
+def run_bound_sweep(sweep_menu_data=None):
+    """Run one visible one-variable sweep with local solver parity."""
+    method_name, objective_name, genes, reactions = _read_simulation_file()
+    config = _normalise_sweep_config(sweep_menu_data)
+    selected_fluxes = [
+        reaction_id for reaction_id in _read_selected_production_fluxes()
+        if reaction_id in PRODUCTION_FLUX_REACTION_IDS
+    ]
+    data = _new_bound_sweep_data(method_name, objective_name, genes, reactions, config, selected_fluxes)
+
+    for bound_value in config.get('values') or []:
+        try:
             simul, constraints = _build_local_constraints(genes, reactions)
             simul.objective = objective_name
             constraints = _apply_numeric_bound_to_constraints(
-                constraints,
-                config.get('reaction_id'),
-                config.get('bound'),
-                bound_value,
+                constraints, config.get('reaction_id'), config.get('bound'), bound_value
             )
             result = simul.simulate(method=method_name, constraints=constraints)
-            objective_result = _normalise_result(result)
-
-            row = {
-                'bound_value': float(bound_value),
-                'objective_result': objective_result,
-                'growth_value': _numeric_result(objective_result),
-            }
-
-            if objective_result == 'Status: INFEASIBLE':
-                row['status'] = 'infeasible'
-                row['tested_reaction_raw_flux'] = 0.0
-                row['tested_reaction_uptake'] = 0.0
-                row['oxygen_uptake'] = 0.0
-                row['tracked_flux_values'] = {reaction_id: 0.0 for reaction_id in tracked_fluxes}
+            normalised = _normalise_result(result)
+            if normalised == 'Status: INFEASIBLE':
+                data['rows'].append(_bound_sweep_infeasible_row(bound_value))
+                continue
+            solver_value = _solver_scalar_value(result)
+            diagnostics = _build_method_diagnostics(
+                method_name, objective_name, result, solver_value=solver_value
+            )
+            flux_getter = lambda reaction_id: _extract_flux(result, reaction_id)
+            data['rows'].append(_build_bound_sweep_row(
+                bound_value, config, method_name, objective_name,
+                selected_fluxes, flux_getter, diagnostics,
+            ))
+        except Exception as exc:
+            if _is_infeasible_solver_exception(exc):
+                data['rows'].append(_bound_sweep_infeasible_row(bound_value, message=exc))
             else:
-                row['status'] = 'ok'
-                flux_getter = lambda reaction_id: _extract_flux(result, reaction_id)
+                data['rows'].append(_bound_sweep_error_row(bound_value, exc))
 
-                tested_flux = _as_float_or_none(flux_getter(config.get('reaction_id')))
-                row['tested_reaction_raw_flux'] = round(float(tested_flux), 6) if tested_flux is not None else None
-                row['tested_reaction_uptake'] = round(max(-float(tested_flux), 0.0), 3) if tested_flux is not None else 0.0
+    if any(row.get('status') == 'error' for row in data['rows']):
+        data['error'] = 'One or more Bound Sweep rows failed. Inspect the row status instead of treating missing values as zero.'
+    save_bound_sweep(data)
+    return data
 
-                oxygen_flux = _as_float_or_none(flux_getter(MISSION26_SWEEP_REACTION))
-                row['oxygen_raw_flux'] = round(float(oxygen_flux), 6) if oxygen_flux is not None else None
-                row['oxygen_uptake'] = round(max(-float(oxygen_flux), 0.0), 3) if oxygen_flux is not None else 0.0
 
-                production_fluxes = _build_production_flux_data(tracked_fluxes, flux_getter=flux_getter)
-                row['tracked_flux_values'] = {
-                    reaction_id: round(float(value), 3)
-                    for reaction_id, value in _bound_sweep_flux_values(production_fluxes).items()
-                }
+def run_bound_sweep_remote(backend_url, sweep_menu_data=None):
+    """Browser sweep: sequentially reuse the existing /simulate contract."""
+    method_name, objective_name, genes, reactions = _read_simulation_file()
+    config = _normalise_sweep_config(sweep_menu_data)
+    selected_fluxes = [
+        reaction_id for reaction_id in _read_selected_production_fluxes()
+        if reaction_id in PRODUCTION_FLUX_REACTION_IDS
+    ]
+    data = _new_bound_sweep_data(method_name, objective_name, genes, reactions, config, selected_fluxes)
+    base_payload = _build_request_payload()
 
-            data['rows'].append(row)
-    except Exception as exc:
-        data['error'] = f'Bound Sweep failed: {exc}'
+    for bound_value in config.get('values') or []:
+        payload = copy.deepcopy(base_payload)
+        env = payload.setdefault('env_conditions', {})
+        current = list(env.get(config.get('reaction_id'), [-1000.0, 1000.0]))
+        if config.get('bound') == 'upper':
+            current[1] = float(bound_value)
+        else:
+            current[0] = float(bound_value)
+        env[config.get('reaction_id')] = current
+        try:
+            response = _http_post_json(backend_url.rstrip('/') + '/simulate', payload)
+        except Exception as exc:
+            data['rows'].append(_bound_sweep_error_row(bound_value, f'Backend error: {exc}'))
+            continue
+        status = response.get('status')
+        if status == 'infeasible':
+            data['rows'].append(_bound_sweep_infeasible_row(bound_value, response.get('message')))
+            continue
+        if status != 'ok':
+            data['rows'].append(_bound_sweep_error_row(bound_value, response.get('message', 'unknown backend error')))
+            continue
 
+        fluxes = response.get('fluxes') or {}
+        flux_getter = lambda reaction_id, mapping=fluxes: mapping.get(reaction_id)
+        primary = _as_float_or_none(response.get('primary_objective_flux', fluxes.get(objective_name)))
+        total_abs = _as_float_or_none(response.get('total_absolute_flux'))
+        if total_abs is None and fluxes:
+            total_abs = sum(abs(float(value)) for value in fluxes.values())
+        active_count = response.get('active_reaction_count')
+        if active_count is None and fluxes:
+            active_count = sum(1 for value in fluxes.values() if abs(float(value)) > MISSION13_ACTIVE_FLUX_TOLERANCE)
+        method_score = _as_float_or_none(response.get('method_score'))
+        diagnostics = {
+            'method': response.get('method', method_name),
+            'objective_reaction': response.get('objective_reaction', objective_name),
+            'primary_objective_flux': float(primary) if primary is not None else None,
+            'method_score': float(method_score) if method_score is not None else None,
+            'method_score_name': response.get('method_score_name', _method_score_label(method_name)),
+            'total_absolute_flux': float(total_abs) if total_abs is not None else None,
+            'active_reaction_count': int(active_count) if active_count is not None else None,
+        }
+        data['rows'].append(_build_bound_sweep_row(
+            bound_value, config, method_name, objective_name,
+            selected_fluxes, flux_getter, diagnostics,
+        ))
+
+    if any(row.get('status') == 'error' for row in data['rows']):
+        data['error'] = 'One or more remote Bound Sweep rows failed. Inspect the row status instead of treating missing values as zero.'
     save_bound_sweep(data)
     return data
 

@@ -53,6 +53,6 @@ The mission is completed when:
 ## Difficulty progression
 Mission 21 introduced simple environment comparison.
 Mission 22 compared normal strain vs knockout.
-Mission 23 compared different objectives.
+Mission 23 studied a graded ammonium-sensitivity curve and the onset of a new secretion.
 Mission 24 compared different simulation methods.
 Mission 25 combines controlled comparison with production-flux evidence, closing Dr. Vega's section.
