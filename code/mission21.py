@@ -65,20 +65,21 @@ class Mission21:
 
         intro22_dialogue = [
             f"Strong comparison, {self.player.player_name}.",
-            "You quantified compensation after an environmental constraint.",
-            "My second task will compare two strains under one controlled protocol."
+            "You quantified compensation after one export route was removed.",
+            "My final task compares two mechanisms under one recorded phenotype panel."
         ]
 
         active22_dialogue = [
-            "Mission 22 is active. Compare the reference strain with one knockout.",
-            "Keep method, objective, medium and tracked evidence unchanged.",
-            "Use the two visible results to support the final strain comparison."
+            "Mission 22 is active. Record the environmental and GPR-based genetic interventions.",
+            "Keep the shared FBA protocol and complete phenotype panel controlled.",
+            "Compare every output difference and submit only the supported count."
         ]
 
         completed22_dialogue = [
             f"Excellent work, {self.player.player_name}.",
-            "You completed Dr. Vega's two controlled-comparison missions.",
-            "Dr. Luna will continue with sensitivity experiments in Mission 23."
+            "Different mechanisms can produce the same recorded phenotype.",
+            "Dr. Luna will continue in Mission 23.",
+            "Dr. Luna will now study how phenotypes change across perturbation levels."
         ]
 
         self.input()

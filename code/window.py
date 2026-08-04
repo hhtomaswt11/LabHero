@@ -875,75 +875,8 @@ def _build_mission21_text(report_data):
     return build_mission21_compensatory_report_text(report_data)
 
 
-def _build_mission22_text(compare_data):
-    if not compare_data:
-        return 'Mission 22 Knockout Comparison\n\nRun two simulations to generate a comparison.'
-
-    if compare_data.get('error') and not compare_data.get('run_a'):
-        return f"Mission 22 Knockout Comparison\n\n{compare_data.get('error')}"
-
-    baseline_status = (
-        'Baseline run: normal strain found.'
-        if compare_data.get('baseline_run_found')
-        else 'Baseline run: missing. Run FBA with biomass objective, no knockouts, unchanged environment and ethanol tracked.'
-    )
-    knockout_status = (
-        f"Knockout run: {compare_data.get('target_gene')} / {compare_data.get('target_gene_name')} found."
-        if compare_data.get('knockout_run_found')
-        else f"Knockout run: missing. Turn off only {compare_data.get('target_gene')} and keep the environment unchanged."
-    )
-    tracking_status = (
-        f"Evidence: {compare_data.get('target_flux')} was tracked in both runs."
-        if compare_data.get('target_flux_tracked')
-        else f"Evidence: track {compare_data.get('target_flux')} in Production Flux for both runs."
-    )
-    production_status = (
-        'Comparison: target product increased after the knockout.'
-        if compare_data.get('production_increased')
-        else 'Comparison: product increase is not clear enough yet.'
-    )
-    growth_status = (
-        'Growth: both runs remain viable.'
-        if compare_data.get('growth_ok')
-        else 'Growth: one of the runs is not viable enough.'
-    )
-    final_status = (
-        'Knockout comparison ready. Return to Dr. Vega and deliver the report.'
-        if compare_data.get('ready_to_deliver')
-        else 'Not ready yet. Run the baseline first, then the knockout setup.'
-    )
-
-    baseline_growth = compare_data.get('baseline_growth')
-    knockout_growth = compare_data.get('knockout_growth')
-    baseline_flux = compare_data.get('baseline_product_flux')
-    knockout_flux = compare_data.get('knockout_product_flux')
-    production_increase = compare_data.get('production_increase')
-
-    def fmt(value):
-        return 'not available' if value is None else f'{float(value):.3f}'
-
-    return (
-        'Mission 22 Knockout Comparison\n\n'
-        f"Target: normal strain vs production knockout\n"
-        f"Method: {compare_data.get('target_method')}\n"
-        f"Objective: {compare_data.get('growth_objective')}\n"
-        f"Target product: {compare_data.get('target_product')} ({compare_data.get('target_flux')})\n"
-        f"Target gene: {compare_data.get('target_gene')} / {compare_data.get('target_gene_name')}\n\n"
-        f"Growth comparison:\n"
-        f"- Baseline growth: {fmt(baseline_growth)}\n"
-        f"- Knockout growth: {fmt(knockout_growth)}\n\n"
-        f"Production comparison:\n"
-        f"- Baseline product flux: {fmt(baseline_flux)}\n"
-        f"- Knockout product flux: {fmt(knockout_flux)}\n"
-        f"- Production increase: {fmt(production_increase)}\n\n"
-        f"{baseline_status}\n"
-        f"{knockout_status}\n"
-        f"{tracking_status}\n"
-        f"{production_status}\n"
-        f"{growth_status}\n\n"
-        f"{final_status}"
-    )
-
+def _build_mission22_text(report_data):
+    return build_mission22_phenotype_equivalence_report_text(report_data)
 
 def _build_mission23_text(compare_data):
     if not compare_data:
@@ -1329,6 +1262,7 @@ class Window:
             ('10', MISSION10_CANDIDATE_GENES),
             ('14', MISSION14_CANDIDATE_GENES),
             ('19', [MISSION19_TARGET_GENE]),
+            ('22', list(MISSION22_TARGET_GENES)),
         ]
         for mission_id, candidates in gene_mission_candidates:
             if mission_id in self.player.missions_activated and mission_id not in self.player.missions_completed:
@@ -1778,7 +1712,10 @@ class Window:
 
             mission22_data = None
             if '22' in self.player.missions_activated and '22' not in self.player.missions_completed:
-                mission22_data = run_mission22_comparison_check(compare_runs)
+                if sys.platform == 'emscripten':
+                    mission22_data = run_mission22_comparison_check_remote(BACKEND_URL, self.results)
+                else:
+                    mission22_data = run_mission22_comparison_check(self.results)
 
             mission23_data = None
             if '23' in self.player.missions_activated and '23' not in self.player.missions_completed:

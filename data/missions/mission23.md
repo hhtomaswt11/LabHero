@@ -1,7 +1,7 @@
 # Mission 23 — Objective Comparison
 
 ## Scientist
-Dr. Vega — Comparative Experiment Lab
+Dr. Luna — Sensitivity Experiment Lab
 
 ## Core idea
 This mission compares the same model setup under two different objectives.
@@ -33,7 +33,7 @@ Then open:
 
 `New Results -> Compare Runs`
 
-Return to Dr. Vega and choose:
+Return to Dr. Luna and choose:
 
 `Deliver Objective Comparison`
 
@@ -47,4 +47,4 @@ The mission is completed when the game detects:
 - ethanol production increases when the ethanol objective is used.
 
 ## Difficulty progression
-Mission 21 compared two environments. Mission 22 compared two strains. Mission 23 compares two objectives, teaching the player that changing the optimization target changes the interpretation of the simulation result.
+Mission 22 completed Dr. Vega's comparison laboratory. Mission 23 begins Dr. Luna's revised two-mission block; its detailed scientific protocol will be audited before manual validation.

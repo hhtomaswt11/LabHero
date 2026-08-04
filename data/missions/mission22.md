@@ -1,56 +1,84 @@
-# Mission 22 — Knockout Comparison
+# Mission 22 — Phenotype Equivalence Audit
 
 ## Scientist
 Dr. Vega — Comparative Experiment Lab
 
 ## Core idea
-Compare two controlled simulations:
+Different interventions can act through different mechanisms and still produce the same recorded phenotype under one controlled model protocol.
 
-- Run A: normal strain
-- Run B: the same setup, but with one gene knockout
+Mission 22 compares:
 
-The goal is to show that changing one gene can redirect metabolism toward a product, while keeping the cell viable.
+- an environmental intervention that closes acetate export;
+- a genetic intervention that disables `PTAr` through the complete `b2297 OR b2458` GPR rule.
 
-## Concept
-A knockout disables a gene. In metabolic models, this can block reactions connected to that gene. Sometimes this reduces growth, but sometimes it redirects flux toward a useful product.
+The mission asks whether the recorded growth, uptake and secretion outputs distinguish the two interventions beyond numerical tolerance.
 
-## How to pass
+## Shared protocol
 
-### Run A — baseline strain
-- Method: FBA
-- Objective: BIOMASS_Ecoli_core_w_GAM
-- Genes: no knockouts
-- Environment: unchanged
-- Production Flux: track EX_etoh_e
+- Method: `FBA`
+- Objective: `BIOMASS_Ecoli_core_w_GAM`
+- Glucose: model default
+- Oxygen: close only the lower bound of `EX_o2_e`
+- Production Flux panel:
+  - `EX_ac_e`
+  - `EX_etoh_e`
+  - `EX_for_e`
+  - `EX_succ_e`
+  - `EX_lac__D_e`
+- Every unrelated environmental bound remains at the model default.
 
-Run the simulation.
+## Run A — environmental intervention
 
-### Run B — knockout strain
-- Method: FBA
-- Objective: BIOMASS_Ecoli_core_w_GAM
-- Genes: turn off b2297 / pta
-- Environment: unchanged
-- Production Flux: track EX_etoh_e
+- Keep every gene active.
+- Close the upper bound of `EX_ac_e`.
+- Run the simulation and inspect the visible growth, Exchange Flux and Production Flux evidence.
 
-Run the simulation.
+## Run B — genetic intervention
 
-Then open:
+- Restore the upper bound of `EX_ac_e` to its model default.
+- Disable exactly:
+  - `b2297 / pta`
+  - `b2458 / eutD`
+- Keep oxygen uptake closed and every unrelated bound at the model default.
+- Confirm that the complete GPR disables `PTAr`.
+- Run the simulation with the same complete panel.
 
-- New Results
-- Compare Runs
+The two runs may be recorded in either order. Repeating a valid run updates its slot without duplicating evidence. A later invalid attempt does not erase valid evidence.
 
-Finally, return to Dr. Vega and deliver the Knockout Comparison.
+## Expected model outputs
 
-## Candidate genes
-- b0728
-- b1241
-- b2975
-- b2297
-- b0723
+Both interventions should remain viable and produce approximately:
 
-## Success criteria
-- The baseline run is valid.
-- The knockout run uses only b2297 / pta.
-- Both runs track ethanol production.
-- Ethanol production increases in the knockout run.
-- Growth remains viable.
+- Growth: `0.189173`
+- Glucose uptake: `10.000000`
+- Oxygen uptake: `0.000000`
+- Acetate: `0.000000`
+- Ethanol: `16.584256`
+- Formate: `3.956347`
+- Succinate: `0.000000`
+- D-lactate: `0.000000`
+
+The report calculates genetic minus environmental differences for every counted phenotype output: biomass, glucose uptake, oxygen uptake and the five tracked secretions. Intervention settings and GPR-disabled reaction labels document the mechanisms but are not included in the phenotype-output count. The numerical difference tolerance is shown in the report.
+
+## Final question
+
+`How many recorded phenotype outputs differed beyond tolerance between the environmental and genetic interventions?`
+
+Accepted concise forms include:
+
+- `0`
+- `zero`
+- `none`
+- `nenhum`
+
+The mission report displays the values and differences but does not state the answer directly.
+
+## Scientific interpretation
+
+Observational equivalence under this limited phenotype panel does not prove mechanistic equivalence. One intervention closes an exchange bound; the other disables an internal reaction through a two-gene GPR.
+
+All validated evidence comes from the same visible solver results. The mission does not launch a hidden simulation.
+
+## Progression
+
+This is Dr. Vega's final mission. Mission 21 asked for the largest change between two runs; Mission 22 asks whether any recorded output distinguishes two different mechanisms. After completion, Dr. Luna begins Mission 23.

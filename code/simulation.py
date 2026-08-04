@@ -626,16 +626,68 @@ MISSION21_GLUCOSE_UPTAKE_TOLERANCE = 0.05
 MISSION21_FLUX_TOLERANCE = 0.01
 MISSION21_PRIMARY_TOLERANCE = 0.01
 
+# Mission 22 closes Dr. Vega's comparison laboratory with an observational
+# equivalence audit.  Two different interventions are compared under the same
+# anaerobic FBA protocol: an acetate-export upper-bound closure and the
+# b2297+b2458 knockout pair that disables PTAr through its complete OR GPR.
+MISSION22_CHECK_VERSION = 2
 MISSION22_METHOD = 'FBA'
 MISSION22_GROWTH_OBJECTIVE = 'BIOMASS_Ecoli_core_w_GAM'
-MISSION22_TARGET_CONTEXT = 'controlled comparison: no knockout vs production knockout'
-MISSION22_TARGET_PRODUCT = 'ethanol'
-MISSION22_TARGET_FLUX = 'EX_etoh_e'
-MISSION22_TARGET_GENE = 'b2297'
-MISSION22_TARGET_GENE_NAME = 'pta'
-MISSION22_CANDIDATE_GENES = ['b0728', 'b1241', 'b2975', 'b2297', 'b0723']
-MISSION22_MIN_GROWTH = 1.0
-MISSION22_MIN_PRODUCTION_INCREASE = 20.0
+MISSION22_TARGET_CONTEXT = 'phenotype equivalence across environmental and genetic interventions'
+MISSION22_OXYGEN_REACTION = 'EX_o2_e'
+MISSION22_GLUCOSE_REACTION = 'EX_glc__D_e'
+MISSION22_ENVIRONMENTAL_EXPORT = 'EX_ac_e'
+MISSION22_TARGET_GENES = ['b2297', 'b2458']
+MISSION22_TARGET_GENE_NAMES = {'b2297': 'pta', 'b2458': 'eutD'}
+MISSION22_EXPECTED_DISABLED_REACTIONS = ['PTAr']
+MISSION22_REQUIRED_TRACKED_FLUXES = [
+    'EX_ac_e',
+    'EX_etoh_e',
+    'EX_for_e',
+    'EX_succ_e',
+    'EX_lac__D_e',
+]
+MISSION22_REQUIRED_MEDIUM_FLUXES = [
+    MISSION22_GLUCOSE_REACTION,
+    MISSION22_OXYGEN_REACTION,
+    *MISSION22_REQUIRED_TRACKED_FLUXES,
+]
+MISSION22_FLUX_NAMES = {
+    'EX_ac_e': 'Acetate',
+    'EX_etoh_e': 'Ethanol',
+    'EX_for_e': 'Formate',
+    'EX_succ_e': 'Succinate',
+    'EX_lac__D_e': 'D-Lactate',
+}
+MISSION22_PHENOTYPE_OUTPUTS = [
+    'growth',
+    'glucose_uptake',
+    'oxygen_uptake',
+    *MISSION22_REQUIRED_TRACKED_FLUXES,
+]
+MISSION22_OUTPUT_NAMES = {
+    'growth': 'Biomass growth',
+    'glucose_uptake': 'Glucose uptake',
+    'oxygen_uptake': 'Oxygen uptake',
+    **MISSION22_FLUX_NAMES,
+}
+MISSION22_MIN_VIABLE_GROWTH = 0.05
+MISSION22_EXPECTED_GLUCOSE_UPTAKE = 10.0
+MISSION22_GLUCOSE_UPTAKE_TOLERANCE = 0.05
+MISSION22_MAX_ACETATE_EXPORT = 0.001
+MISSION22_MIN_ACTIVE_ETHANOL_EXPORT = 0.01
+MISSION22_MIN_ACTIVE_FORMATE_EXPORT = 0.01
+MISSION22_OUTPUT_DIFFERENCE_TOLERANCE = 0.01
+MISSION22_EXPECTED_DIFFERENT_OUTPUT_COUNT = 0
+MISSION22_FLUX_TOLERANCE = 0.01
+MISSION22_PRIMARY_TOLERANCE = 0.01
+
+# Compatibility aliases retained for external imports from older saves/UI.
+MISSION22_TARGET_PRODUCT = 'phenotype outputs'
+MISSION22_TARGET_FLUX = MISSION22_ENVIRONMENTAL_EXPORT
+MISSION22_TARGET_GENE = MISSION22_TARGET_GENES[0]
+MISSION22_TARGET_GENE_NAME = MISSION22_TARGET_GENE_NAMES[MISSION22_TARGET_GENE]
+MISSION22_CANDIDATE_GENES = list(MISSION22_TARGET_GENES)
 
 MISSION23_METHOD = 'FBA'
 MISSION23_TARGET_CONTEXT = 'controlled comparison: biomass objective vs product objective'
@@ -11755,118 +11807,625 @@ def build_mission21_compensatory_report_text(report):
     ])
     return '\n'.join(lines)
 
-def _mission22_is_baseline_run(snapshot):
-    if not snapshot:
-        return False
-    selected_fluxes = snapshot.get('selected_production_fluxes') or []
-    return (
-        snapshot.get('method') == MISSION22_METHOD
-        and snapshot.get('objective') == MISSION22_GROWTH_OBJECTIVE
-        and not snapshot.get('knocked_out_genes')
-        and not snapshot.get('environment_changed')
-        and MISSION22_TARGET_FLUX in selected_fluxes
-        and snapshot.get('growth_value', 0.0) >= MISSION22_MIN_GROWTH
+def is_mission22_unlocked(missions_completed):
+    """Mission 22 is Dr. Vega's final task and follows Mission 21."""
+    return '21' in (missions_completed or [])
+
+
+def _mission22_number_or_none(value):
+    numeric = _as_float_or_none(value)
+    return float(numeric) if numeric is not None else None
+
+
+def _mission22_clean_number(value, decimals=6):
+    numeric = float(value)
+    if abs(numeric) < DISPLAY_ZERO_TOLERANCE:
+        numeric = 0.0
+    return round(numeric, decimals)
+
+
+def _mission22_environment_status(reactions):
+    """Classify Mission 22 environments by reaction id, never dict order.
+
+    Both controlled runs close oxygen uptake.  The environmental intervention
+    additionally closes acetate export; the genetic intervention keeps the
+    acetate exchange at its model-default bounds.  Every unrelated bound must
+    remain at the SBML default.
+    """
+    bounds_complete = True
+    oxygen_lower_bound_closed = False
+    acetate_upper_bound_closed = False
+    unexpected_changes = []
+
+    for index in range(len(REACTIONS.index)):
+        reaction_id = REACTIONS.index[index]
+        lower_open, upper_open = _reaction_bound_open_states(reactions, index)
+        if lower_open is None or upper_open is None:
+            bounds_complete = False
+            continue
+
+        default_lower_open = REACTIONS.lb.iloc[index] != 0
+        default_upper_open = REACTIONS.ub.iloc[index] != 0
+        lower_changed = lower_open != default_lower_open
+        upper_changed = upper_open != default_upper_open
+
+        if reaction_id == MISSION22_OXYGEN_REACTION:
+            oxygen_lower_bound_closed = not lower_open
+            if upper_changed:
+                unexpected_changes.append(f'{reaction_id} upper bound')
+            continue
+
+        if reaction_id == MISSION22_ENVIRONMENTAL_EXPORT:
+            acetate_upper_bound_closed = not upper_open
+            if lower_changed:
+                unexpected_changes.append(f'{reaction_id} lower bound')
+            # The upper-bound closure is the controlled environmental factor.
+            continue
+
+        if lower_changed:
+            unexpected_changes.append(f'{reaction_id} lower bound')
+        if upper_changed:
+            unexpected_changes.append(f'{reaction_id} upper bound')
+
+    controlled_environment = bool(
+        bounds_complete
+        and oxygen_lower_bound_closed
+        and not unexpected_changes
+    )
+    return {
+        'bounds_complete': bounds_complete,
+        'oxygen_lower_bound_closed': oxygen_lower_bound_closed,
+        'acetate_upper_bound_closed': acetate_upper_bound_closed,
+        'unexpected_environment_changes': unexpected_changes,
+        'controlled_environment': controlled_environment,
+    }
+
+
+def _mission22_disabled_reactions(knocked_out_genes):
+    """Evaluate the complete GPR without running a metabolic simulation."""
+    knocked_out_genes = list(knocked_out_genes or [])
+    if model is not None:
+        try:
+            return sorted(disabled_reaction_ids(model, knocked_out_genes))
+        except Exception:
+            pass
+
+    # Browser-safe fallback for the exact Mission 22 GPR demonstrated earlier:
+    # PTAr = b2297 OR b2458.  One gene alone leaves the reaction functional.
+    if set(knocked_out_genes) == set(MISSION22_TARGET_GENES) and len(knocked_out_genes) == 2:
+        return list(MISSION22_EXPECTED_DISABLED_REACTIONS)
+    return []
+
+
+def _mission22_measured_medium_values(medium_fluxes):
+    raw, uptake, secretion = _mission21_measured_medium_values(medium_fluxes)
+    return raw, uptake, secretion
+
+
+def _mission22_measured_production_values(production_fluxes):
+    return _mission21_measured_production_values(production_fluxes)
+
+
+def _normalise_mission22_text(value):
+    text = unicodedata.normalize('NFKD', str(value or ''))
+    text = ''.join(character for character in text if not unicodedata.combining(character))
+    return text.lower().strip()
+
+
+def normalise_mission22_answer(answer):
+    """Return the submitted output count only for an unambiguous zero answer."""
+    text = _normalise_mission22_text(answer)
+    if not text:
+        return None
+    if re.search(r'\b[1-9]\d*\b', text):
+        return None
+    if re.search(
+        r'\b(?:acetate|acetato|ethanol|etanol|formate|formato|succinate|succinato|'
+        r'lactate|lactato|ptar|b2297|b2458|all|todos|todas|both|ambos|ambas)\b',
+        text,
+    ):
+        return None
+
+    compact = ''.join(character for character in text if character.isalnum())
+    accepted = {
+        '0', 'zero', 'none', 'nothing', 'nenhum', 'nenhuma',
+        'nodifference', 'nodifferences', 'nooutput', 'nooutputs',
+        'zerodifference', 'zerodifferences', 'zerooutput', 'zerooutputs',
+        'nenhumadiferenca', 'nenhumasdiferencas', 'nenhumoutput', 'nenhumoutputs',
+    }
+    return 0 if compact in accepted else None
+
+
+def mission22_answer_matches(answer, report_data=None):
+    if report_data is None:
+        report_data = load_mission22_comparison_check() or {}
+    submitted = normalise_mission22_answer(answer)
+    expected = report_data.get('different_output_count')
+    return bool(
+        report_data.get('evidence_ready')
+        and report_data.get('relationship_supported')
+        and submitted is not None
+        and expected is not None
+        and submitted == int(expected)
     )
 
 
-def _mission22_is_knockout_run(snapshot):
-    if not snapshot:
-        return False
-    selected_fluxes = snapshot.get('selected_production_fluxes') or []
-    return (
-        snapshot.get('method') == MISSION22_METHOD
-        and snapshot.get('objective') == MISSION22_GROWTH_OBJECTIVE
-        and snapshot.get('knocked_out_genes') == [MISSION22_TARGET_GENE]
-        and not snapshot.get('environment_changed')
-        and MISSION22_TARGET_FLUX in selected_fluxes
-        and snapshot.get('growth_value', 0.0) >= MISSION22_MIN_GROWTH
-    )
-
-
-def _build_mission22_data(compare_runs=None, error=None):
-    compare_runs = compare_runs or load_compare_runs() or {}
-    run_a = compare_runs.get('run_a')
-    run_b = compare_runs.get('run_b')
-    available_runs = [run for run in (run_a, run_b) if run]
-
-    baseline_run = next((run for run in available_runs if _mission22_is_baseline_run(run)), None)
-    knockout_run = next((run for run in available_runs if _mission22_is_knockout_run(run)), None)
-
-    baseline_growth = baseline_run.get('growth_value') if baseline_run else None
-    knockout_growth = knockout_run.get('growth_value') if knockout_run else None
-
-    baseline_flux = None
-    knockout_flux = None
-    if baseline_run:
-        baseline_flux = (baseline_run.get('production_flux_values') or {}).get(MISSION22_TARGET_FLUX)
-    if knockout_run:
-        knockout_flux = (knockout_run.get('production_flux_values') or {}).get(MISSION22_TARGET_FLUX)
-
-    production_increase = None
-    production_increased = False
-    if baseline_flux is not None and knockout_flux is not None:
-        production_increase = round(float(knockout_flux) - float(baseline_flux), 3)
-        production_increased = production_increase >= MISSION22_MIN_PRODUCTION_INCREASE
-
-    target_flux_tracked = False
-    if baseline_run and knockout_run:
-        target_flux_tracked = (
-            MISSION22_TARGET_FLUX in (baseline_run.get('selected_production_fluxes') or [])
-            and MISSION22_TARGET_FLUX in (knockout_run.get('selected_production_fluxes') or [])
-        )
-
-    growth_ok = (
-        baseline_growth is not None
-        and knockout_growth is not None
-        and float(baseline_growth) >= MISSION22_MIN_GROWTH
-        and float(knockout_growth) >= MISSION22_MIN_GROWTH
-    )
-
-    mission22_data = {
+def initialise_mission22_phenotype_equivalence_audit():
+    data = {
         'mission_id': '22',
-        'check_version': 1,
-        'mission_title': 'Knockout Comparison',
+        'check_version': MISSION22_CHECK_VERSION,
+        'mission_title': 'Phenotype Equivalence Audit',
         'target_context': MISSION22_TARGET_CONTEXT,
         'target_method': MISSION22_METHOD,
         'growth_objective': MISSION22_GROWTH_OBJECTIVE,
-        'target_product': MISSION22_TARGET_PRODUCT,
-        'target_flux': MISSION22_TARGET_FLUX,
-        'target_gene': MISSION22_TARGET_GENE,
-        'target_gene_name': MISSION22_TARGET_GENE_NAME,
-        'candidate_genes': MISSION22_CANDIDATE_GENES,
-        'minimum_growth': MISSION22_MIN_GROWTH,
-        'minimum_production_increase': MISSION22_MIN_PRODUCTION_INCREASE,
-        'run_a': run_a,
-        'run_b': run_b,
-        'baseline_run_found': baseline_run is not None,
-        'knockout_run_found': knockout_run is not None,
-        'baseline_growth': round(float(baseline_growth), 3) if baseline_growth is not None else None,
-        'knockout_growth': round(float(knockout_growth), 3) if knockout_growth is not None else None,
-        'baseline_product_flux': round(float(baseline_flux), 3) if baseline_flux is not None else None,
-        'knockout_product_flux': round(float(knockout_flux), 3) if knockout_flux is not None else None,
-        'production_increase': production_increase,
-        'production_increased': production_increased,
-        'target_flux_tracked': target_flux_tracked,
-        'growth_ok': growth_ok,
-        'ready_to_deliver': (
-            baseline_run is not None
-            and knockout_run is not None
-            and target_flux_tracked
-            and production_increased
-            and growth_ok
-        ),
+        'oxygen_reaction': MISSION22_OXYGEN_REACTION,
+        'environmental_export': MISSION22_ENVIRONMENTAL_EXPORT,
+        'target_genes': list(MISSION22_TARGET_GENES),
+        'expected_disabled_reactions': list(MISSION22_EXPECTED_DISABLED_REACTIONS),
+        'required_tracked_fluxes': list(MISSION22_REQUIRED_TRACKED_FLUXES),
+        'required_medium_fluxes': list(MISSION22_REQUIRED_MEDIUM_FLUXES),
+        'environmental_intervention_run': None,
+        'genetic_intervention_run': None,
+        'recorded_run_count': 0,
+        'required_run_count': 2,
+        'missing_run_types': ['environmental_intervention', 'genetic_intervention'],
+        'all_runs_recorded': False,
+        'same_base_protocol': False,
+        'phenotype_differences': {},
+        'different_output_ids': [],
+        'different_output_count': None,
+        'maximum_absolute_difference': None,
+        'relationship_supported': False,
+        'evidence_ready': False,
+        'answer_ready': False,
+        'ready_to_deliver': False,
+        'current_run_valid': False,
+        'current_run_recorded': False,
+        'current_run_type': None,
+        'current_issues': [],
+        'latest_attempt': None,
     }
-    if error:
-        mission22_data['error'] = error
-    save_mission22_comparison_check(mission22_data)
-    return mission22_data
+    save_mission22_comparison_check(data)
+    return data
 
 
-def run_mission22_comparison_check(compare_runs=None):
-    compare_runs = compare_runs or load_compare_runs()
-    if not compare_runs or not compare_runs.get('run_a') or not compare_runs.get('run_b'):
-        return _build_mission22_data(compare_runs, error='Run two simulations before delivering Mission 22.')
-    return _build_mission22_data(compare_runs)
+def _build_mission22_data(
+    method_name,
+    selected_objective,
+    objective_result,
+    genes,
+    reactions,
+    production_fluxes=None,
+    medium_fluxes=None,
+    existing_report=None,
+    selected_fluxes=None,
+    objective_error=None,
+):
+    """Validate and accumulate one visible Mission 22 intervention run."""
+    existing_report = existing_report or {}
+    if (
+        existing_report.get('mission_id') != '22'
+        or existing_report.get('check_version') != MISSION22_CHECK_VERSION
+    ):
+        existing_report = {}
+
+    environmental_run = copy.deepcopy(existing_report.get('environmental_intervention_run'))
+    genetic_run = copy.deepcopy(existing_report.get('genetic_intervention_run'))
+
+    environment = _mission22_environment_status(reactions)
+    knocked_out_genes = _knocked_out_genes(genes)
+    exact_target_pair = (
+        len(knocked_out_genes) == len(MISSION22_TARGET_GENES)
+        and set(knocked_out_genes) == set(MISSION22_TARGET_GENES)
+    )
+    disabled_reactions = _mission22_disabled_reactions(knocked_out_genes)
+
+    run_type = None
+    if environment.get('controlled_environment'):
+        if not knocked_out_genes and environment.get('acetate_upper_bound_closed'):
+            run_type = 'environmental_intervention'
+        elif exact_target_pair and not environment.get('acetate_upper_bound_closed'):
+            run_type = 'genetic_intervention'
+
+    objective_numeric = _mission22_number_or_none(objective_result)
+    result_infeasible = 'INFEASIBLE' in str(objective_result or '').upper()
+    measured_production = _mission22_measured_production_values(production_fluxes)
+    raw_fluxes, uptake_fluxes, secretion_fluxes = _mission22_measured_medium_values(medium_fluxes)
+    diagnostics = _method_diagnostics_from_production_data(production_fluxes)
+    biomass_raw = _mission22_number_or_none(_mission13_biomass_value(production_fluxes))
+    primary_flux = _mission22_number_or_none(diagnostics.get('primary_objective_flux'))
+    method_score = _mission22_number_or_none(diagnostics.get('method_score'))
+    method_score_name = diagnostics.get('method_score_name')
+    diagnostics_method = normalise_method_name(diagnostics.get('method'))
+    diagnostics_objective = diagnostics.get('objective_reaction')
+
+    if selected_fluxes is None:
+        selected_fluxes = _read_selected_production_fluxes()
+    selected_fluxes = list(selected_fluxes or [])
+
+    missing_medium_fluxes = [
+        reaction_id for reaction_id in MISSION22_REQUIRED_MEDIUM_FLUXES
+        if reaction_id not in raw_fluxes
+    ]
+    missing_selected_fluxes = [
+        reaction_id for reaction_id in MISSION22_REQUIRED_TRACKED_FLUXES
+        if reaction_id not in selected_fluxes
+    ]
+    extra_selected_fluxes = [
+        reaction_id for reaction_id in selected_fluxes
+        if reaction_id not in MISSION22_REQUIRED_TRACKED_FLUXES
+    ]
+    missing_measured_fluxes = [
+        reaction_id for reaction_id in MISSION22_REQUIRED_TRACKED_FLUXES
+        if reaction_id not in measured_production
+    ]
+
+    glucose_uptake = _mission22_number_or_none(uptake_fluxes.get(MISSION22_GLUCOSE_REACTION))
+    oxygen_uptake = _mission22_number_or_none(uptake_fluxes.get(MISSION22_OXYGEN_REACTION))
+    acetate_export = _mission22_number_or_none(measured_production.get(MISSION22_ENVIRONMENTAL_EXPORT))
+    ethanol_export = _mission22_number_or_none(measured_production.get('EX_etoh_e'))
+    formate_export = _mission22_number_or_none(measured_production.get('EX_for_e'))
+
+    issues = []
+    if objective_error:
+        issues.append(objective_error)
+    if normalise_method_name(method_name) != MISSION22_METHOD:
+        issues.append('Use FBA for both Mission 22 runs.')
+    if selected_objective != MISSION22_GROWTH_OBJECTIVE:
+        issues.append('Use the biomass objective for both Mission 22 runs.')
+    if not environment.get('bounds_complete'):
+        issues.append('The environmental-bound payload is incomplete.')
+    if not environment.get('oxygen_lower_bound_closed'):
+        issues.append('Close the oxygen lower bound in both Mission 22 runs.')
+    if environment.get('unexpected_environment_changes'):
+        issues.append('Keep glucose and every unrelated environmental bound at the model default.')
+
+    if not knocked_out_genes:
+        if not environment.get('acetate_upper_bound_closed'):
+            issues.append('The environmental intervention must close acetate export with every gene active.')
+    elif exact_target_pair:
+        if environment.get('acetate_upper_bound_closed'):
+            issues.append('The genetic intervention must keep the acetate upper bound at its model default.')
+        if disabled_reactions != MISSION22_EXPECTED_DISABLED_REACTIONS:
+            issues.append('The b2297 + b2458 pair must disable PTAr under the complete GPR rule.')
+    else:
+        issues.append('Use either all genes active for the environmental run or exactly b2297 + b2458 for the genetic run.')
+
+    if run_type not in {'environmental_intervention', 'genetic_intervention'}:
+        issues.append('Use one of the two controlled Mission 22 interventions without combining them.')
+
+    if result_infeasible or objective_numeric is None:
+        issues.append('Mission 22 requires a numeric viable biomass result in both runs.')
+    elif objective_numeric < MISSION22_MIN_VIABLE_GROWTH:
+        issues.append('The current intervention does not retain enough predicted growth for comparison.')
+
+    if medium_fluxes and medium_fluxes.get('error'):
+        issues.append('The Exchange Flux Report is unavailable for this run.')
+    elif missing_medium_fluxes:
+        issues.append('The Exchange Flux Report is missing required Mission 22 reactions.')
+    if production_fluxes and production_fluxes.get('error'):
+        issues.append('The Production Flux report is unavailable for this run.')
+    elif missing_measured_fluxes:
+        issues.append('The Production Flux report is missing numeric Mission 22 values.')
+    if missing_selected_fluxes or extra_selected_fluxes:
+        issues.append('Select exactly the complete Mission 22 product/byproduct panel.')
+
+    if glucose_uptake is None or oxygen_uptake is None:
+        issues.append('Numeric glucose and oxygen uptake evidence is required.')
+    else:
+        if abs(glucose_uptake - MISSION22_EXPECTED_GLUCOSE_UPTAKE) > MISSION22_GLUCOSE_UPTAKE_TOLERANCE:
+            issues.append('Keep model-default glucose uptake in both Mission 22 runs.')
+        if oxygen_uptake > MISSION22_FLUX_TOLERANCE:
+            issues.append('The Exchange Flux Report still detects oxygen uptake.')
+
+    for reaction_id in MISSION22_REQUIRED_TRACKED_FLUXES:
+        production_value = _mission22_number_or_none(measured_production.get(reaction_id))
+        exchange_value = _mission22_number_or_none(secretion_fluxes.get(reaction_id))
+        if production_value is not None and exchange_value is not None:
+            if abs(production_value - exchange_value) > MISSION22_FLUX_TOLERANCE:
+                issues.append('Production Flux and Exchange Flux must describe the same visible solution.')
+                break
+
+    if diagnostics_method != MISSION22_METHOD or diagnostics_objective != MISSION22_GROWTH_OBJECTIVE:
+        issues.append('The visible method diagnostics do not describe the required FBA biomass result.')
+    if primary_flux is None or method_score is None or biomass_raw is None:
+        issues.append('The visible result is missing biomass or FBA objective diagnostics.')
+    else:
+        if abs(primary_flux - objective_numeric) > MISSION22_PRIMARY_TOLERANCE:
+            issues.append('The displayed objective result does not match the primary biomass flux.')
+        if abs(biomass_raw - objective_numeric) > MISSION22_PRIMARY_TOLERANCE:
+            issues.append('The visible biomass evidence does not match the displayed result.')
+        if method_score_name != 'primary_objective_flux':
+            issues.append('The FBA method score is not identified as the primary objective flux.')
+        if abs(method_score - primary_flux) > MISSION22_PRIMARY_TOLERANCE:
+            issues.append('The FBA method score does not match the primary objective flux.')
+
+    if acetate_export is None or ethanol_export is None or formate_export is None:
+        issues.append('The visible phenotype panel is incomplete.')
+    else:
+        if acetate_export > MISSION22_MAX_ACETATE_EXPORT:
+            issues.append('The intended intervention should suppress acetate export in this controlled phenotype.')
+        if ethanol_export < MISSION22_MIN_ACTIVE_ETHANOL_EXPORT:
+            issues.append('The current run does not show the expected positive ethanol secretion phenotype.')
+        if formate_export < MISSION22_MIN_ACTIVE_FORMATE_EXPORT:
+            issues.append('The current run does not show the expected positive formate secretion phenotype.')
+
+    current_run_valid = not issues
+    current_run_recorded = False
+    current_run = None
+    if current_run_valid:
+        current_run = {
+            'run_type': run_type,
+            'method': MISSION22_METHOD,
+            'objective': selected_objective,
+            'growth': _mission22_clean_number(objective_numeric),
+            'glucose_uptake': _mission22_clean_number(glucose_uptake),
+            'oxygen_uptake': _mission22_clean_number(oxygen_uptake),
+            'tracked_flux_values': {
+                reaction_id: _mission22_clean_number(measured_production[reaction_id])
+                for reaction_id in MISSION22_REQUIRED_TRACKED_FLUXES
+            },
+            'selected_fluxes': list(selected_fluxes),
+            'knocked_out_genes': list(knocked_out_genes),
+            'disabled_reactions': list(disabled_reactions),
+            'oxygen_lower_bound_closed': bool(environment.get('oxygen_lower_bound_closed')),
+            'acetate_upper_bound_closed': bool(environment.get('acetate_upper_bound_closed')),
+            'method_diagnostics': {
+                'method': diagnostics_method,
+                'objective_reaction': diagnostics_objective,
+                'primary_objective_flux': _mission22_clean_number(primary_flux),
+                'method_score': _mission22_clean_number(method_score),
+                'method_score_name': method_score_name,
+            },
+        }
+        if run_type == 'environmental_intervention':
+            environmental_run = current_run
+        elif run_type == 'genetic_intervention':
+            genetic_run = current_run
+        current_run_recorded = True
+
+    all_runs_recorded = bool(environmental_run and genetic_run)
+    missing_run_types = []
+    if not environmental_run:
+        missing_run_types.append('environmental_intervention')
+    if not genetic_run:
+        missing_run_types.append('genetic_intervention')
+
+    same_base_protocol = bool(
+        all_runs_recorded
+        and environmental_run.get('method') == genetic_run.get('method') == MISSION22_METHOD
+        and environmental_run.get('objective') == genetic_run.get('objective') == MISSION22_GROWTH_OBJECTIVE
+        and not environmental_run.get('knocked_out_genes')
+        and set(genetic_run.get('knocked_out_genes') or []) == set(MISSION22_TARGET_GENES)
+        and genetic_run.get('disabled_reactions') == MISSION22_EXPECTED_DISABLED_REACTIONS
+        and environmental_run.get('oxygen_lower_bound_closed')
+        and genetic_run.get('oxygen_lower_bound_closed')
+        and environmental_run.get('acetate_upper_bound_closed')
+        and not genetic_run.get('acetate_upper_bound_closed')
+        and set(environmental_run.get('selected_fluxes') or []) == set(MISSION22_REQUIRED_TRACKED_FLUXES)
+        and set(genetic_run.get('selected_fluxes') or []) == set(MISSION22_REQUIRED_TRACKED_FLUXES)
+    )
+
+    phenotype_differences = {}
+    different_output_ids = []
+    different_output_count = None
+    maximum_absolute_difference = None
+    relationship_supported = False
+    if all_runs_recorded:
+        phenotype_differences = {
+            'growth': _mission22_clean_number(
+                float(genetic_run['growth']) - float(environmental_run['growth'])
+            ),
+            'glucose_uptake': _mission22_clean_number(
+                float(genetic_run['glucose_uptake']) - float(environmental_run['glucose_uptake'])
+            ),
+            'oxygen_uptake': _mission22_clean_number(
+                float(genetic_run['oxygen_uptake']) - float(environmental_run['oxygen_uptake'])
+            ),
+        }
+        for reaction_id in MISSION22_REQUIRED_TRACKED_FLUXES:
+            phenotype_differences[reaction_id] = _mission22_clean_number(
+                float((genetic_run.get('tracked_flux_values') or {})[reaction_id])
+                - float((environmental_run.get('tracked_flux_values') or {})[reaction_id])
+            )
+        different_output_ids = [
+            output_id for output_id in MISSION22_PHENOTYPE_OUTPUTS
+            if abs(float(phenotype_differences[output_id])) > MISSION22_OUTPUT_DIFFERENCE_TOLERANCE
+        ]
+        different_output_count = len(different_output_ids)
+        maximum_absolute_difference = max(
+            (abs(float(value)) for value in phenotype_differences.values()),
+            default=0.0,
+        )
+        relationship_supported = bool(
+            same_base_protocol
+            and different_output_count == MISSION22_EXPECTED_DIFFERENT_OUTPUT_COUNT
+            and float(environmental_run['growth']) >= MISSION22_MIN_VIABLE_GROWTH
+            and float(genetic_run['growth']) >= MISSION22_MIN_VIABLE_GROWTH
+            and float((environmental_run.get('tracked_flux_values') or {})['EX_etoh_e'])
+            >= MISSION22_MIN_ACTIVE_ETHANOL_EXPORT
+            and float((genetic_run.get('tracked_flux_values') or {})['EX_etoh_e'])
+            >= MISSION22_MIN_ACTIVE_ETHANOL_EXPORT
+        )
+
+    latest_attempt = {
+        'method': method_name,
+        'objective': selected_objective,
+        'run_type': run_type,
+        'knocked_out_genes': list(knocked_out_genes),
+        'objective_result': str(objective_result),
+        'issues': list(issues),
+        'recorded': current_run_recorded,
+    }
+    report = {
+        'mission_id': '22',
+        'check_version': MISSION22_CHECK_VERSION,
+        'mission_title': 'Phenotype Equivalence Audit',
+        'target_context': MISSION22_TARGET_CONTEXT,
+        'target_method': MISSION22_METHOD,
+        'growth_objective': MISSION22_GROWTH_OBJECTIVE,
+        'oxygen_reaction': MISSION22_OXYGEN_REACTION,
+        'environmental_export': MISSION22_ENVIRONMENTAL_EXPORT,
+        'target_genes': list(MISSION22_TARGET_GENES),
+        'expected_disabled_reactions': list(MISSION22_EXPECTED_DISABLED_REACTIONS),
+        'required_tracked_fluxes': list(MISSION22_REQUIRED_TRACKED_FLUXES),
+        'required_medium_fluxes': list(MISSION22_REQUIRED_MEDIUM_FLUXES),
+        'environmental_intervention_run': environmental_run,
+        'genetic_intervention_run': genetic_run,
+        'recorded_run_count': int(isinstance(environmental_run, dict)) + int(isinstance(genetic_run, dict)),
+        'required_run_count': 2,
+        'missing_run_types': missing_run_types,
+        'all_runs_recorded': all_runs_recorded,
+        'same_base_protocol': same_base_protocol,
+        'phenotype_differences': phenotype_differences,
+        'different_output_ids': different_output_ids,
+        'different_output_count': different_output_count,
+        'maximum_absolute_difference': (
+            _mission22_clean_number(maximum_absolute_difference)
+            if maximum_absolute_difference is not None else None
+        ),
+        'relationship_supported': relationship_supported,
+        'evidence_ready': all_runs_recorded,
+        'answer_ready': relationship_supported,
+        'ready_to_deliver': relationship_supported,
+        'current_run_valid': current_run_valid,
+        'current_run_recorded': current_run_recorded,
+        'current_run_type': run_type,
+        'current_issues': issues,
+        'current_run': current_run,
+        'latest_attempt': latest_attempt,
+        'output_difference_tolerance': MISSION22_OUTPUT_DIFFERENCE_TOLERANCE,
+        'expected_different_output_count': MISSION22_EXPECTED_DIFFERENT_OUTPUT_COUNT,
+    }
+    save_mission22_comparison_check(report)
+    return report
+
+
+def run_mission22_comparison_check(simulation_results=None):
+    """Validate the already visible Mission 22 result without re-simulating."""
+    method_name, selected_objective, genes, reactions = _read_simulation_file()
+    objective_result = None
+    production_fluxes = None
+    medium_fluxes = None
+    objective_error = None
+    try:
+        if simulation_results is not None:
+            result_objective = simulation_results[0]
+            objective_result = simulation_results[1]
+            production_fluxes = simulation_results[2] if len(simulation_results) > 2 else None
+            medium_fluxes = simulation_results[3] if len(simulation_results) > 3 else None
+            if result_objective != selected_objective:
+                objective_error = 'The displayed simulation result does not match the currently selected objective.'
+        else:
+            objective_error = 'Run a visible Mission 22 simulation before recording evidence.'
+    except Exception:
+        objective_error = 'Could not read the current visible Mission 22 simulation result.'
+
+    return _build_mission22_data(
+        method_name,
+        selected_objective,
+        objective_result,
+        genes,
+        reactions,
+        production_fluxes=production_fluxes,
+        medium_fluxes=medium_fluxes,
+        existing_report=load_mission22_comparison_check() or {},
+        objective_error=objective_error,
+    )
+
+
+def run_mission22_comparison_check_remote(backend_url, simulation_results=None):
+    """Browser parity wrapper: validate the already visible backend result."""
+    del backend_url
+    return run_mission22_comparison_check(simulation_results)
+
+
+def build_mission22_phenotype_equivalence_report_text(report):
+    if not report:
+        return 'Mission 22 Phenotype Equivalence Audit\n\nActivate the mission and record the two controlled intervention runs.'
+    if report.get('mission_id') != '22' or report.get('check_version') != MISSION22_CHECK_VERSION:
+        return 'Mission 22 Phenotype Equivalence Audit\n\nCurrent-format evidence has not been recorded yet.'
+
+    lines = [
+        'Mission 22 Phenotype Equivalence Audit',
+        '',
+        'Shared protocol:',
+        '- FBA biomass objective; model-default glucose; oxygen uptake closed',
+        '- Complete product/byproduct panel measured from each visible solution',
+        f'- Output-difference tolerance: {MISSION22_OUTPUT_DIFFERENCE_TOLERANCE:.3f}',
+        '- Counted phenotype outputs: biomass, glucose uptake, oxygen uptake and the five tracked secretions',
+        '- Intervention settings and GPR labels describe mechanisms; they are not counted phenotype outputs',
+        '- Environmental intervention: all genes active; acetate export upper bound closed',
+        '- Genetic intervention: acetate export bound default; b2297 + b2458 disabled',
+        '- Complete GPR check required: PTAr disabled only in the genetic intervention',
+        '',
+        f"Controlled runs recorded: {report.get('recorded_run_count', 0)}/{report.get('required_run_count', 2)}",
+    ]
+
+    for title, key in (
+        ('Environmental intervention', 'environmental_intervention_run'),
+        ('Genetic intervention', 'genetic_intervention_run'),
+    ):
+        run = report.get(key) or {}
+        if not run:
+            lines.append(f'- {title}: not recorded')
+            continue
+        lines.extend([
+            f'{title}:',
+            f"- Growth: {float(run.get('growth')):.3f}",
+            f"- Glucose uptake: {float(run.get('glucose_uptake')):.3f}",
+            f"- Oxygen uptake: {float(run.get('oxygen_uptake')):.3f}",
+            f"- Knockouts: {', '.join(run.get('knocked_out_genes') or []) or 'none'}",
+            f"- GPR-disabled reactions: {', '.join(run.get('disabled_reactions') or []) or 'none'}",
+            '- Export profile:',
+        ])
+        fluxes = run.get('tracked_flux_values') or {}
+        for reaction_id in MISSION22_REQUIRED_TRACKED_FLUXES:
+            lines.append(
+                f"  {MISSION22_FLUX_NAMES.get(reaction_id, reaction_id)} ({reaction_id}): "
+                f"{float(fluxes.get(reaction_id)):.3f}"
+            )
+        lines.append('')
+
+    if report.get('all_runs_recorded'):
+        lines.append('Genetic minus environmental phenotype differences:')
+        differences = report.get('phenotype_differences') or {}
+        for output_id in MISSION22_PHENOTYPE_OUTPUTS:
+            if output_id not in differences:
+                continue
+            value = float(differences[output_id])
+            prefix = '+' if value > 0 else ''
+            lines.append(f"- {MISSION22_OUTPUT_NAMES.get(output_id, output_id)}: {prefix}{value:.3f}")
+    else:
+        missing = report.get('missing_run_types') or []
+        if missing:
+            lines.append('Missing controlled runs: ' + ', '.join(missing) + '.')
+
+    if report.get('current_run_recorded'):
+        lines.extend(['', f"Latest valid visible run recorded: {str(report.get('current_run_type') or '').replace('_', ' ')}."])
+    elif report.get('current_issues'):
+        lines.extend(['', 'Latest run was not recorded:'])
+        lines.extend(f'- {issue}' for issue in report.get('current_issues') or [])
+        if report.get('environmental_intervention_run') or report.get('genetic_intervention_run'):
+            lines.append('Previously valid Mission 22 evidence remains available.')
+
+    lines.append('')
+    if report.get('evidence_ready'):
+        lines.extend([
+            'Evidence complete.',
+            'Inspect every recorded output difference and report how many exceed the stated numerical tolerance.',
+            'Question: How many recorded phenotype outputs differed beyond tolerance between the two interventions?',
+        ])
+    else:
+        lines.append('Evidence incomplete.')
+
+    lines.extend([
+        '',
+        'Interpretation note: equal observed outputs do not prove equal intervention mechanisms.',
+        'This comparison is conditional on this model, anaerobic glucose medium, biomass objective and recorded phenotype panel.',
+        'All growth and exchange values come from the same visible solver results. No hidden simulation is used.',
+    ])
+    return '\n'.join(lines)
 
 
 def _mission23_is_growth_objective_run(snapshot):

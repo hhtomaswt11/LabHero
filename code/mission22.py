@@ -9,190 +9,264 @@ from functions import animation_text_save
 from async_menu import run_menu
 from utils import *
 from simulation import (
+    MISSION22_CHECK_VERSION,
     MISSION22_METHOD,
     MISSION22_GROWTH_OBJECTIVE,
-    MISSION22_TARGET_PRODUCT,
-    MISSION22_TARGET_FLUX,
-    MISSION22_TARGET_GENE,
-    MISSION22_TARGET_GENE_NAME,
-    MISSION22_CANDIDATE_GENES,
-    MISSION22_MIN_PRODUCTION_INCREASE,
+    MISSION22_OXYGEN_REACTION,
+    MISSION22_ENVIRONMENTAL_EXPORT,
+    MISSION22_TARGET_GENES,
+    MISSION22_TARGET_GENE_NAMES,
+    MISSION22_EXPECTED_DISABLED_REACTIONS,
+    MISSION22_REQUIRED_TRACKED_FLUXES,
+    build_mission22_phenotype_equivalence_report_text,
+    initialise_mission22_phenotype_equivalence_audit,
+    is_mission22_unlocked,
+    mission22_answer_matches,
+    normalise_mission22_answer,
 )
 
 
 class Mission22_info:
-    """Mission 22 — Knockout Comparison.
+    """Mission 22 — Phenotype Equivalence Audit.
 
-    Second and final Dr. Vega mission. The player moves from the controlled
-    export-bound comparison in Mission 21 to a controlled strain comparison.
+    Second and final Dr. Vega mission.  Mission 21 established an
+    export-bound change; this mission compares two different mechanisms under
+    one controlled phenotype panel and determines how many recorded outputs
+    distinguish them beyond numerical tolerance.
     """
 
     def __init__(self, toggle_menu, player) -> None:
         self.player = player
         self.missions_activated = self.player.missions_activated
         self.missions_completed = self.player.missions_completed
-
         self.toggle_menu = toggle_menu
         self.display_surface = pygame.display.get_surface()
-        font_path = get_resource_path('font/LycheeSoda.ttf')
-        self.font = pygame.font.Font(font_path, 30)
+        self.font = pygame.font.Font(get_resource_path('font/LycheeSoda.ttf'), 30)
         self.timer = Timer(200)
-
         self.mission22 = '22' in self.missions_activated
 
-        success_path = get_resource_path('audio/success_3.ogg')
-        self.success = pygame.mixer.Sound(success_path)
+        self.success = pygame.mixer.Sound(get_resource_path('audio/success_3.ogg'))
         self.success.set_volume(1.2)
-
-        failed_path = get_resource_path('audio/failed.ogg')
-        self.failed = pygame.mixer.Sound(failed_path)
+        self.failed = pygame.mixer.Sound(get_resource_path('audio/failed.ogg'))
         self.failed.set_volume(1.2)
 
     async def setup(self):
         menu = pygame_menu.Menu(
             height=720,
+            center_content=False,
             onclose=self.toggle_menu,
             theme=mytheme,
             title='Mission 22',
             width=1280,
         )
 
-        menu_text = pygame_menu.Menu(
+        if not is_mission22_unlocked(self.missions_completed):
+            menu.add.vertical_margin(40)
+            menu.add.label(
+                'Mission 22 is locked. Complete Mission 21 before beginning Dr. Vega\'s final audit.',
+                wordwrap=True,
+                align=pygame_menu.locals.ALIGN_CENTER,
+                padding=(25, 25, 25, 25),
+                background_color='white',
+                font_size=30,
+            )
+            menu.add.button('Back', pygame_menu.events.BACK, background_color=(70, 70, 70))
+            await run_menu(menu, self.display_surface)
+            return
+
+        hint3 = pygame_menu.Menu(
+            height=720, center_content=False, onclose=pygame_menu.events.BACK,
+            theme=mytheme, title='Mission 22 Hint 3', width=1280,
+        )
+        hint3.add.label(
+            f'Technical hint: use {MISSION22_METHOD}, objective {MISSION22_GROWTH_OBJECTIVE}, model-default glucose and close {MISSION22_OXYGEN_REACTION} uptake in both runs. Track ' + ', '.join(MISSION22_REQUIRED_TRACKED_FLUXES) + f'. For the environmental run, keep all genes active and close only the upper bound of {MISSION22_ENVIRONMENTAL_EXPORT}. For the genetic run, restore that upper bound and disable exactly ' + ' + '.join(MISSION22_TARGET_GENES) + '.',
+            wordwrap=True,
+            align=pygame_menu.locals.ALIGN_LEFT,
+            padding=(20, 20, 20, 20),
+        )
+        hint3.add.button('Back', pygame_menu.events.BACK, background_color=(70, 70, 70))
+
+        hint2 = pygame_menu.Menu(
+            height=720, center_content=False, onclose=pygame_menu.events.BACK,
+            theme=mytheme, title='Mission 22 Hint 2', width=1280,
+        )
+        hint2.add.label(
+            'Experimental hint: compare genetic minus environmental values for growth, glucose uptake, oxygen uptake and every tracked secretion. Count an output only when the absolute difference exceeds the tolerance shown by the mission report.',
+            wordwrap=True,
+            align=pygame_menu.locals.ALIGN_LEFT,
+            padding=(20, 20, 20, 20),
+        )
+        hint2.add.button('Reveal technical hint', hint3, background_color=(255, 215, 0), font_color='black')
+        hint2.add.button('Back', pygame_menu.events.BACK, background_color=(70, 70, 70))
+
+        hint1 = pygame_menu.Menu(
+            height=720, center_content=False, onclose=pygame_menu.events.BACK,
+            theme=mytheme, title='Mission 22 Hint 1', width=1280,
+        )
+        hint1.add.label(
+            'Conceptual hint: different interventions can act through different mechanisms yet remain indistinguishable under a limited observed phenotype panel. Matching outputs do not prove matching mechanisms.',
+            wordwrap=True,
+            align=pygame_menu.locals.ALIGN_LEFT,
+            padding=(20, 20, 20, 20),
+        )
+        hint1.add.button('Reveal next hint', hint2, background_color=(255, 215, 0), font_color='black')
+        hint1.add.button('Back', pygame_menu.events.BACK, background_color=(70, 70, 70))
+
+        briefing = pygame_menu.Menu(
             height=720,
-            onclose=self.toggle_menu,
+            center_content=False,
+            onclose=pygame_menu.events.BACK,
             theme=mytheme,
             title='Mission 22 Briefing',
             width=1280,
         )
-
-        menu_text.add.label(
+        briefing.add.label(
             f"""
-            Mission 22: Knockout Comparison.
+            Dr. Vega's final task compares two mechanisms under one shared protocol.
 
-            In Mission 21 you compared a reference with one export-bound change.
-            Now keep one protocol fixed and compare two strains: the normal strain
-            and a strain with one gene disabled.
+            Shared setup:
+            Use {MISSION22_METHOD}, the biomass objective, model-default glucose, closed oxygen uptake and the complete product/byproduct panel. Keep every unrelated bound at its model default.
 
-            Keep the method, objective and environment the same in both runs.
-            The only intended change is the gene knockout.
+            Environmental intervention:
+            Keep every gene active and close the upper bound of {MISSION22_ENVIRONMENTAL_EXPORT}.
 
-            Use Production Flux to track {MISSION22_TARGET_PRODUCT}
-            ({MISSION22_TARGET_FLUX}) in both runs. Then open Compare Runs to
-            check whether the knockout increased product secretion while the
-            cell still grows.
+            Genetic intervention:
+            Restore the acetate upper bound to its model default and disable exactly {MISSION22_TARGET_GENES[0]} / {MISSION22_TARGET_GENE_NAMES[MISSION22_TARGET_GENES[0]]} plus {MISSION22_TARGET_GENES[1]} / {MISSION22_TARGET_GENE_NAMES[MISSION22_TARGET_GENES[1]]}. The complete GPR must report {MISSION22_EXPECTED_DISABLED_REACTIONS[0]} as disabled.
+
+            Record both visible runs in any order. Count only biomass, glucose uptake, oxygen uptake and the five tracked secretions. The intervention settings and GPR-disabled reaction labels identify the mechanisms; they are not phenotype outputs. Submit only the number of counted outputs that differ beyond tolerance.
             """,
             max_char=-1,
             wordwrap=True,
             align=pygame_menu.locals.ALIGN_LEFT,
-            margin=(0, 0),
+            padding=(20, 20, 20, 20),
         )
-        menu_text.add.button('Back', pygame_menu.events.BACK, background_color=(70, 70, 70))
-        menu_text.add.vertical_margin(20)
+        briefing.add.button('Optional Hints', hint1, background_color=(230, 230, 180), font_color='black')
+        briefing.add.button('Back', pygame_menu.events.BACK, background_color=(70, 70, 70))
 
         menu.add.vertical_margin(20)
         menu.add.label(
-            'Mission 22: Knockout Comparison',
-            wordwrap=False,
+            'Mission 22: Phenotype Equivalence Audit',
             align=pygame_menu.locals.ALIGN_CENTER,
             font_size=34,
         )
-
         menu.add.label(
-            f"""
-            Dr. Vega now wants a controlled gene comparison.
-
-            Question:
-            Does one candidate knockout increase {MISSION22_TARGET_PRODUCT}
-            production compared with the normal strain?
-
-            Run A — baseline strain:
-            - Method: {MISSION22_METHOD}
-            - Objective: {MISSION22_GROWTH_OBJECTIVE}
-            - Genes: no knockouts
-            - Environment: unchanged
-            - Production Flux: track {MISSION22_TARGET_FLUX}
-
-            Run B — modified strain:
-            - Method: {MISSION22_METHOD}
-            - Objective: {MISSION22_GROWTH_OBJECTIVE}
-            - Genes: turn off {MISSION22_TARGET_GENE} / {MISSION22_TARGET_GENE_NAME}
-            - Environment: unchanged
-            - Production Flux: track {MISSION22_TARGET_FLUX}
-
-            Candidate genes:
-            {', '.join(MISSION22_CANDIDATE_GENES)}
-
-            After the second simulation, open New Results -> Compare Runs.
-            {MISSION22_TARGET_PRODUCT.capitalize()} should increase by at least
-            {MISSION22_MIN_PRODUCTION_INCREASE:.1f}.
-            """,
+            'Compare an environmental intervention with a GPR-based genetic intervention and determine whether the recorded phenotype panel distinguishes them.',
             wordwrap=True,
             align=pygame_menu.locals.ALIGN_CENTER,
-            font_size=30,
+            font_size=27,
         )
-
-        menu.add.button('Mission 22 Briefing', menu_text, font_color='black', background_color=(255, 215, 0, 255))
-        menu.add.vertical_margin(50)
+        menu.add.label(
+            f'Controlled factors:\nOxygen uptake: {MISSION22_OXYGEN_REACTION} lower bound closed in both runs\nEnvironmental mechanism: {MISSION22_ENVIRONMENTAL_EXPORT} upper bound closed; genes active\nGenetic mechanism: {" + ".join(MISSION22_TARGET_GENES)} disabled; acetate upper bound default\nProduction Flux panel: {", ".join(MISSION22_REQUIRED_TRACKED_FLUXES)}',
+            wordwrap=True,
+            align=pygame_menu.locals.ALIGN_LEFT,
+            font_size=24,
+            padding=(5, 0, 0, 35),
+        )
+        menu.add.button('Mission 22 Briefing', briefing, font_color='black', background_color=(255, 215, 0))
+        menu.add.button('Optional Hints', hint1, font_color='black', background_color=(230, 230, 180))
+        menu.add.vertical_margin(25)
 
         if self.mission22:
-            menu.add.button('Deliver Knockout Comparison', action=self.deliver_results, background_color=(50, 100, 100))
-            menu.add.vertical_margin(50)
-            menu.add.label('Mission Activated', font_color=(150, 150, 150))
+            report = load_mission22_comparison_check()
+            if (
+                not isinstance(report, dict)
+                or report.get('mission_id') != '22'
+                or report.get('check_version') != MISSION22_CHECK_VERSION
+            ):
+                report = initialise_mission22_phenotype_equivalence_audit()
+            menu.add.label(
+                build_mission22_phenotype_equivalence_report_text(report),
+                wordwrap=True,
+                align=pygame_menu.locals.ALIGN_LEFT,
+                padding=(20, 20, 20, 20),
+                background_color='white',
+                font_size=22,
+            )
             menu.add.vertical_margin(20)
+            menu.add.label(
+                'Question: How many recorded phenotype outputs differed beyond tolerance between the environmental and genetic interventions?',
+                wordwrap=True,
+                align=pygame_menu.locals.ALIGN_LEFT,
+                font_size=24,
+            )
+            menu.add.text_input(
+                'Different outputs: ',
+                default='',
+                input_underline='_',
+                maxchar=40,
+                onreturn=self.deliver_results,
+            )
+            menu.add.label('Mission Activated', font_color=(150, 150, 150))
         else:
-            if '21' in self.missions_completed:
-                menu.add.button('Activate Mission', action=self.activate_mission22, background_color=(50, 100, 100))
-            else:
-                menu.add.label('Complete Mission 21 before activating this mission.', font_color=(150, 40, 40))
+            menu.add.button('Activate Mission', action=self.activate_mission22, background_color=(50, 100, 100))
 
         menu.add.vertical_margin(20)
         await run_menu(menu, self.display_surface)
 
     def activate_mission22(self):
-        if '21' not in self.missions_completed:
+        if not is_mission22_unlocked(self.missions_completed):
             self.failed.play()
-            animation_text_save('Complete Mission 21 first.', time=2500)
+            animation_text_save('Complete Mission 21 before starting Mission 22.', time=3000)
+            return
+        if '22' in self.missions_completed:
+            return
+        if '22' in self.missions_activated:
+            self.mission22 = True
             return
 
         clear_compare_runs()
         clear_mission22_comparison_check()
+        initialise_mission22_phenotype_equivalence_audit()
         self.mission22 = True
-        if '22' not in self.missions_activated:
-            self.missions_activated.insert(0, '22')
+        self.missions_activated.insert(0, '22')
         animation_text_save('Mission 22 Activated')
         save_file(self.player.get_save_data())
 
-    def deliver_results(self):
-        report_data = load_mission22_comparison_check()
-
-        if (not report_data
-                or report_data.get('mission_id') != '22'
-                or report_data.get('check_version') != 1):
+    def deliver_results(self, answer):
+        if not is_mission22_unlocked(self.missions_completed):
             self.failed.play()
-            animation_text_save('Run the Mission 22 comparison first!', time=2500)
+            animation_text_save('Complete Mission 21 first!', time=2500)
+            return
+        if '22' not in self.missions_activated:
+            self.failed.play()
+            animation_text_save('Activate Mission 22 before delivering a conclusion.', time=2800)
             return
 
-        if report_data.get('ready_to_deliver'):
-            self.success.play()
-            if '22' not in self.missions_completed:
-                self.missions_completed.insert(0, '22')
-            animation_text_save('Congratulations! Mission 22 completed!', time=2500)
-            save_file(self.player.get_save_data())
+        report = load_mission22_comparison_check()
+        if (
+            not report
+            or report.get('mission_id') != '22'
+            or report.get('check_version') != MISSION22_CHECK_VERSION
+        ):
+            self.failed.play()
+            animation_text_save('Record the two current-format Mission 22 runs first.', time=3000)
+            return
+        if not report.get('all_runs_recorded'):
+            self.failed.play()
+            animation_text_save('Record both the environmental and genetic interventions.', time=3000)
+            return
+        if not report.get('same_base_protocol'):
+            self.failed.play()
+            animation_text_save('The two runs do not preserve the shared controlled protocol.', time=3000)
+            return
+        if not report.get('relationship_supported'):
+            self.failed.play()
+            animation_text_save('The visible outputs do not support the required equivalence audit yet.', time=3000)
+            return
+        if normalise_mission22_answer(answer) is None:
+            self.failed.play()
+            animation_text_save('Enter one unambiguous numerical count only.', time=2800)
+            return
+        if not mission22_answer_matches(answer, report):
+            self.failed.play()
+            animation_text_save('That count is not supported by the recorded output differences.', time=3000)
             return
 
-        self.failed.play()
-        if not report_data.get('baseline_run_found'):
-            animation_text_save('Missing baseline. Run normal FBA, no knockouts, unchanged environment.', time=3000)
-        elif not report_data.get('knockout_run_found'):
-            animation_text_save(f'Missing knockout run. Turn off only {MISSION22_TARGET_GENE} and run again.', time=3000)
-        elif not report_data.get('target_flux_tracked'):
-            animation_text_save(f'Track {MISSION22_TARGET_FLUX} in Production Flux for both runs.', time=3000)
-        elif not report_data.get('production_increased'):
-            animation_text_save('The ethanol increase is not clear enough yet.', time=3000)
-        elif not report_data.get('growth_ok'):
-            animation_text_save('The knockout design does not remain viable enough.', time=3000)
-        else:
-            animation_text_save('Almost there. Open Compare Runs and check the knockout comparison.', time=3000)
+        self.success.play()
+        if '22' not in self.missions_completed:
+            self.missions_completed.insert(0, '22')
+        animation_text_save('Congratulations! Mission 22 completed!', time=2500)
+        save_file(self.player.get_save_data())
 
     def input(self):
         keys = pygame.key.get_pressed()
