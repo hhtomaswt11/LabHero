@@ -407,76 +407,7 @@ def _build_bound_sweep_report_text(sweep_data):
 
 
 def _build_mission26_text(report_data):
-    if not report_data:
-        return 'Mission 26 Oxygen Sweep Check\n\nRun a Bound Sweep to generate the mission report.'
-
-    if report_data.get('error') and not report_data.get('sweep_data'):
-        return f"Mission 26 Oxygen Sweep Check\nError: {report_data.get('error')}"
-
-    clean_status = (
-        'Base setup: clean sensitivity setup detected.'
-        if report_data.get('clean_base_setup')
-        else 'Base setup: keep FBA, biomass objective, no knockouts and unchanged environment.'
-    )
-    sweep_status = (
-        'Sweep variable: oxygen lower-bound sweep selected.'
-        if report_data.get('oxygen_sweep_selected')
-        else 'Sweep variable: select the oxygen lower bound in Bound Sweep Setup.'
-    )
-    points_status = (
-        'Sweep points: all required values returned valid results.'
-        if report_data.get('all_points_valid')
-        else 'Sweep points: not enough valid points were returned.'
-    )
-    growth_status = (
-        'Growth trend: growth decreases as oxygen becomes limited.'
-        if report_data.get('growth_decreased')
-        else 'Growth trend: the drop is not clear enough yet.'
-    )
-    oxygen_status = (
-        'Oxygen trend: oxygen uptake decreases across the sweep.'
-        if report_data.get('oxygen_uptake_decreased')
-        else 'Oxygen trend: uptake did not decrease clearly.'
-    )
-    profile_status = (
-        'Product profile: enough tracked products/byproducts changed.'
-        if report_data.get('profile_changed')
-        else 'Product profile: not enough tracked products/byproducts changed yet.'
-    )
-    final_status = (
-        'Oxygen sensitivity sweep ready. Return to Dr. Luna and deliver it.'
-        if report_data.get('ready_to_deliver')
-        else 'Not ready yet. Open the Bound Sweep Report and inspect the trend.'
-    )
-
-    changed_fluxes = report_data.get('changed_fluxes') or []
-    changed_text = ', '.join(changed_fluxes) if changed_fluxes else 'none'
-
-    return (
-        'Mission 26 Oxygen Sweep Check\n\n'
-        f"Context: {report_data.get('target_context')}\n"
-        f"Variable: {report_data.get('sweep_reaction')} {report_data.get('sweep_bound')} bound\n"
-        f"Values tested: {', '.join(str(v).rstrip('0').rstrip('.') for v in report_data.get('sweep_values') or [])}\n"
-        f"Valid points: {report_data.get('valid_point_count')}\n\n"
-        f"Growth trend:\n"
-        f"- First point growth: {_format_sweep_number(report_data.get('first_growth'))}\n"
-        f"- Last point growth: {_format_sweep_number(report_data.get('last_growth'))}\n"
-        f"- Growth drop: {_format_sweep_number(report_data.get('growth_drop'))}\n"
-        f"- Required minimum drop: {_format_sweep_number(report_data.get('minimum_growth_drop'))}\n\n"
-        f"Oxygen trend:\n"
-        f"- First point O2 uptake: {_format_sweep_number(report_data.get('first_oxygen_uptake'))}\n"
-        f"- Last point O2 uptake: {_format_sweep_number(report_data.get('last_oxygen_uptake'))}\n"
-        f"- O2 uptake drop: {_format_sweep_number(report_data.get('oxygen_uptake_drop'))}\n\n"
-        f"Changed tracked fluxes: {changed_text}\n"
-        f"Changed flux count: {report_data.get('changed_flux_count', 0)} / {report_data.get('minimum_changed_fluxes')}\n\n"
-        f"{clean_status}\n"
-        f"{sweep_status}\n"
-        f"{points_status}\n"
-        f"{growth_status}\n"
-        f"{oxygen_status}\n"
-        f"{profile_status}\n\n"
-        f"{final_status}"
-    )
+    return build_mission26_interaction_report_text(report_data)
 
 def _visible_biomass_flux(results):
     """Read predicted biomass from the same visible simulation solution."""
@@ -1074,6 +1005,7 @@ class Window:
             ('19', [MISSION19_TARGET_GENE]),
             ('22', list(MISSION22_TARGET_GENES)),
             ('25', [MISSION25_TARGET_GENE]),
+            ('26', [MISSION26_TARGET_GENE]),
         ]
         for mission_id, candidates in gene_mission_candidates:
             if mission_id in self.player.missions_activated and mission_id not in self.player.missions_completed:
@@ -1391,7 +1323,7 @@ class Window:
             items=[
                 ('Ammonium sensitivity: -5, -4, -2, -1', 'ammonium_sensitivity'),
                 ('CO2 export capacity: 25, 20, 10, 0', 'co2_export_capacity'),
-                ('O2 transition: -20, -10, -5, 0', 'oxygen_transition'),
+                ('O2 genotype interaction: -25, -10, -1, 0', 'oxygen_transition'),
                 ('Glucose limitation: -1000, -500, -100, -50, -10, 0', 'glucose_limitation'),
                 ('Alternative carbon: -20, -10, -5, -1, 0', 'alternative_carbon_limitation'),
             ],
@@ -1404,7 +1336,7 @@ class Window:
         )
         menu_bound_sweep.add.vertical_margin(20)
         menu_bound_sweep.add.label(
-            "Dr. Luna note: follow the active mission setup first, then select the requested sweep. Some missions need a clean base setup; harder missions may ask for one controlled medium change before the sweep.",
+            "Active-mission note: follow the current scientist briefing before selecting a sweep. Some missions require one curve; advanced missions may require matched curves under different genotypes or base conditions.",
             wordwrap=True,
             padding=(20, 20, 20, 20),
             background_color='white',
@@ -1546,14 +1478,14 @@ class Window:
             mission26_data = None
             mission27_data = None
             mission28_data = None
-            luna_sweep_active = (
+            bound_sweep_mission_active = (
                 ('23' in self.player.missions_activated and '23' not in self.player.missions_completed)
                 or ('24' in self.player.missions_activated and '24' not in self.player.missions_completed)
                 or ('26' in self.player.missions_activated and '26' not in self.player.missions_completed)
                 or ('27' in self.player.missions_activated and '27' not in self.player.missions_completed)
                 or ('28' in self.player.missions_activated and '28' not in self.player.missions_completed)
             )
-            if luna_sweep_active:
+            if bound_sweep_mission_active:
                 if sys.platform == 'emscripten':
                     bound_sweep_data = run_bound_sweep_remote(
                         BACKEND_URL, menu_bound_sweep.get_input_data()
@@ -1576,7 +1508,12 @@ class Window:
                     else:
                         mission24_data = run_mission24_export_capacity_check(bound_sweep_data)
                 if '26' in self.player.missions_activated and '26' not in self.player.missions_completed:
-                    mission26_data = run_mission26_bound_sweep_check(bound_sweep_data)
+                    if sys.platform == 'emscripten':
+                        mission26_data = run_mission26_interaction_curve_check_remote(
+                            BACKEND_URL, bound_sweep_data
+                        )
+                    else:
+                        mission26_data = run_mission26_interaction_curve_check(bound_sweep_data)
                 if '27' in self.player.missions_activated and '27' not in self.player.missions_completed:
                     mission27_data = run_mission27_bound_sweep_check(bound_sweep_data)
                 if '28' in self.player.missions_activated and '28' not in self.player.missions_completed:

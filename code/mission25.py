@@ -8,6 +8,7 @@ from options_values import mytheme
 from functions import animation_text_save
 from button import Button
 from async_menu import run_menu
+from mission26 import Mission26_info
 from utils import *
 from simulation import (
     MISSION25_CHECK_VERSION,
@@ -37,6 +38,7 @@ class Mission25:
         self.font_name = pygame.font.Font(font_path, 24)
         self.timer = Timer(200)
         self.menu25 = Mission25_info(self.toggle_menu, self.player)
+        self.menu26 = Mission26_info(self.toggle_menu, self.player)
         self.pending = None
 
     def input(self):
@@ -61,15 +63,29 @@ class Mission25:
             "Complete every cell of the oxygen-by-genotype matrix.",
             "Return when the visible evidence supports one context-dependent conclusion.",
         ]
-        completed_dialogue = [
+        intro26_dialogue = [
             f"Good work, {self.player.player_name}.",
-            "You separated a model- and context-specific gene effect from a universal claim.",
-            "My next experiment will build on that conditional dependency.",
+            "Mission 25 showed that the same knockout depends strongly on oxygen context.",
+            "Mission 26 extends those endpoints into matched wild-type and knockout curves.",
+        ]
+        active26_dialogue = [
+            "Mission 26 is active.",
+            "Record one oxygen Bound Sweep for wild type and one for the b3956 knockout.",
+            "Return when the matched curves support a threshold conclusion.",
+        ]
+        completed26_dialogue = [
+            f"Excellent work, {self.player.player_name}.",
+            "You distinguished a gradual response from a genotype-specific collapse threshold.",
+            "Dr. Ribeiro will continue the campaign in Mission 27.",
         ]
 
         self.input()
-        if '25' in self.missions_completed:
-            self.menu_message(completed_dialogue, buttons=False)
+        if '26' in self.missions_completed:
+            self.menu_message(completed26_dialogue, buttons=False)
+        elif '26' in self.missions_activated:
+            self.menu_message(active26_dialogue, menu_to_open=self.menu26)
+        elif '25' in self.missions_completed:
+            self.menu_message(intro26_dialogue, menu_to_open=self.menu26)
         elif '25' in self.missions_activated:
             self.menu_message(active_dialogue, menu_to_open=self.menu25)
         elif is_mission25_unlocked(self.missions_completed):

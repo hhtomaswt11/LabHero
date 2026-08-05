@@ -168,6 +168,31 @@ class Mission23RegressionTests(unittest.TestCase):
         self.assertEqual(config['preset'], 'ammonium_sensitivity')
         self.assertEqual(config['values'], self.VALUES)
 
+    def test_sweep_menu_preserves_mismatched_recognised_preset_values(self):
+        menu_data = {
+            'sweep_variable': [[('Ammonium lower bound (EX_nh4_e)', 'EX_nh4_e:lower')]],
+            'sweep_values': [[('O2 genotype interaction', 'oxygen_transition')]],
+        }
+        config = simulation._normalise_sweep_config(menu_data)
+        self.assertEqual(config['reaction_id'], 'EX_nh4_e')
+        self.assertEqual(config['preset'], 'oxygen_transition')
+        self.assertEqual(config['expected_preset'], 'ammonium_sensitivity')
+        self.assertFalse(config['preset_matches_variable'])
+        self.assertEqual(config['values'], simulation.MISSION26_SWEEP_VALUES)
+
+        valid = self._build()
+        invalid_sweep = self._sweep(values=config['values'], rows=[])
+        invalid_sweep.update({
+            'variable': config['variable'],
+            'preset': config['preset'],
+            'expected_preset': config['expected_preset'],
+            'preset_matches_variable': config['preset_matches_variable'],
+        })
+        invalid = self._build(invalid_sweep, existing=valid)
+        self.assertFalse(invalid['current_sweep_recorded'])
+        self.assertTrue(invalid['evidence_ready'])
+        self.assertIn('four required ammonium', ' '.join(invalid['current_issues']))
+
     def test_default_environment_reader_is_order_independent(self):
         reactions = simulation._build_default_reactions_data()
         expected = simulation._mission23_base_environment_status(reactions)

@@ -149,6 +149,31 @@ class Mission24RegressionTests(unittest.TestCase):
             ['EX_co2_e', 'EX_for_e', 'EX_ac_e'],
         )
 
+    def test_sweep_menu_preserves_mismatched_recognised_preset_values(self):
+        menu_data = {
+            'sweep_variable': [[('CO2 upper bound (EX_co2_e)', 'EX_co2_e:upper')]],
+            'sweep_values': [[('Ammonium sensitivity', 'ammonium_sensitivity')]],
+        }
+        config = simulation._normalise_sweep_config(menu_data)
+        self.assertEqual(config['reaction_id'], 'EX_co2_e')
+        self.assertEqual(config['preset'], 'ammonium_sensitivity')
+        self.assertEqual(config['expected_preset'], 'co2_export_capacity')
+        self.assertFalse(config['preset_matches_variable'])
+        self.assertEqual(config['values'], simulation.MISSION23_SWEEP_VALUES)
+
+        valid = self._build()
+        invalid_sweep = self._sweep(values=config['values'], rows=[])
+        invalid_sweep.update({
+            'variable': config['variable'],
+            'preset': config['preset'],
+            'expected_preset': config['expected_preset'],
+            'preset_matches_variable': config['preset_matches_variable'],
+        })
+        invalid = self._build(invalid_sweep, existing=valid)
+        self.assertFalse(invalid['current_sweep_recorded'])
+        self.assertTrue(invalid['evidence_ready'])
+        self.assertIn('four required CO2', ' '.join(invalid['current_issues']))
+
     def test_valid_sweep_records_complete_relationship(self):
         report = self._build()
         self.assertTrue(report['current_sweep_valid'])

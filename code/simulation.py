@@ -779,19 +779,38 @@ MISSION25_EXPECTED_GLUCOSE_CAPACITY = 10.0
 MISSION25_GLUCOSE_CAPACITY_TOLERANCE = 0.01
 MISSION25_MIN_AEROBIC_OXYGEN_UPTAKE = 1.0
 
+# Mission 26 completes Dr. Smith's laboratory by extending Mission 25 from
+# two endpoint contexts to two matched oxygen-response curves.  The validator
+# consumes only the visible Bound Sweep rows and preserves valid WT/KO curves
+# independently; it never launches a hidden simulation.
+MISSION26_CHECK_VERSION = 2
 MISSION26_METHOD = 'FBA'
 MISSION26_GROWTH_OBJECTIVE = 'BIOMASS_Ecoli_core_w_GAM'
-MISSION26_TARGET_CONTEXT = 'oxygen sensitivity sweep: aerobic to anaerobic transition'
+MISSION26_TARGET_CONTEXT = 'matched wild-type and b3956 oxygen-response curves'
+MISSION26_TARGET_GENE = MISSION25_TARGET_GENE
+MISSION26_TARGET_GENE_NAME = MISSION25_TARGET_GENE_NAME
 MISSION26_SWEEP_REACTION = 'EX_o2_e'
 MISSION26_SWEEP_REACTION_NAME = 'Oxygen exchange'
 MISSION26_SWEEP_BOUND = 'lower'
 MISSION26_SWEEP_BOUND_LABEL = 'lower bound'
-MISSION26_SWEEP_VALUES = [-20.0, -10.0, -5.0, 0.0]
-MISSION26_REQUIRED_TRACKED_FLUXES = ['EX_ac_e', 'EX_etoh_e', 'EX_for_e', 'EX_lac__D_e', 'EX_succ_e']
-MISSION26_MIN_GROWTH_DROP = 0.5
-MISSION26_MIN_PROFILE_CHANGE = 1.0
-MISSION26_MIN_CHANGED_FLUXES = 2
-MISSION26_MIN_VALID_POINTS = 4
+MISSION26_SWEEP_VALUES = [-25.0, -10.0, -1.0, 0.0]
+MISSION26_NON_BINDING_BOUND = -25.0
+MISSION26_GLUCOSE_REACTION = 'EX_glc__D_e'
+MISSION26_OXYGEN_REACTION = 'EX_o2_e'
+MISSION26_REQUIRED_MEDIUM_FLUXES = [MISSION26_GLUCOSE_REACTION, MISSION26_OXYGEN_REACTION]
+MISSION26_EXPECTED_SCORE_NAME = 'primary_objective_flux'
+MISSION26_EXPECTED_GLUCOSE_UPTAKE = 10.0
+MISSION26_GLUCOSE_TOLERANCE = 0.05
+MISSION26_BOUND_TOLERANCE = 0.05
+MISSION26_NON_BINDING_MARGIN = 0.5
+MISSION26_MIN_OXYGEN_UPTAKE = 1.0
+MISSION26_MIN_VIABLE_GROWTH = 0.05
+MISSION26_MIN_POSITIVE_OXYGEN_RETENTION = 0.90
+MISSION26_MAX_COLLAPSED_GROWTH = 0.001
+MISSION26_MAX_COLLAPSED_RETENTION = 0.01
+MISSION26_MONOTONIC_TOLERANCE = 0.001
+MISSION26_FLUX_TOLERANCE = 0.01
+MISSION26_PRIMARY_TOLERANCE = 0.001
 
 MISSION27_METHOD = 'FBA'
 MISSION27_GROWTH_OBJECTIVE = 'BIOMASS_Ecoli_core_w_GAM'
@@ -14091,12 +14110,26 @@ def _normalise_sweep_config(sweep_menu_data=None):
         'glucose_limitation': list(MISSION27_SWEEP_VALUES),
         'alternative_carbon_limitation': list(MISSION28_SWEEP_VALUES),
     }
-    config = sweep_options.get(variable, sweep_options[f'{MISSION23_SWEEP_REACTION}:lower']).copy()
-    if preset not in preset_values or preset != config['default_preset']:
-        preset = config['default_preset']
+    resolved_variable = (
+        variable if variable in sweep_options
+        else f'{MISSION23_SWEEP_REACTION}:lower'
+    )
+    config = sweep_options[resolved_variable].copy()
+    expected_preset = config['default_preset']
+
+    # Preserve every recognised preset selected by the player.  A preset can be
+    # scientifically incompatible with the selected reaction, but silently
+    # replacing it with the reaction default would make an invalid visible setup
+    # execute as a valid experiment.  Mission validators must receive the exact
+    # values that were shown and selected in the Bound Sweep menu.
+    if preset not in preset_values:
+        preset = expected_preset
+
     return {
-        'variable': variable if variable in sweep_options else f'{MISSION23_SWEEP_REACTION}:lower',
+        'variable': resolved_variable,
         'preset': preset,
+        'expected_preset': expected_preset,
+        'preset_matches_variable': preset == expected_preset,
         'reaction_id': config.get('reaction_id'),
         'reaction_name': config.get('reaction_name'),
         'bound': config.get('bound'),
@@ -14219,6 +14252,8 @@ def _new_bound_sweep_data(method_name, objective_name, genes, reactions, config,
         'base_reactions': copy.deepcopy(reactions),
         'variable': config.get('variable'),
         'preset': config.get('preset'),
+        'expected_preset': config.get('expected_preset'),
+        'preset_matches_variable': bool(config.get('preset_matches_variable')),
         'reaction_id': config.get('reaction_id'),
         'reaction_name': config.get('reaction_name'),
         'bound': config.get('bound'),
@@ -14352,106 +14387,547 @@ def _selected_fluxes_include(required_fluxes, selected_fluxes):
     selected_fluxes = selected_fluxes or []
     return all(reaction_id in selected_fluxes for reaction_id in required_fluxes)
 
-def _build_mission26_data(sweep_data=None, error=None):
-    sweep_data = sweep_data or load_bound_sweep() or {}
-    rows = sweep_data.get('rows') or []
-    valid_rows = [row for row in rows if row.get('status') == 'ok']
+def is_mission26_unlocked(missions_completed):
+    """Mission 26 is Dr. Smith's second task and follows Mission 25."""
+    return '25' in (missions_completed or [])
 
-    clean_base_setup = (
-        sweep_data.get('method') == MISSION26_METHOD
-        and sweep_data.get('objective') == MISSION26_GROWTH_OBJECTIVE
-        and not sweep_data.get('knocked_out_genes')
-        and not sweep_data.get('environment_changed')
-    )
 
-    expected_values = [float(value) for value in MISSION26_SWEEP_VALUES]
-    got_values = [float(value) for value in (sweep_data.get('values') or [])]
-    oxygen_sweep_selected = (
-        sweep_data.get('reaction_id') == MISSION26_SWEEP_REACTION
-        and sweep_data.get('bound') == MISSION26_SWEEP_BOUND
-        and got_values == expected_values
-    )
+def _mission26_clean_number(value):
+    numeric = float(value)
+    if abs(numeric) < DISPLAY_ZERO_TOLERANCE:
+        numeric = 0.0
+    return round(numeric, 6)
 
-    all_points_valid = len(valid_rows) >= MISSION26_MIN_VALID_POINTS
 
-    first_row = valid_rows[0] if valid_rows else None
-    last_row = valid_rows[-1] if valid_rows else None
-    first_growth = _row_value(first_row, 'growth_value') if first_row else 0.0
-    last_growth = _row_value(last_row, 'growth_value') if last_row else 0.0
-    growth_drop = round(first_growth - last_growth, 3) if valid_rows else 0.0
-    growth_decreased = growth_drop >= MISSION26_MIN_GROWTH_DROP
+def _mission26_number_or_none(value):
+    numeric = _as_float_or_none(value)
+    return _mission26_clean_number(numeric) if numeric is not None else None
 
-    first_oxygen = _row_value(first_row, 'oxygen_uptake') if first_row else 0.0
-    last_oxygen = _row_value(last_row, 'oxygen_uptake') if last_row else 0.0
-    oxygen_uptake_drop = round(first_oxygen - last_oxygen, 3) if valid_rows else 0.0
-    oxygen_uptake_decreased = oxygen_uptake_drop > 0.001
 
-    profile_differences = {}
-    changed_fluxes = []
-    if first_row and last_row:
-        first_fluxes = first_row.get('tracked_flux_values') or {}
-        last_fluxes = last_row.get('tracked_flux_values') or {}
-        for reaction_id in MISSION26_REQUIRED_TRACKED_FLUXES:
-            difference = round(float(last_fluxes.get(reaction_id, 0.0)) - float(first_fluxes.get(reaction_id, 0.0)), 3)
-            profile_differences[reaction_id] = difference
-            if abs(difference) >= MISSION26_MIN_PROFILE_CHANGE:
-                changed_fluxes.append(reaction_id)
+def _mission26_value_key(value):
+    numeric = _as_float_or_none(value)
+    return round(float(numeric), 6) if numeric is not None else None
 
-    profile_changed = len(changed_fluxes) >= MISSION26_MIN_CHANGED_FLUXES
 
-    mission26_data = {
+def _mission26_base_environment_status(reactions):
+    """Require a complete model-default base environment, independent of key order."""
+    return _mission23_base_environment_status(reactions)
+
+
+def _mission26_empty_report():
+    return {
         'mission_id': '26',
-        'check_version': 1,
-        'mission_title': 'Oxygen Sensitivity Sweep',
+        'check_version': MISSION26_CHECK_VERSION,
+        'mission_title': 'Genotype-Environment Interaction Curve',
         'target_context': MISSION26_TARGET_CONTEXT,
         'target_method': MISSION26_METHOD,
         'growth_objective': MISSION26_GROWTH_OBJECTIVE,
+        'target_gene': MISSION26_TARGET_GENE,
+        'target_gene_name': MISSION26_TARGET_GENE_NAME,
         'sweep_reaction': MISSION26_SWEEP_REACTION,
         'sweep_bound': MISSION26_SWEEP_BOUND,
-        'sweep_values': expected_values,
-        'required_tracked_fluxes': MISSION26_REQUIRED_TRACKED_FLUXES,
-        'minimum_growth_drop': MISSION26_MIN_GROWTH_DROP,
-        'minimum_profile_change': MISSION26_MIN_PROFILE_CHANGE,
-        'minimum_changed_fluxes': MISSION26_MIN_CHANGED_FLUXES,
-        'sweep_data': sweep_data,
-        'clean_base_setup': clean_base_setup,
-        'oxygen_sweep_selected': oxygen_sweep_selected,
-        'valid_point_count': len(valid_rows),
-        'all_points_valid': all_points_valid,
-        'first_growth': round(first_growth, 3),
-        'last_growth': round(last_growth, 3),
-        'growth_drop': growth_drop,
-        'growth_decreased': growth_decreased,
-        'first_oxygen_uptake': round(first_oxygen, 3),
-        'last_oxygen_uptake': round(last_oxygen, 3),
-        'oxygen_uptake_drop': oxygen_uptake_drop,
-        'oxygen_uptake_decreased': oxygen_uptake_decreased,
-        'profile_differences': profile_differences,
-        'changed_fluxes': changed_fluxes,
-        'changed_flux_count': len(changed_fluxes),
-        'profile_changed': profile_changed,
-        'ready_to_deliver': (
-            clean_base_setup
-            and oxygen_sweep_selected
-            and all_points_valid
-            and growth_decreased
-            and oxygen_uptake_decreased
-            and profile_changed
-        ),
+        'required_bound_values': list(MISSION26_SWEEP_VALUES),
+        'required_medium_fluxes': list(MISSION26_REQUIRED_MEDIUM_FLUXES),
+        'wild_type_sweep': None,
+        'knockout_sweep': None,
+        'wild_type_sweep_rows': [],
+        'knockout_sweep_rows': [],
+        'recorded_sweep_count': 0,
+        'required_sweep_count': 2,
+        'missing_sweeps': ['wild_type', 'knockout'],
+        'curves_complete': False,
+        'matched_points_complete': False,
+        'growth_retention_by_bound': {},
+        'oxygen_binding_by_bound': {},
+        'wild_type_growth_monotonic': False,
+        'knockout_growth_monotonic': False,
+        'positive_oxygen_growth_retained': False,
+        'zero_bound_wild_type_viable': False,
+        'zero_bound_knockout_collapsed': False,
+        'interaction_threshold_supported': False,
+        'threshold_bound': None,
+        'evidence_ready': False,
+        'answer_ready': False,
+        'ready_to_deliver': False,
+        'current_sweep_type': None,
+        'current_sweep_valid': False,
+        'current_sweep_recorded': False,
+        'current_issues': [],
+        'latest_attempt': None,
     }
-    if error or sweep_data.get('error'):
-        mission26_data['error'] = error or sweep_data.get('error')
-    save_mission26_bound_sweep_check(mission26_data)
-    return mission26_data
 
 
+def initialise_mission26_interaction_curves():
+    report = _mission26_empty_report()
+    save_mission26_bound_sweep_check(report)
+    return report
+
+
+def _mission26_row_groups(rows):
+    grouped = {}
+    for row in rows or []:
+        key = _mission26_value_key(row.get('bound_value'))
+        if key is not None:
+            grouped.setdefault(key, []).append(row)
+    return grouped
+
+
+def _mission26_complete_numeric_mapping(mapping, required_ids):
+    if not isinstance(mapping, dict):
+        return False
+    return all(_as_float_or_none(mapping.get(reaction_id)) is not None for reaction_id in required_ids)
+
+
+def _mission26_validate_sweep(sweep_data):
+    """Validate one visible WT or b3956 oxygen sweep without invoking a solver."""
+    issues = []
+    if not isinstance(sweep_data, dict) or not sweep_data:
+        return None, [], ['Run one Mission 26 oxygen Bound Sweep before recording evidence.']
+    if sweep_data.get('error'):
+        issues.append(str(sweep_data.get('error')))
+
+    if sweep_data.get('method') != MISSION26_METHOD:
+        issues.append('Use FBA for both Mission 26 curves.')
+    if sweep_data.get('objective') != MISSION26_GROWTH_OBJECTIVE:
+        issues.append('Use the biomass objective for both Mission 26 curves.')
+
+    knocked_out_genes = sorted(set(sweep_data.get('knocked_out_genes') or []))
+    if not knocked_out_genes:
+        sweep_type = 'wild_type'
+    elif knocked_out_genes == [MISSION26_TARGET_GENE]:
+        sweep_type = 'knockout'
+    else:
+        sweep_type = None
+        issues.append(
+            f'Use either every gene active or only {MISSION26_TARGET_GENE} / '
+            f'{MISSION26_TARGET_GENE_NAME} knocked out.'
+        )
+
+    base_genes = sweep_data.get('base_genes') or {}
+    if not isinstance(base_genes, dict) or any(gene_id not in base_genes for gene_id in GENES):
+        issues.append('The explicit base-gene payload is incomplete.')
+    elif sorted(_knocked_out_genes(base_genes)) != knocked_out_genes:
+        issues.append('The reported knockout list does not match the visible base-gene configuration.')
+
+    environment = _mission26_base_environment_status(sweep_data.get('base_reactions') or {})
+    if not environment.get('bounds_complete'):
+        issues.append('The explicit base environmental-bound payload is incomplete.')
+    elif not environment.get('environment_default'):
+        issues.append('Keep every base environmental bound at the model default before both sweeps.')
+
+    if sweep_data.get('reaction_id') != MISSION26_SWEEP_REACTION or sweep_data.get('bound') != MISSION26_SWEEP_BOUND:
+        issues.append('Sweep only the lower bound of EX_o2_e.')
+
+    expected_keys = [_mission26_value_key(value) for value in MISSION26_SWEEP_VALUES]
+    got_keys = [_mission26_value_key(value) for value in (sweep_data.get('values') or [])]
+    if len(got_keys) != len(expected_keys) or sorted(value for value in got_keys if value is not None) != sorted(expected_keys):
+        issues.append('Use exactly the four oxygen lower-bound values: -25, -10, -1 and 0.')
+
+    row_groups = _mission26_row_groups(sweep_data.get('rows') or [])
+    normalised_rows = []
+    for bound_value in MISSION26_SWEEP_VALUES:
+        key = _mission26_value_key(bound_value)
+        candidates = row_groups.get(key) or []
+        if len(candidates) != 1:
+            if not candidates:
+                issues.append(f'Missing the visible sweep row for oxygen lower bound {bound_value:g}.')
+            else:
+                issues.append(f'Duplicate visible sweep rows were returned for oxygen lower bound {bound_value:g}.')
+            continue
+        row = candidates[0]
+        if row.get('status') != 'ok':
+            issues.append(f'The sweep row at oxygen lower bound {bound_value:g} did not return an optimal measurable result.')
+            continue
+
+        growth = _mission26_number_or_none(row.get('growth_value'))
+        objective_result = _mission26_number_or_none(row.get('objective_result'))
+        row_oxygen_uptake = _mission26_number_or_none(row.get('oxygen_uptake'))
+        raw_fluxes = row.get('exchange_raw_fluxes') or {}
+        diagnostics = row.get('method_diagnostics') or {}
+        if growth is None:
+            issues.append(f'Biomass is missing from the row at oxygen lower bound {bound_value:g}.')
+        if objective_result is None or growth is None or abs(float(objective_result) - float(growth)) > MISSION26_PRIMARY_TOLERANCE:
+            issues.append(f'The visible objective result does not match biomass at oxygen lower bound {bound_value:g}.')
+        if not _mission26_complete_numeric_mapping(raw_fluxes, MISSION26_REQUIRED_MEDIUM_FLUXES):
+            issues.append(f'Numeric glucose and oxygen exchange evidence is incomplete at oxygen lower bound {bound_value:g}.')
+
+        glucose_raw = _mission26_number_or_none(raw_fluxes.get(MISSION26_GLUCOSE_REACTION))
+        oxygen_raw = _mission26_number_or_none(raw_fluxes.get(MISSION26_OXYGEN_REACTION))
+        glucose_uptake = max(-float(glucose_raw), 0.0) if glucose_raw is not None else None
+        oxygen_uptake = max(-float(oxygen_raw), 0.0) if oxygen_raw is not None else None
+        tested_uptake = _mission26_number_or_none(row.get('tested_reaction_uptake'))
+
+        primary = _mission26_number_or_none(diagnostics.get('primary_objective_flux'))
+        method_score = _mission26_number_or_none(diagnostics.get('method_score'))
+        total_absolute_flux = _mission26_number_or_none(diagnostics.get('total_absolute_flux'))
+        active_reactions = diagnostics.get('active_reaction_count')
+        try:
+            active_reactions = int(active_reactions)
+        except Exception:
+            active_reactions = None
+
+        if diagnostics.get('method') != MISSION26_METHOD:
+            issues.append(f'The visible method diagnostics do not describe FBA at oxygen lower bound {bound_value:g}.')
+        if diagnostics.get('objective_reaction') != MISSION26_GROWTH_OBJECTIVE:
+            issues.append(f'The visible diagnostics use the wrong objective at oxygen lower bound {bound_value:g}.')
+        if diagnostics.get('method_score_name') != MISSION26_EXPECTED_SCORE_NAME:
+            issues.append(f'The FBA score label is missing at oxygen lower bound {bound_value:g}.')
+        if primary is None or growth is None or abs(float(primary) - float(growth)) > MISSION26_PRIMARY_TOLERANCE:
+            issues.append(f'The primary biomass flux does not match growth at oxygen lower bound {bound_value:g}.')
+        if method_score is None or primary is None or abs(float(method_score) - float(primary)) > MISSION26_PRIMARY_TOLERANCE:
+            issues.append(f'The FBA method score does not match the primary biomass flux at oxygen lower bound {bound_value:g}.')
+        if total_absolute_flux is None or active_reactions is None:
+            issues.append(f'Total flux or active-reaction diagnostics are missing at oxygen lower bound {bound_value:g}.')
+
+        if oxygen_uptake is not None and row_oxygen_uptake is not None:
+            if abs(float(oxygen_uptake) - float(row_oxygen_uptake)) > MISSION26_FLUX_TOLERANCE:
+                issues.append(f'The visible oxygen-uptake field does not match oxygen exchange at lower bound {bound_value:g}.')
+        elif oxygen_uptake is not None:
+            issues.append(f'The visible oxygen-uptake field is missing at lower bound {bound_value:g}.')
+        if oxygen_uptake is not None and tested_uptake is not None:
+            if abs(float(oxygen_uptake) - float(tested_uptake)) > MISSION26_FLUX_TOLERANCE:
+                issues.append(f'The tested-reaction uptake does not match oxygen exchange at lower bound {bound_value:g}.')
+        elif oxygen_uptake is not None:
+            issues.append(f'The tested oxygen-uptake value is missing at lower bound {bound_value:g}.')
+
+        if glucose_raw is not None:
+            if float(glucose_raw) > MISSION26_FLUX_TOLERANCE:
+                issues.append(f'The model is secreting rather than consuming glucose at oxygen lower bound {bound_value:g}.')
+            if growth is not None and float(growth) > MISSION26_MAX_COLLAPSED_GROWTH:
+                if abs(float(glucose_uptake) - MISSION26_EXPECTED_GLUCOSE_UPTAKE) > MISSION26_GLUCOSE_TOLERANCE:
+                    issues.append(f'Keep model-default glucose uptake at oxygen lower bound {bound_value:g}.')
+            elif float(glucose_uptake) > MISSION26_EXPECTED_GLUCOSE_UPTAKE + MISSION26_GLUCOSE_TOLERANCE:
+                issues.append(f'Glucose uptake exceeds the model-default capacity at oxygen lower bound {bound_value:g}.')
+
+        capacity = abs(float(bound_value))
+        if oxygen_uptake is not None:
+            if bound_value == MISSION26_NON_BINDING_BOUND:
+                if oxygen_uptake <= MISSION26_MIN_OXYGEN_UPTAKE:
+                    issues.append('The -25 reference row must retain measurable aerobic oxygen uptake.')
+                if oxygen_uptake >= capacity - MISSION26_NON_BINDING_MARGIN:
+                    issues.append('The -25 oxygen capacity should be non-binding in both curves.')
+            elif abs(float(oxygen_uptake) - capacity) > MISSION26_BOUND_TOLERANCE:
+                issues.append(f'Oxygen uptake should reach the tested capacity at lower bound {bound_value:g}.')
+
+        normalised_rows.append({
+            'bound_value': float(bound_value),
+            'growth_value': _mission26_clean_number(growth) if growth is not None else None,
+            'glucose_uptake': _mission26_clean_number(glucose_uptake) if glucose_uptake is not None else None,
+            'oxygen_uptake': _mission26_clean_number(oxygen_uptake) if oxygen_uptake is not None else None,
+            'method_diagnostics': {
+                'method': diagnostics.get('method'),
+                'objective_reaction': diagnostics.get('objective_reaction'),
+                'primary_objective_flux': _mission26_clean_number(primary) if primary is not None else None,
+                'method_score': _mission26_clean_number(method_score) if method_score is not None else None,
+                'method_score_name': diagnostics.get('method_score_name'),
+                'total_absolute_flux': _mission26_clean_number(total_absolute_flux) if total_absolute_flux is not None else None,
+                'active_reaction_count': active_reactions,
+            },
+        })
+
+    unexpected_keys = sorted(set(row_groups) - set(expected_keys))
+    if unexpected_keys:
+        issues.append('The visible sweep includes unexpected oxygen lower-bound rows.')
+
+    current_valid = bool(sweep_type and len(normalised_rows) == len(MISSION26_SWEEP_VALUES) and not issues)
+    normalised_sweep = None
+    if current_valid:
+        normalised_sweep = {
+            'sweep_type': sweep_type,
+            'method': MISSION26_METHOD,
+            'objective': MISSION26_GROWTH_OBJECTIVE,
+            'knocked_out_genes': [] if sweep_type == 'wild_type' else [MISSION26_TARGET_GENE],
+            'reaction_id': MISSION26_SWEEP_REACTION,
+            'bound': MISSION26_SWEEP_BOUND,
+            'values': list(MISSION26_SWEEP_VALUES),
+            'rows': normalised_rows,
+        }
+    return sweep_type, normalised_sweep, issues
+
+
+def _mission26_rows_by_bound(rows):
+    return {
+        _mission26_value_key(row.get('bound_value')): row
+        for row in rows or []
+        if _mission26_value_key(row.get('bound_value')) is not None
+    }
+
+
+def _mission26_curve_is_monotonic(rows):
+    values = [float(row.get('growth_value')) for row in rows or []]
+    return bool(values) and all(
+        after <= before + MISSION26_MONOTONIC_TOLERANCE
+        for before, after in zip(values, values[1:])
+    )
+
+
+def _mission26_relationship(wild_type_sweep, knockout_sweep):
+    empty = {
+        'matched_points_complete': False,
+        'growth_retention_by_bound': {},
+        'oxygen_binding_by_bound': {},
+        'wild_type_growth_monotonic': False,
+        'knockout_growth_monotonic': False,
+        'positive_oxygen_growth_retained': False,
+        'zero_bound_wild_type_viable': False,
+        'zero_bound_knockout_collapsed': False,
+        'interaction_threshold_supported': False,
+        'threshold_bound': None,
+    }
+    if not wild_type_sweep or not knockout_sweep:
+        return empty
+
+    wt_rows = _mission26_rows_by_bound(wild_type_sweep.get('rows') or [])
+    ko_rows = _mission26_rows_by_bound(knockout_sweep.get('rows') or [])
+    expected_keys = [_mission26_value_key(value) for value in MISSION26_SWEEP_VALUES]
+    matched = all(key in wt_rows and key in ko_rows for key in expected_keys)
+    if not matched:
+        return empty
+
+    retention = {}
+    binding = {}
+    for bound_value in MISSION26_SWEEP_VALUES:
+        key = _mission26_value_key(bound_value)
+        wt = wt_rows[key]
+        ko = ko_rows[key]
+        wt_growth = float(wt.get('growth_value'))
+        ko_growth = float(ko.get('growth_value'))
+        retention[str(float(bound_value))] = round(ko_growth / wt_growth, 6) if wt_growth > MISSION26_FLUX_TOLERANCE else None
+        capacity = abs(float(bound_value))
+        binding[str(float(bound_value))] = {
+            'wild_type': bool(bound_value != MISSION26_NON_BINDING_BOUND and abs(float(wt.get('oxygen_uptake')) - capacity) <= MISSION26_BOUND_TOLERANCE),
+            'knockout': bool(bound_value != MISSION26_NON_BINDING_BOUND and abs(float(ko.get('oxygen_uptake')) - capacity) <= MISSION26_BOUND_TOLERANCE),
+        }
+
+    positive_bounds = [value for value in MISSION26_SWEEP_VALUES if value < 0]
+    positive_retained = all(
+        float(wt_rows[_mission26_value_key(value)].get('growth_value')) >= MISSION26_MIN_VIABLE_GROWTH
+        and float(ko_rows[_mission26_value_key(value)].get('growth_value')) >= MISSION26_MIN_VIABLE_GROWTH
+        and float(retention[str(float(value))]) >= MISSION26_MIN_POSITIVE_OXYGEN_RETENTION
+        for value in positive_bounds
+    )
+    zero_key = _mission26_value_key(0.0)
+    zero_wt_viable = float(wt_rows[zero_key].get('growth_value')) >= MISSION26_MIN_VIABLE_GROWTH
+    zero_ko_collapsed = (
+        float(ko_rows[zero_key].get('growth_value')) <= MISSION26_MAX_COLLAPSED_GROWTH
+        and float(retention[str(0.0)]) <= MISSION26_MAX_COLLAPSED_RETENTION
+    )
+    wt_monotonic = _mission26_curve_is_monotonic([wt_rows[key] for key in expected_keys])
+    ko_monotonic = _mission26_curve_is_monotonic([ko_rows[key] for key in expected_keys])
+    nonbinding = all(
+        float(rows[_mission26_value_key(MISSION26_NON_BINDING_BOUND)].get('oxygen_uptake'))
+        < abs(MISSION26_NON_BINDING_BOUND) - MISSION26_NON_BINDING_MARGIN
+        for rows in (wt_rows, ko_rows)
+    )
+    threshold_supported = bool(
+        matched and positive_retained and zero_wt_viable and zero_ko_collapsed
+        and wt_monotonic and ko_monotonic and nonbinding
+    )
+    return {
+        'matched_points_complete': matched,
+        'growth_retention_by_bound': retention,
+        'oxygen_binding_by_bound': binding,
+        'wild_type_growth_monotonic': wt_monotonic,
+        'knockout_growth_monotonic': ko_monotonic,
+        'positive_oxygen_growth_retained': positive_retained,
+        'zero_bound_wild_type_viable': zero_wt_viable,
+        'zero_bound_knockout_collapsed': zero_ko_collapsed,
+        'interaction_threshold_supported': threshold_supported,
+        'threshold_bound': 0.0 if threshold_supported else None,
+    }
+
+
+def _build_mission26_data(sweep_data=None, existing_report=None):
+    existing_report = existing_report or {}
+    if existing_report.get('mission_id') != '26' or existing_report.get('check_version') != MISSION26_CHECK_VERSION:
+        existing_report = _mission26_empty_report()
+
+    sweep_type, normalised_sweep, issues = _mission26_validate_sweep(sweep_data)
+    current_valid = normalised_sweep is not None and not issues
+    current_recorded = False
+
+    wild_type_sweep = copy.deepcopy(existing_report.get('wild_type_sweep'))
+    knockout_sweep = copy.deepcopy(existing_report.get('knockout_sweep'))
+    if current_valid and sweep_type == 'wild_type':
+        wild_type_sweep = normalised_sweep
+        current_recorded = True
+    elif current_valid and sweep_type == 'knockout':
+        knockout_sweep = normalised_sweep
+        current_recorded = True
+
+    curves_complete = bool(wild_type_sweep and knockout_sweep)
+    relation = _mission26_relationship(wild_type_sweep, knockout_sweep)
+    evidence_ready = bool(curves_complete and relation.get('interaction_threshold_supported'))
+    missing_sweeps = []
+    if not wild_type_sweep:
+        missing_sweeps.append('wild_type')
+    if not knockout_sweep:
+        missing_sweeps.append('knockout')
+
+    report = _mission26_empty_report()
+    report.update({
+        'wild_type_sweep': wild_type_sweep,
+        'knockout_sweep': knockout_sweep,
+        'wild_type_sweep_rows': copy.deepcopy((wild_type_sweep or {}).get('rows') or []),
+        'knockout_sweep_rows': copy.deepcopy((knockout_sweep or {}).get('rows') or []),
+        'recorded_sweep_count': int(bool(wild_type_sweep)) + int(bool(knockout_sweep)),
+        'missing_sweeps': missing_sweeps,
+        'curves_complete': curves_complete,
+        **relation,
+        'evidence_ready': evidence_ready,
+        'answer_ready': evidence_ready,
+        'ready_to_deliver': evidence_ready,
+        'current_sweep_type': sweep_type,
+        'current_sweep_valid': current_valid,
+        'current_sweep_recorded': current_recorded,
+        'current_issues': list(issues),
+        'latest_attempt': {
+            'sweep_type': sweep_type,
+            'values': list((sweep_data or {}).get('values') or []),
+            'valid': current_valid,
+            'recorded': current_recorded,
+            'issues': list(issues),
+        },
+    })
+    save_mission26_bound_sweep_check(report)
+    return report
+
+
+def run_mission26_interaction_curve_check(sweep_data=None):
+    """Validate one visible sweep and preserve any previously valid companion curve."""
+    if sweep_data is None:
+        sweep_data = load_bound_sweep()
+    return _build_mission26_data(
+        sweep_data=sweep_data,
+        existing_report=load_mission26_bound_sweep_check() or {},
+    )
+
+
+def run_mission26_interaction_curve_check_remote(backend_url, sweep_data=None):
+    """Browser parity wrapper: the remote solver has already produced the visible rows."""
+    del backend_url
+    return run_mission26_interaction_curve_check(sweep_data)
+
+
+# Backwards-compatible alias retained for older window imports and saves.
 def run_mission26_bound_sweep_check(sweep_data=None):
-    sweep_data = sweep_data or load_bound_sweep()
-    if not sweep_data or not sweep_data.get('rows'):
-        return _build_mission26_data(sweep_data, error='Run a Bound Sweep before delivering Mission 26.')
-    return _build_mission26_data(sweep_data)
+    return run_mission26_interaction_curve_check(sweep_data)
 
 
+def normalise_mission26_answer(answer):
+    text = unicodedata.normalize('NFKD', str(answer or '')).encode('ascii', 'ignore').decode('ascii').lower().strip()
+    if re.search(r'(?<![\d.])0(?:\.0+)?(?![\d.])', text):
+        return 0.0
+    accepted_phrases = (
+        'zero',
+        'lower bound zero',
+        'lower bound at zero',
+        'lb zero',
+        'complete oxygen block',
+        'oxygen blocked',
+        'full oxygen block',
+        'full block',
+        'bloqueio completo',
+        'oxigenio bloqueado',
+        'bloqueio de oxigenio',
+    )
+    if any(phrase in text for phrase in accepted_phrases):
+        return 0.0
+    return None
+
+
+def mission26_answer_matches(answer, report_data=None):
+    report_data = report_data if report_data is not None else (load_mission26_bound_sweep_check() or {})
+    return bool(
+        report_data.get('mission_id') == '26'
+        and report_data.get('check_version') == MISSION26_CHECK_VERSION
+        and report_data.get('answer_ready')
+        and report_data.get('interaction_threshold_supported')
+        and normalise_mission26_answer(answer) == 0.0
+    )
+
+
+def build_mission26_interaction_report_text(report):
+    if not report:
+        return (
+            'Prepare two matched oxygen-response curves for wild type and the highlighted b3956 / ppc knockout. '
+            'Keep the FBA biomass setup and base environment unchanged while sweeping only oxygen uptake capacity.\n\n'
+            'The visible rows must record growth, glucose uptake, oxygen uptake and FBA diagnostics at lower bounds -25, -10, -1 and 0. '
+            'Activate the mission when you are ready to construct both curves.'
+        )
+    if report.get('mission_id') != '26' or report.get('check_version') != MISSION26_CHECK_VERSION:
+        return 'Mission 26 Genotype-Environment Interaction Curve\n\nCurrent-format curve evidence has not been recorded yet.'
+
+    lines = [
+        'Mission 26 Genotype-Environment Interaction Curve',
+        '',
+        'Controlled matched protocol:',
+        '- FBA biomass objective; model-default base environment',
+        f'- Curves: wild type and single {MISSION26_TARGET_GENE} / {MISSION26_TARGET_GENE_NAME} knockout',
+        '- Sweep only the EX_o2_e lower bound: -25, -10, -1, 0',
+        '- Every row includes numeric glucose/oxygen exchange and FBA diagnostics',
+        '',
+        f"Curves recorded: {report.get('recorded_sweep_count', 0)}/{report.get('required_sweep_count', 2)}",
+    ]
+
+    def append_curve(title, rows):
+        lines.extend(['', title])
+        if not rows:
+            lines.append('- pending')
+            return
+        lines.append('LB | growth | glucose uptake | O2 uptake | total abs flux | active reactions')
+        for row in rows:
+            diagnostics = row.get('method_diagnostics') or {}
+            lines.append(
+                f"{float(row.get('bound_value')):.0f} | "
+                f"{float(row.get('growth_value')):.3f} | "
+                f"{float(row.get('glucose_uptake')):.3f} | "
+                f"{float(row.get('oxygen_uptake')):.3f} | "
+                f"{float(diagnostics.get('total_absolute_flux')):.3f} | "
+                f"{int(diagnostics.get('active_reaction_count'))}"
+            )
+
+    append_curve('Wild-type oxygen sweep:', report.get('wild_type_sweep_rows') or [])
+    append_curve(f'{MISSION26_TARGET_GENE} knockout oxygen sweep:', report.get('knockout_sweep_rows') or [])
+
+    retention = report.get('growth_retention_by_bound') or {}
+    if retention:
+        lines.extend(['', 'Knockout-to-wild-type growth retention:'])
+        for bound_value in MISSION26_SWEEP_VALUES:
+            value = retention.get(str(float(bound_value)))
+            lines.append(
+                f"- LB {bound_value:g}: {float(value) * 100.0:.1f}%"
+                if value is not None else f"- LB {bound_value:g}: unavailable"
+            )
+
+    if report.get('missing_sweeps'):
+        lines.append('Missing curves: ' + ', '.join(report.get('missing_sweeps') or []))
+
+    if report.get('current_sweep_recorded'):
+        lines.extend(['', f"Latest valid visible curve recorded: {report.get('current_sweep_type')}."])
+    elif report.get('current_issues'):
+        lines.extend(['', 'Latest sweep was not recorded:'])
+        lines.extend(f'- {issue}' for issue in report.get('current_issues') or [])
+        if report.get('wild_type_sweep') or report.get('knockout_sweep'):
+            lines.append('Previously valid Mission 26 curve evidence remains available.')
+
+    lines.append('')
+    if report.get('evidence_ready'):
+        lines.extend([
+            'Evidence complete.',
+            'Compare matched wild-type and knockout growth at every tested oxygen capacity.',
+            'Question: At which tested oxygen lower-bound value does knockout growth collapse while wild-type growth remains viable?',
+        ])
+    else:
+        lines.append('Evidence incomplete.')
+
+    lines.extend([
+        '',
+        'Interpretation note: the first point tests a non-binding oxygen capacity; the remaining points test progressively tighter capacities.',
+        'The threshold is conditional on this model, biomass objective, medium, genotype and tested bound values.',
+        'All growth, exchange and FBA diagnostic values come from the visible Bound Sweep results. No hidden validation simulation is used.',
+    ])
+    return '\n'.join(lines)
 
 def _build_mission27_data(sweep_data=None, error=None):
     sweep_data = sweep_data or load_bound_sweep() or {}
