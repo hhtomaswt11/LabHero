@@ -1,18 +1,16 @@
-Mission 26 — Genotype-Environment Interaction Curve
+LabHero — Mission 28 initial-description refinement
+Base archive: LabHero_chat(20260805-180906).zip
 
 Changed files:
-- MISSION_PROGRESS_OVERVIEW.md
-- PATCH_MANIFEST.txt
-- code/mission25.py
-- code/mission26.py
 - code/simulation.py
-- code/window.py
-- data/missions/mission26.md
-- tests/test_mission26.py
+  * Removes the duplicated "Mission 28 Bypass Dependency Mapping" title from the lower report area before evidence exists.
+  * Replaces the former one-line instruction with a fuller introduction covering the experimental objective, the controlled secondary-knockout screen, the evidence to compare, and the interpretation goal.
+  * Does not reveal the correct dependency candidate.
+- tests/test_mission28.py
+  * Adds a regression test confirming that the initial report text is detailed, does not repeat the mission title, and does not disclose the answer.
 
-The patch replaces the obsolete single wild-type oxygen sweep with two matched
-oxygen-response curves for wild type and b3956 / ppc knockout. It keeps the
-existing Tiled object Mission25 as the shared Dr. Smith interaction point and
-adds internal 25 -> 26 progression, robust accumulated JSON-safe evidence,
-answer interpretation, gene highlighting, local/browser parity and dedicated
-regression tests without changing Missions 1-25.
+No scientific rules, thresholds, mission state, progression, simulation behavior, web-service contract, or other missions were changed.
+
+Validation:
+- Python compilation: OK
+- Mission 28 tests: 46 tests, OK (1 solver/backend test skipped in the dependency-light validation mode)

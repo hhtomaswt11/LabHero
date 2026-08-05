@@ -812,41 +812,100 @@ MISSION26_MONOTONIC_TOLERANCE = 0.001
 MISSION26_FLUX_TOLERANCE = 0.01
 MISSION26_PRIMARY_TOLERANCE = 0.001
 
-MISSION27_METHOD = 'FBA'
+# Mission 27 opens Dr. Ribeiro's laboratory with a metabolic-rescue screen.
+# The validator accumulates two controlled references and five single-supplement
+# trials from already visible pFBA results.  It never launches a hidden solver.
+MISSION27_CHECK_VERSION = 2
+MISSION27_METHOD = 'pFBA'
 MISSION27_GROWTH_OBJECTIVE = 'BIOMASS_Ecoli_core_w_GAM'
-MISSION27_TARGET_CONTEXT = 'glucose sensitivity sweep: carbon limitation threshold'
-MISSION27_SWEEP_REACTION = 'EX_glc__D_e'
-MISSION27_SWEEP_REACTION_NAME = 'D-Glucose exchange'
-MISSION27_SWEEP_BOUND = 'lower'
-MISSION27_SWEEP_BOUND_LABEL = 'lower bound'
-MISSION27_SWEEP_VALUES = [-1000.0, -500.0, -100.0, -50.0, -10.0, 0.0]
-MISSION27_REQUIRED_TRACKED_FLUXES = ['EX_ac_e', 'EX_etoh_e', 'EX_for_e', 'EX_lac__D_e', 'EX_succ_e']
-MISSION27_MIN_GROWTH_DROP = 10.0
-MISSION27_MIN_UPTAKE_DROP = 100.0
-MISSION27_MAX_FINAL_GROWTH = 1.0
-MISSION27_MIN_PROFILE_CHANGE = 10.0
-MISSION27_MIN_CHANGED_FLUXES = 3
-MISSION27_MIN_RESULT_POINTS = 6
-MISSION27_MIN_DECREASING_STEPS = 3
+MISSION27_TARGET_CONTEXT = 'environmental bypass rescue of a gltA knockout'
+MISSION27_TARGET_GENE = 'b0720'
+MISSION27_TARGET_GENE_NAME = 'gltA'
+MISSION27_TARGET_REACTION = 'CS'
+MISSION27_GLUCOSE_REACTION = 'EX_glc__D_e'
+MISSION27_OXYGEN_REACTION = 'EX_o2_e'
+MISSION27_CANDIDATE_SUPPLEMENTS = [
+    'EX_akg_e',
+    'EX_pyr_e',
+    'EX_succ_e',
+    'EX_fum_e',
+    'EX_mal__L_e',
+]
+MISSION27_CANDIDATE_NAMES = {
+    'EX_akg_e': '2-Oxoglutarate',
+    'EX_pyr_e': 'Pyruvate',
+    'EX_succ_e': 'Succinate',
+    'EX_fum_e': 'Fumarate',
+    'EX_mal__L_e': 'L-Malate',
+}
+MISSION27_EXPECTED_RESCUE = 'EX_akg_e'
+MISSION27_REQUIRED_REFERENCE_COUNT = 2
+MISSION27_REQUIRED_CANDIDATE_COUNT = len(MISSION27_CANDIDATE_SUPPLEMENTS)
+MISSION27_REQUIRED_RUN_COUNT = MISSION27_REQUIRED_REFERENCE_COUNT + MISSION27_REQUIRED_CANDIDATE_COUNT
+MISSION27_EXPECTED_SCORE_NAME = 'total_absolute_flux'
+MISSION27_EXPECTED_DEFAULT_UPTAKE = 10.0
+MISSION27_EXPECTED_SUPPLEMENT_CAPACITY = 10.0
+MISSION27_MIN_REFERENCE_GROWTH = 0.5
+MISSION27_MAX_KNOCKOUT_GROWTH = 0.001
+MISSION27_MIN_RESCUE_GROWTH = 0.05
+MISSION27_MAX_NON_RESCUE_GROWTH = 0.001
+MISSION27_MIN_RESCUE_UPTAKE = 1.0
+MISSION27_MIN_AEROBIC_OXYGEN_UPTAKE = 1.0
+MISSION27_FLUX_TOLERANCE = 0.01
+MISSION27_PRIMARY_TOLERANCE = 0.001
+MISSION27_CAPACITY_TOLERANCE = 0.05
 
-MISSION28_METHOD = 'FBA'
+# Mission 28 continues Dr. Ribeiro's rescue programme.  The player keeps the
+# gltA lesion and the rescuing 2-oxoglutarate supplement fixed, then screens
+# one secondary knockout at a time to identify the network function on which
+# the rescue depends.  Every value is taken from the player's visible pFBA
+# result; no hidden simulation is launched by the validator.
+MISSION28_CHECK_VERSION = 2
+MISSION28_METHOD = 'pFBA'
 MISSION28_GROWTH_OBJECTIVE = 'BIOMASS_Ecoli_core_w_GAM'
-MISSION28_TARGET_CONTEXT = 'alternative carbon source sensitivity sweep under glucose removal'
-MISSION28_BLOCKED_CARBON_SOURCE = 'EX_glc__D_e'
+MISSION28_TARGET_CONTEXT = 'mechanistic dependency mapping of the gltA bypass rescue'
+MISSION28_PRIMARY_GENE = MISSION27_TARGET_GENE
+MISSION28_PRIMARY_GENE_NAME = MISSION27_TARGET_GENE_NAME
+MISSION28_PRIMARY_REACTION = MISSION27_TARGET_REACTION
+MISSION28_RESCUE_SUPPLEMENT = MISSION27_EXPECTED_RESCUE
+MISSION28_RESCUE_SUPPLEMENT_NAME = MISSION27_CANDIDATE_NAMES[MISSION27_EXPECTED_RESCUE]
+MISSION28_SECONDARY_GENES = ['b2587', 'b1761', 'b0728', 'b3236', 'b3403']
+MISSION28_SECONDARY_GENE_NAMES = {
+    'b2587': 'kgtP',
+    'b1761': 'gdhA',
+    'b0728': 'sucC',
+    'b3236': 'mdh',
+    'b3403': 'pckA',
+}
+MISSION28_SECONDARY_REACTIONS = {
+    'b2587': 'AKGt2r',
+    'b1761': 'GLUDy',
+    'b0728': 'SUCOAS',
+    'b3236': 'MDH',
+    'b3403': 'PPCK',
+}
+MISSION28_EXPECTED_DEPENDENCY = 'b2587'
+MISSION28_REQUIRED_RUN_COUNT = 1 + len(MISSION28_SECONDARY_GENES)
+MISSION28_EXPECTED_SCORE_NAME = MISSION27_EXPECTED_SCORE_NAME
+MISSION28_EXPECTED_DEFAULT_UPTAKE = MISSION27_EXPECTED_DEFAULT_UPTAKE
+MISSION28_EXPECTED_SUPPLEMENT_CAPACITY = MISSION27_EXPECTED_SUPPLEMENT_CAPACITY
+MISSION28_MIN_REFERENCE_GROWTH = 0.05
+MISSION28_MIN_REFERENCE_SUPPLEMENT_UPTAKE = 1.0
+MISSION28_MAX_DEPENDENCY_GROWTH = 0.001
+MISSION28_MAX_DEPENDENCY_UPTAKE = 0.001
+MISSION28_MIN_NONDEPENDENCY_RETENTION = 0.90
+MISSION28_MIN_NONDEPENDENCY_UPTAKE = 1.0
+MISSION28_MIN_AEROBIC_OXYGEN_UPTAKE = 1.0
+MISSION28_FLUX_TOLERANCE = 0.01
+MISSION28_PRIMARY_TOLERANCE = 0.001
+MISSION28_CAPACITY_TOLERANCE = 0.05
+
+# Generic Bound Sweep menu presets retained for Missions 23–26 and future
+# experiments. Mission 28 itself no longer consumes these legacy names.
 MISSION28_CANDIDATE_CARBON_SOURCES = ['EX_ac_e', 'EX_pyr_e', 'EX_mal__L_e', 'EX_fum_e', 'EX_akg_e']
 MISSION28_SWEEP_BOUND = 'lower'
 MISSION28_SWEEP_BOUND_LABEL = 'lower bound'
 MISSION28_SWEEP_VALUES = [-20.0, -10.0, -5.0, -1.0, 0.0]
-MISSION28_REQUIRED_TRACKED_FLUXES = ['EX_ac_e', 'EX_etoh_e', 'EX_for_e', 'EX_lac__D_e', 'EX_succ_e']
-MISSION28_MIN_FIRST_GROWTH = 5.0
-MISSION28_MAX_FINAL_GROWTH = 1.0
-MISSION28_MIN_GROWTH_DROP = 5.0
-MISSION28_MIN_SOURCE_UPTAKE_DROP = 5.0
-MISSION28_MIN_SOURCE_UPTAKE = 1.0
-MISSION28_MIN_PROFILE_CHANGE = 1.0
-MISSION28_MIN_CHANGED_FLUXES = 2
-MISSION28_MIN_RESULT_POINTS = 5
-MISSION28_MIN_DECREASING_STEPS = 2
 
 
 EXCHANGE_FLUX_REPORT_REACTION_IDS = [
@@ -14033,7 +14092,7 @@ def _selected_sweep_value(menu_data, key, default_value):
             f'{MISSION23_SWEEP_REACTION}:lower',
             f'{MISSION24_SWEEP_REACTION}:upper',
             f'{MISSION26_SWEEP_REACTION}:lower',
-            f'{MISSION27_SWEEP_REACTION}:lower',
+            f'{MISSION27_GLUCOSE_REACTION}:lower',
             *[f'{reaction_id}:lower' for reaction_id in MISSION28_CANDIDATE_CARBON_SOURCES],
         },
         'sweep_values': {
@@ -14086,11 +14145,11 @@ def _normalise_sweep_config(sweep_menu_data=None):
             'bound_label': MISSION26_SWEEP_BOUND_LABEL,
             'default_preset': 'oxygen_transition',
         },
-        f'{MISSION27_SWEEP_REACTION}:lower': {
-            'reaction_id': MISSION27_SWEEP_REACTION,
-            'reaction_name': MISSION27_SWEEP_REACTION_NAME,
-            'bound': MISSION27_SWEEP_BOUND,
-            'bound_label': MISSION27_SWEEP_BOUND_LABEL,
+        f'{MISSION27_GLUCOSE_REACTION}:lower': {
+            'reaction_id': MISSION27_GLUCOSE_REACTION,
+            'reaction_name': 'D-Glucose exchange',
+            'bound': 'lower',
+            'bound_label': 'lower bound',
             'default_preset': 'glucose_limitation',
         },
     }
@@ -14107,7 +14166,7 @@ def _normalise_sweep_config(sweep_menu_data=None):
         'ammonium_sensitivity': list(MISSION23_SWEEP_VALUES),
         'co2_export_capacity': list(MISSION24_SWEEP_VALUES),
         'oxygen_transition': list(MISSION26_SWEEP_VALUES),
-        'glucose_limitation': list(MISSION27_SWEEP_VALUES),
+        'glucose_limitation': [-1000.0, -500.0, -100.0, -50.0, -10.0, 0.0],
         'alternative_carbon_limitation': list(MISSION28_SWEEP_VALUES),
     }
     resolved_variable = (
@@ -14929,307 +14988,1169 @@ def build_mission26_interaction_report_text(report):
     ])
     return '\n'.join(lines)
 
-def _build_mission27_data(sweep_data=None, error=None):
-    sweep_data = sweep_data or load_bound_sweep() or {}
-    rows = sweep_data.get('rows') or []
-    result_rows = [row for row in rows if row.get('status') in ('ok', 'infeasible')]
-    ok_rows = [row for row in rows if row.get('status') == 'ok']
+def is_mission27_unlocked(missions_completed):
+    """Mission 27 starts only after Dr. Smith's final interaction-curve mission."""
+    return '26' in (missions_completed or [])
 
-    clean_base_setup = (
-        sweep_data.get('method') == MISSION27_METHOD
-        and sweep_data.get('objective') == MISSION27_GROWTH_OBJECTIVE
-        and not sweep_data.get('knocked_out_genes')
-        and not sweep_data.get('environment_changed')
-    )
 
-    expected_values = [float(value) for value in MISSION27_SWEEP_VALUES]
-    got_values = [float(value) for value in (sweep_data.get('values') or [])]
-    glucose_sweep_selected = (
-        sweep_data.get('reaction_id') == MISSION27_SWEEP_REACTION
-        and sweep_data.get('bound') == MISSION27_SWEEP_BOUND
-        and got_values == expected_values
-    )
+def _mission27_number_or_none(value):
+    numeric = _as_float_or_none(value)
+    return float(numeric) if numeric is not None else None
 
-    tracking_ready = _selected_fluxes_include(
-        MISSION27_REQUIRED_TRACKED_FLUXES,
-        sweep_data.get('selected_production_fluxes') or []
-    )
-    all_points_returned = len(result_rows) >= MISSION27_MIN_RESULT_POINTS
 
-    first_row = result_rows[0] if result_rows else None
-    last_row = result_rows[-1] if result_rows else None
-    first_growth = _row_value(first_row, 'growth_value') if first_row else 0.0
-    last_growth = _row_value(last_row, 'growth_value') if last_row else 0.0
-    growth_drop = round(first_growth - last_growth, 3) if result_rows else 0.0
-    growth_decreased = growth_drop >= MISSION27_MIN_GROWTH_DROP
-    final_growth_low = last_growth <= MISSION27_MAX_FINAL_GROWTH if last_row else False
+def _mission27_clean_number(value, decimals=6):
+    numeric = float(value)
+    if abs(numeric) < DISPLAY_ZERO_TOLERANCE:
+        numeric = 0.0
+    return round(numeric, decimals)
 
-    growth_values = _growth_values_from_rows(result_rows)
-    decreasing_steps = _count_decreasing_steps(growth_values)
-    trend_is_gradual = decreasing_steps >= MISSION27_MIN_DECREASING_STEPS
 
-    first_uptake = _row_value(first_row, 'tested_reaction_uptake') if first_row else 0.0
-    last_uptake = _row_value(last_row, 'tested_reaction_uptake') if last_row else 0.0
-    glucose_uptake_drop = round(first_uptake - last_uptake, 3) if result_rows else 0.0
-    glucose_uptake_decreased = glucose_uptake_drop >= MISSION27_MIN_UPTAKE_DROP
+def _mission27_disabled_reactions(knocked_out_genes):
+    """Return deterministic GPR-disabled reactions without launching a simulation."""
+    knocked_out_genes = sorted(knocked_out_genes or [])
+    if not knocked_out_genes:
+        return []
+    try:
+        if model is not None:
+            return sorted(disabled_reaction_ids(model, knocked_out_genes))
+    except Exception:
+        pass
+    if knocked_out_genes == [MISSION27_TARGET_GENE]:
+        return [MISSION27_TARGET_REACTION]
+    return []
 
-    profile_differences = {}
-    decreased_fluxes = []
-    if first_row and last_row:
-        first_fluxes = first_row.get('tracked_flux_values') or {}
-        last_fluxes = last_row.get('tracked_flux_values') or {}
-        for reaction_id in MISSION27_REQUIRED_TRACKED_FLUXES:
-            difference = round(float(last_fluxes.get(reaction_id, 0.0)) - float(first_fluxes.get(reaction_id, 0.0)), 3)
-            profile_differences[reaction_id] = difference
-            if difference <= -MISSION27_MIN_PROFILE_CHANGE:
-                decreased_fluxes.append(reaction_id)
 
-    profile_decreased = len(decreased_fluxes) >= MISSION27_MIN_CHANGED_FLUXES
+def _mission27_environment_status(reactions):
+    """Classify the exact default medium or one-candidate supplementation setup."""
+    bounds_complete = True
+    changes = []
+    candidate = None
 
-    mission27_data = {
+    for index in range(len(REACTIONS.index)):
+        reaction_id = REACTIONS.index[index]
+        lower_open, upper_open = _reaction_bound_open_states(reactions, index)
+        if lower_open is None or upper_open is None:
+            bounds_complete = False
+            continue
+
+        default_lower_open = bool(REACTIONS.lb.iloc[index] != 0)
+        default_upper_open = bool(REACTIONS.ub.iloc[index] != 0)
+        lower_changed = bool(lower_open) != default_lower_open
+        upper_changed = bool(upper_open) != default_upper_open
+        if lower_changed:
+            changes.append((reaction_id, 'lower', bool(lower_open)))
+        if upper_changed:
+            changes.append((reaction_id, 'upper', bool(upper_open)))
+
+    if bounds_complete and len(changes) == 1:
+        reaction_id, bound, is_open = changes[0]
+        if reaction_id in MISSION27_CANDIDATE_SUPPLEMENTS and bound == 'lower' and is_open:
+            candidate = reaction_id
+
+    setup_type = None
+    if bounds_complete and not changes:
+        setup_type = 'default'
+    elif bounds_complete and candidate is not None:
+        setup_type = 'candidate'
+
+    return {
+        'bounds_complete': bounds_complete,
+        'changes': [f'{reaction_id} {bound}' for reaction_id, bound, _is_open in changes],
+        'candidate': candidate,
+        'setup_type': setup_type,
+        'controlled_environment': bool(setup_type),
+    }
+
+
+def _mission27_empty_report():
+    return {
         'mission_id': '27',
-        'check_version': 1,
-        'mission_title': 'Glucose Limitation Sweep',
+        'check_version': MISSION27_CHECK_VERSION,
+        'mission_title': 'Metabolic Bypass Rescue',
         'target_context': MISSION27_TARGET_CONTEXT,
         'target_method': MISSION27_METHOD,
         'growth_objective': MISSION27_GROWTH_OBJECTIVE,
-        'sweep_reaction': MISSION27_SWEEP_REACTION,
-        'sweep_bound': MISSION27_SWEEP_BOUND,
-        'sweep_values': expected_values,
-        'required_tracked_fluxes': MISSION27_REQUIRED_TRACKED_FLUXES,
-        'minimum_growth_drop': MISSION27_MIN_GROWTH_DROP,
-        'minimum_uptake_drop': MISSION27_MIN_UPTAKE_DROP,
-        'maximum_final_growth': MISSION27_MAX_FINAL_GROWTH,
-        'minimum_profile_change': MISSION27_MIN_PROFILE_CHANGE,
-        'minimum_changed_fluxes': MISSION27_MIN_CHANGED_FLUXES,
-        'minimum_result_points': MISSION27_MIN_RESULT_POINTS,
-        'minimum_decreasing_steps': MISSION27_MIN_DECREASING_STEPS,
-        'sweep_data': sweep_data,
-        'clean_base_setup': clean_base_setup,
-        'glucose_sweep_selected': glucose_sweep_selected,
-        'tracking_ready': tracking_ready,
-        'result_point_count': len(result_rows),
-        'valid_ok_point_count': len(ok_rows),
-        'all_points_returned': all_points_returned,
-        'first_growth': round(first_growth, 3),
-        'last_growth': round(last_growth, 3),
-        'growth_drop': growth_drop,
-        'growth_decreased': growth_decreased,
-        'final_growth_low': final_growth_low,
-        'decreasing_steps': decreasing_steps,
-        'trend_is_gradual': trend_is_gradual,
-        'first_glucose_uptake': round(first_uptake, 3),
-        'last_glucose_uptake': round(last_uptake, 3),
-        'glucose_uptake_drop': glucose_uptake_drop,
-        'glucose_uptake_decreased': glucose_uptake_decreased,
-        'profile_differences': profile_differences,
-        'decreased_fluxes': decreased_fluxes,
-        'decreased_flux_count': len(decreased_fluxes),
-        'profile_decreased': profile_decreased,
-        'ready_to_deliver': (
-            clean_base_setup
-            and glucose_sweep_selected
-            and tracking_ready
-            and all_points_returned
-            and growth_decreased
-            and final_growth_low
-            and trend_is_gradual
-            and glucose_uptake_decreased
-            and profile_decreased
-        ),
+        'target_gene': MISSION27_TARGET_GENE,
+        'target_gene_name': MISSION27_TARGET_GENE_NAME,
+        'target_reaction': MISSION27_TARGET_REACTION,
+        'candidate_supplements': list(MISSION27_CANDIDATE_SUPPLEMENTS),
+        'candidate_names': copy.deepcopy(MISSION27_CANDIDATE_NAMES),
+        'wild_type_reference': None,
+        'knockout_reference': None,
+        'candidate_trials': {},
+        'recorded_run_count': 0,
+        'required_run_count': MISSION27_REQUIRED_RUN_COUNT,
+        'missing_conditions': ['wild_type_reference', 'knockout_reference'] + list(MISSION27_CANDIDATE_SUPPLEMENTS),
+        'rescue_candidates': [],
+        'unique_rescue_supported': False,
+        'evidence_ready': False,
+        'answer_ready': False,
+        'ready_to_deliver': False,
+        'current_run_type': None,
+        'current_candidate': None,
+        'current_run_valid': False,
+        'current_run_recorded': False,
+        'current_issues': [],
+        'current_run': None,
+        'latest_attempt': None,
     }
-    if error or sweep_data.get('error'):
-        mission27_data['error'] = error or sweep_data.get('error')
-    save_mission27_bound_sweep_check(mission27_data)
-    return mission27_data
 
 
+def initialise_mission27_rescue_screen():
+    report = _mission27_empty_report()
+    save_mission27_rescue_check(report)
+    return report
+
+
+def _build_mission27_data(
+    method_name,
+    selected_objective,
+    objective_result,
+    genes,
+    reactions,
+    production_fluxes=None,
+    medium_fluxes=None,
+    existing_report=None,
+    objective_error=None,
+):
+    """Validate and accumulate one visible Mission 27 reference or candidate run."""
+    existing_report = existing_report or {}
+    if (
+        existing_report.get('mission_id') != '27'
+        or existing_report.get('check_version') != MISSION27_CHECK_VERSION
+    ):
+        existing_report = _mission27_empty_report()
+
+    wild_type_reference = copy.deepcopy(existing_report.get('wild_type_reference'))
+    knockout_reference = copy.deepcopy(existing_report.get('knockout_reference'))
+    candidate_trials = copy.deepcopy(existing_report.get('candidate_trials') or {})
+
+    environment = _mission27_environment_status(reactions)
+    knocked_out_genes = sorted(_knocked_out_genes(genes))
+    disabled_reactions = _mission27_disabled_reactions(knocked_out_genes)
+    target_reaction_disabled = MISSION27_TARGET_REACTION in disabled_reactions
+
+    run_type = None
+    candidate = environment.get('candidate')
+    if environment.get('setup_type') == 'default' and not knocked_out_genes:
+        run_type = 'wild_type_reference'
+    elif environment.get('setup_type') == 'default' and knocked_out_genes == [MISSION27_TARGET_GENE]:
+        run_type = 'knockout_reference'
+    elif environment.get('setup_type') == 'candidate' and knocked_out_genes == [MISSION27_TARGET_GENE]:
+        run_type = 'candidate_trial'
+
+    objective_numeric = _mission27_number_or_none(objective_result)
+    result_infeasible = 'INFEASIBLE' in str(objective_result or '').upper()
+    raw_fluxes, uptake_fluxes, _secretion_fluxes = _mission21_measured_medium_values(medium_fluxes)
+    diagnostics = _method_diagnostics_from_production_data(production_fluxes)
+    biomass_raw = _mission27_number_or_none(_mission13_biomass_value(production_fluxes))
+    primary_flux = _mission27_number_or_none(diagnostics.get('primary_objective_flux'))
+    method_score = _mission27_number_or_none(diagnostics.get('method_score'))
+    total_absolute_flux = _mission27_number_or_none(diagnostics.get('total_absolute_flux'))
+    method_score_name = diagnostics.get('method_score_name')
+    try:
+        active_reaction_count = int(diagnostics.get('active_reaction_count'))
+    except Exception:
+        active_reaction_count = None
+
+    glucose_raw = _mission27_number_or_none(raw_fluxes.get(MISSION27_GLUCOSE_REACTION))
+    oxygen_raw = _mission27_number_or_none(raw_fluxes.get(MISSION27_OXYGEN_REACTION))
+    glucose_uptake = _mission27_number_or_none(uptake_fluxes.get(MISSION27_GLUCOSE_REACTION))
+    oxygen_uptake = _mission27_number_or_none(uptake_fluxes.get(MISSION27_OXYGEN_REACTION))
+    candidate_raw = _mission27_number_or_none(raw_fluxes.get(candidate)) if candidate else None
+    candidate_uptake = _mission27_number_or_none(uptake_fluxes.get(candidate)) if candidate else None
+
+    issues = []
+    if objective_error:
+        issues.append(objective_error)
+    if method_name != MISSION27_METHOD:
+        issues.append('Use pFBA for every Mission 27 reference and candidate trial.')
+    if selected_objective != MISSION27_GROWTH_OBJECTIVE:
+        issues.append('Use the biomass objective for every Mission 27 run.')
+    if not environment.get('bounds_complete'):
+        issues.append('The environmental-bound payload is incomplete.')
+    if environment.get('setup_type') is None:
+        issues.append('Use either the completely default medium or open exactly one Mission 27 candidate lower bound.')
+    if run_type is None:
+        issues.append(
+            f'Use wild type only for the default reference, or keep exactly {MISSION27_TARGET_GENE} / '
+            f'{MISSION27_TARGET_GENE_NAME} knocked out for the knockout reference and every candidate trial.'
+        )
+    if run_type in {'knockout_reference', 'candidate_trial'} and not target_reaction_disabled:
+        issues.append(f'The {MISSION27_TARGET_GENE} knockout must keep {MISSION27_TARGET_REACTION} disabled by the GPR.')
+    if run_type == 'wild_type_reference' and disabled_reactions:
+        issues.append('The wild-type reference must not contain GPR-disabled reactions.')
+
+    if result_infeasible or objective_numeric is None:
+        issues.append('Mission 27 requires a numeric visible biomass result; an infeasible result is not a measured zero-growth solution.')
+    elif objective_numeric < -MISSION27_PRIMARY_TOLERANCE:
+        issues.append('The biomass result is outside the valid non-negative range.')
+
+    required_medium = [MISSION27_GLUCOSE_REACTION, MISSION27_OXYGEN_REACTION]
+    if candidate:
+        required_medium.append(candidate)
+    missing_medium = [reaction_id for reaction_id in required_medium if reaction_id not in raw_fluxes]
+    if medium_fluxes and medium_fluxes.get('error'):
+        issues.append('The Exchange Flux Report is unavailable for this run.')
+    elif missing_medium:
+        issues.append('Numeric glucose, oxygen and selected-candidate exchange evidence is required.')
+
+    if glucose_raw is not None and glucose_uptake is not None:
+        if glucose_raw > MISSION27_FLUX_TOLERANCE:
+            issues.append('Glucose must not be secreted in the controlled rescue screen.')
+        if glucose_uptake > MISSION27_EXPECTED_DEFAULT_UPTAKE + MISSION27_CAPACITY_TOLERANCE:
+            issues.append('Glucose uptake exceeds the model-default capacity.')
+    if oxygen_raw is not None and oxygen_uptake is not None:
+        if oxygen_raw > MISSION27_FLUX_TOLERANCE:
+            issues.append('Oxygen must not be secreted in the controlled rescue screen.')
+    if candidate_raw is not None and candidate_uptake is not None:
+        if candidate_raw > MISSION27_FLUX_TOLERANCE:
+            issues.append('The selected candidate must be consumed rather than secreted.')
+        if candidate_uptake > MISSION27_EXPECTED_SUPPLEMENT_CAPACITY + MISSION27_CAPACITY_TOLERANCE:
+            issues.append('Candidate uptake exceeds the controlled supplementation capacity.')
+
+    if not isinstance(production_fluxes, dict) or production_fluxes.get('error'):
+        issues.append('The visible result is missing biomass and method-aware diagnostics.')
+    if biomass_raw is None:
+        issues.append('The visible result is missing the biomass-reaction flux.')
+    if primary_flux is None:
+        issues.append('The visible pFBA result is missing the primary objective flux.')
+    if objective_numeric is not None and biomass_raw is not None:
+        if abs(objective_numeric - biomass_raw) > MISSION27_PRIMARY_TOLERANCE:
+            issues.append('The displayed objective value does not match the biomass-reaction flux.')
+    if biomass_raw is not None and primary_flux is not None:
+        if abs(biomass_raw - primary_flux) > MISSION27_PRIMARY_TOLERANCE:
+            issues.append('The primary objective diagnostic does not match biomass.')
+    if diagnostics.get('method') != MISSION27_METHOD:
+        issues.append('The method diagnostic does not identify pFBA.')
+    if diagnostics.get('objective_reaction') != MISSION27_GROWTH_OBJECTIVE:
+        issues.append('The method diagnostic does not identify the biomass objective.')
+    if method_score_name != MISSION27_EXPECTED_SCORE_NAME:
+        issues.append('The pFBA secondary-score meaning is missing or incorrect.')
+    if method_score is None or total_absolute_flux is None:
+        issues.append('The visible pFBA secondary score or total absolute flux is missing.')
+    elif abs(method_score - total_absolute_flux) > MISSION27_PRIMARY_TOLERANCE:
+        issues.append('The pFBA method score does not match total absolute flux.')
+    if active_reaction_count is None:
+        issues.append('The visible pFBA result is missing the active-reaction diagnostic.')
+
+    if objective_numeric is not None:
+        if run_type == 'wild_type_reference':
+            if objective_numeric < MISSION27_MIN_REFERENCE_GROWTH:
+                issues.append('The wild-type default reference must retain clear positive growth.')
+            if glucose_uptake is not None and abs(glucose_uptake - MISSION27_EXPECTED_DEFAULT_UPTAKE) > MISSION27_CAPACITY_TOLERANCE:
+                issues.append('The wild-type reference must use the model-default glucose uptake capacity.')
+            if oxygen_uptake is not None and oxygen_uptake < MISSION27_MIN_AEROBIC_OXYGEN_UPTAKE:
+                issues.append('The wild-type reference must show measurable oxygen uptake.')
+        elif run_type == 'knockout_reference':
+            if objective_numeric > MISSION27_MAX_KNOCKOUT_GROWTH:
+                issues.append('The default gltA knockout reference should show no predicted growth.')
+        elif run_type == 'candidate_trial':
+            if candidate == MISSION27_EXPECTED_RESCUE:
+                if objective_numeric < MISSION27_MIN_RESCUE_GROWTH:
+                    issues.append('The expected rescue trial does not restore clear positive growth.')
+                if candidate_uptake is not None and candidate_uptake < MISSION27_MIN_RESCUE_UPTAKE:
+                    issues.append('The rescue candidate is not measurably consumed.')
+                if glucose_uptake is not None and abs(glucose_uptake - MISSION27_EXPECTED_DEFAULT_UPTAKE) > MISSION27_CAPACITY_TOLERANCE:
+                    issues.append('Keep model-default glucose availability in the rescue trial.')
+                if oxygen_uptake is not None and oxygen_uptake < MISSION27_MIN_AEROBIC_OXYGEN_UPTAKE:
+                    issues.append('The rescue trial must retain measurable oxygen uptake.')
+            elif objective_numeric > MISSION27_MAX_NON_RESCUE_GROWTH:
+                issues.append('This candidate unexpectedly restores growth above the non-rescue tolerance.')
+
+    current_run_valid = not issues
+    current_run_recorded = False
+    current_run = None
+    if current_run_valid:
+        current_run = {
+            'run_type': run_type,
+            'candidate': candidate,
+            'candidate_name': MISSION27_CANDIDATE_NAMES.get(candidate) if candidate else None,
+            'method': method_name,
+            'objective': selected_objective,
+            'growth': _mission27_clean_number(objective_numeric),
+            'knocked_out_genes': list(knocked_out_genes),
+            'disabled_reactions': list(disabled_reactions),
+            'target_reaction_disabled': bool(target_reaction_disabled),
+            'environment_changes': list(environment.get('changes') or []),
+            'glucose_raw_flux': _mission27_clean_number(glucose_raw),
+            'glucose_uptake': _mission27_clean_number(glucose_uptake),
+            'oxygen_raw_flux': _mission27_clean_number(oxygen_raw),
+            'oxygen_uptake': _mission27_clean_number(oxygen_uptake),
+            'candidate_raw_flux': _mission27_clean_number(candidate_raw) if candidate_raw is not None else None,
+            'candidate_uptake': _mission27_clean_number(candidate_uptake) if candidate_uptake is not None else None,
+            'method_diagnostics': {
+                'method': diagnostics.get('method'),
+                'objective_reaction': diagnostics.get('objective_reaction'),
+                'primary_objective_flux': _mission27_clean_number(primary_flux),
+                'method_score': _mission27_clean_number(method_score),
+                'method_score_name': method_score_name,
+                'total_absolute_flux': _mission27_clean_number(total_absolute_flux),
+                'active_reaction_count': active_reaction_count,
+            },
+        }
+        if run_type == 'wild_type_reference':
+            wild_type_reference = current_run
+        elif run_type == 'knockout_reference':
+            knockout_reference = current_run
+        elif run_type == 'candidate_trial':
+            candidate_trials[candidate] = current_run
+        current_run_recorded = True
+
+    missing_conditions = []
+    if not isinstance(wild_type_reference, dict):
+        missing_conditions.append('wild_type_reference')
+    if not isinstance(knockout_reference, dict):
+        missing_conditions.append('knockout_reference')
+    missing_conditions.extend(
+        candidate for candidate in MISSION27_CANDIDATE_SUPPLEMENTS
+        if not isinstance(candidate_trials.get(candidate), dict)
+    )
+    recorded_run_count = MISSION27_REQUIRED_RUN_COUNT - len(missing_conditions)
+    evidence_ready = not missing_conditions
+
+    rescue_candidates = []
+    if evidence_ready:
+        for candidate_id in MISSION27_CANDIDATE_SUPPLEMENTS:
+            growth = _mission27_number_or_none((candidate_trials.get(candidate_id) or {}).get('growth'))
+            if growth is not None and growth >= MISSION27_MIN_RESCUE_GROWTH:
+                rescue_candidates.append(candidate_id)
+    unique_rescue_supported = bool(
+        evidence_ready
+        and rescue_candidates == [MISSION27_EXPECTED_RESCUE]
+        and _mission27_number_or_none((wild_type_reference or {}).get('growth')) >= MISSION27_MIN_REFERENCE_GROWTH
+        and _mission27_number_or_none((knockout_reference or {}).get('growth')) <= MISSION27_MAX_KNOCKOUT_GROWTH
+        and all(
+            bool((candidate_trials.get(candidate_id) or {}).get('target_reaction_disabled'))
+            for candidate_id in MISSION27_CANDIDATE_SUPPLEMENTS
+        )
+    )
+
+    latest_attempt = {
+        'method': method_name,
+        'objective': selected_objective,
+        'run_type': run_type,
+        'candidate': candidate,
+        'knocked_out_genes': list(knocked_out_genes),
+        'valid': current_run_valid,
+        'recorded': current_run_recorded,
+        'issues': list(issues),
+    }
+
+    report = _mission27_empty_report()
+    report.update({
+        'wild_type_reference': wild_type_reference,
+        'knockout_reference': knockout_reference,
+        'candidate_trials': candidate_trials,
+        'recorded_run_count': recorded_run_count,
+        'missing_conditions': missing_conditions,
+        'rescue_candidates': rescue_candidates,
+        'unique_rescue_supported': unique_rescue_supported,
+        'evidence_ready': evidence_ready,
+        'answer_ready': unique_rescue_supported,
+        'ready_to_deliver': unique_rescue_supported,
+        'current_run_type': run_type,
+        'current_candidate': candidate,
+        'current_run_valid': current_run_valid,
+        'current_run_recorded': current_run_recorded,
+        'current_issues': list(issues),
+        'current_run': current_run,
+        'latest_attempt': latest_attempt,
+    })
+    save_mission27_rescue_check(report)
+    return report
+
+
+def run_mission27_rescue_check(simulation_results=None):
+    """Validate the already visible Mission 27 result without re-simulating."""
+    method_name, selected_objective, genes, reactions = _read_simulation_file()
+    objective_result = None
+    production_fluxes = None
+    medium_fluxes = None
+    objective_error = None
+    try:
+        if simulation_results is not None:
+            result_objective = simulation_results[0]
+            objective_result = simulation_results[1]
+            production_fluxes = simulation_results[2] if len(simulation_results) > 2 else None
+            medium_fluxes = simulation_results[3] if len(simulation_results) > 3 else None
+            if result_objective != selected_objective:
+                objective_error = 'The displayed simulation result does not match the currently selected objective.'
+        else:
+            objective_error = 'Run a visible Mission 27 simulation before recording evidence.'
+    except Exception:
+        objective_error = 'Could not read the current visible Mission 27 simulation result.'
+
+    return _build_mission27_data(
+        method_name,
+        selected_objective,
+        objective_result,
+        genes,
+        reactions,
+        production_fluxes=production_fluxes,
+        medium_fluxes=medium_fluxes,
+        existing_report=load_mission27_rescue_check() or {},
+        objective_error=objective_error,
+    )
+
+
+def run_mission27_rescue_check_remote(backend_url, simulation_results=None):
+    """Browser parity wrapper using the same already returned visible result."""
+    del backend_url
+    return run_mission27_rescue_check(simulation_results)
+
+
+def _normalise_mission27_text(value):
+    text = str(value or '').replace('α', 'alpha').replace('Α', 'alpha')
+    text = unicodedata.normalize('NFKD', text)
+    return ''.join(char for char in text if not unicodedata.combining(char)).lower().strip()
+
+
+def normalise_mission27_answer(answer):
+    text = _normalise_mission27_text(answer)
+    if not text:
+        return None
+    patterns = (
+        r'\bex[_\s-]*akg[_\s-]*e\b',
+        r'\b(?:2|two)[-\s]*(?:oxo|keto)glutarate\b',
+        r'\balpha[-\s]*ketoglutarate\b',
+        r'\bakg\b',
+        r'\b2og\b',
+    )
+    return MISSION27_EXPECTED_RESCUE if any(re.search(pattern, text) for pattern in patterns) else None
+
+
+def mission27_answer_matches(answer, report_data=None):
+    report = report_data if report_data is not None else (load_mission27_rescue_check() or {})
+    return bool(
+        report.get('mission_id') == '27'
+        and report.get('check_version') == MISSION27_CHECK_VERSION
+        and report.get('answer_ready')
+        and report.get('unique_rescue_supported')
+        and normalise_mission27_answer(answer) == MISSION27_EXPECTED_RESCUE
+    )
+
+
+def build_mission27_rescue_report_text(report_data=None):
+    report = report_data or {}
+    if report.get('mission_id') != '27' or report.get('check_version') != MISSION27_CHECK_VERSION:
+        return (
+            'Mission 27 Metabolic Bypass Rescue\n\n'
+            'Record a default wild-type reference, a default b0720 / gltA knockout reference, and five single-supplement knockout trials. '
+            'Use pFBA with the biomass objective and keep every unrelated environmental bound at model default.'
+        )
+
+    def fmt(value):
+        return 'pending' if value is None else f'{float(value):.3f}'
+
+    lines = [
+        'Mission 27 Metabolic Bypass Rescue',
+        '',
+        'Controlled protocol:',
+        f'- Method: {MISSION27_METHOD}',
+        f'- Objective: {MISSION27_GROWTH_OBJECTIVE}',
+        f'- Genetic lesion: {MISSION27_TARGET_GENE} / {MISSION27_TARGET_GENE_NAME}',
+        f'- GPR-disabled reaction in knockout runs: {MISSION27_TARGET_REACTION}',
+        '- Candidate trials: open exactly one candidate lower bound while keeping glucose, oxygen and every unrelated bound at model default',
+        '',
+        f"Runs recorded: {report.get('recorded_run_count', 0)}/{report.get('required_run_count', MISSION27_REQUIRED_RUN_COUNT)}",
+        '',
+    ]
+
+    for key, title in (
+        ('wild_type_reference', 'Wild-type default reference'),
+        ('knockout_reference', f'{MISSION27_TARGET_GENE} knockout default reference'),
+    ):
+        run = report.get(key)
+        if not isinstance(run, dict):
+            lines.append(f'{title}: pending')
+            continue
+        lines.extend([
+            title + ':',
+            f"- Growth: {fmt(run.get('growth'))}",
+            f"- Glucose uptake: {fmt(run.get('glucose_uptake'))}",
+            f"- Oxygen uptake: {fmt(run.get('oxygen_uptake'))}",
+            f"- {MISSION27_TARGET_REACTION} disabled: {'yes' if run.get('target_reaction_disabled') else 'no'}",
+        ])
+
+    lines.extend(['', 'Candidate supplementation trials:', 'Candidate | growth | candidate uptake | CS disabled'])
+    trials = report.get('candidate_trials') or {}
+    for candidate_id in MISSION27_CANDIDATE_SUPPLEMENTS:
+        trial = trials.get(candidate_id)
+        if not isinstance(trial, dict):
+            lines.append(f'{candidate_id} | pending | pending | pending')
+            continue
+        lines.append(
+            f"{candidate_id} | {fmt(trial.get('growth'))} | {fmt(trial.get('candidate_uptake'))} | "
+            f"{'yes' if trial.get('target_reaction_disabled') else 'no'}"
+        )
+
+    if report.get('current_run_recorded'):
+        label = report.get('current_run_type')
+        if report.get('current_candidate'):
+            label += f" ({report.get('current_candidate')})"
+        lines.extend(['', f'Latest valid visible run recorded: {label}.'])
+    elif report.get('current_issues'):
+        lines.extend(['', 'Latest run was not recorded:'])
+        lines.extend(f'- {issue}' for issue in report.get('current_issues') or [])
+        if report.get('recorded_run_count'):
+            lines.append('Previously valid Mission 27 rescue evidence remains available.')
+
+    lines.append('')
+    if report.get('evidence_ready'):
+        lines.extend([
+            'Evidence complete.',
+            'Compare all candidate growth values while confirming that the knockout-defined reaction remains disabled.',
+            'Question: Which candidate exchange restored predicted growth while citrate synthase remained disabled?',
+        ])
+        if not report.get('unique_rescue_supported'):
+            lines.append('The current complete evidence does not support one unique rescue under the controlled criteria; verify the visible runs.')
+    else:
+        lines.append('Evidence incomplete.')
+        if report.get('missing_conditions'):
+            lines.append('Missing conditions: ' + ', '.join(report.get('missing_conditions') or []))
+
+    lines.extend([
+        '',
+        'Interpretation note: environmental rescue bypasses the predicted consequence of the knockout; it does not restore the deleted gene or citrate synthase reaction.',
+        'The conclusion is conditional on this model, pFBA biomass objective, medium, bounds and tested candidate set.',
+        'All growth, exchange and pFBA diagnostic values come from visible simulation results. No hidden validation simulation is used.',
+    ])
+    return '\n'.join(lines)
+
+
+# Backwards-compatible names retained for stale imports. Mission 27 no longer
+# uses Bound Sweep; these aliases now expose the redesigned rescue report.
 def run_mission27_bound_sweep_check(sweep_data=None):
-    sweep_data = sweep_data or load_bound_sweep()
-    if not sweep_data or not sweep_data.get('rows'):
-        return _build_mission27_data(sweep_data, error='Run a Bound Sweep before delivering Mission 27.')
-    return _build_mission27_data(sweep_data)
+    del sweep_data
+    return load_mission27_rescue_check() or _mission27_empty_report()
 
+
+def _build_mission27_text(report_data=None):
+    return build_mission27_rescue_report_text(report_data)
+
+
+def is_mission28_unlocked(missions_completed):
+    """Mission 28 is Dr. Ribeiro's second mission and requires Mission 27."""
+    return '27' in (missions_completed or [])
+
+
+def _mission28_number_or_none(value):
+    numeric = _as_float_or_none(value)
+    return float(numeric) if numeric is not None else None
+
+
+def _mission28_clean_number(value, decimals=6):
+    numeric = float(value)
+    if abs(numeric) < DISPLAY_ZERO_TOLERANCE:
+        numeric = 0.0
+    return round(numeric, decimals)
+
+
+def _mission28_disabled_reactions(knocked_out_genes):
+    """Evaluate GPR consequences without running a metabolic optimisation."""
+    knocked_out_genes = sorted(knocked_out_genes or [])
+    if not knocked_out_genes:
+        return []
+    try:
+        if model is not None:
+            return sorted(disabled_reaction_ids(model, knocked_out_genes))
+    except Exception:
+        pass
+
+    disabled = []
+    if MISSION28_PRIMARY_GENE in knocked_out_genes:
+        disabled.append(MISSION28_PRIMARY_REACTION)
+    for gene_id, reaction_id in MISSION28_SECONDARY_REACTIONS.items():
+        if gene_id in knocked_out_genes:
+            disabled.append(reaction_id)
+    return sorted(set(disabled))
 
 
 def _mission28_environment_status(reactions):
-    """Mission 28 base medium: close only glucose lower bound.
-
-    The sweep itself supplies the alternative source numerically. Before the
-    sweep, the only manual medium change should be glucose removal.
-    """
-    reaction_values = list((reactions or {}).values())
-    glucose_lower_bound_closed = False
-    unexpected_changes = []
-
-    for i in range(len(REACTIONS.index)):
-        lb_index = i * 2
-        ub_index = lb_index + 1
-
-        if ub_index >= len(reaction_values):
-            break
-
-        reaction_id = REACTIONS.index[i]
-        lower_bound_open = bool(reaction_values[lb_index])
-        upper_bound_open = bool(reaction_values[ub_index])
-
-        default_lower_bound_open = REACTIONS.lb.iloc[i] != 0
-        default_upper_bound_open = REACTIONS.ub.iloc[i] != 0
-
-        lower_changed = lower_bound_open != default_lower_bound_open
-        upper_changed = upper_bound_open != default_upper_bound_open
-
-        if reaction_id == MISSION28_BLOCKED_CARBON_SOURCE:
-            glucose_lower_bound_closed = not lower_bound_open
-            if upper_changed:
-                unexpected_changes.append(f'{reaction_id} upper bound')
-            continue
-
-        if lower_changed:
-            unexpected_changes.append(f'{reaction_id} lower bound')
-        if upper_changed:
-            unexpected_changes.append(f'{reaction_id} upper bound')
-
-    return glucose_lower_bound_closed, unexpected_changes
-
-
-def _build_mission28_data(sweep_data=None, error=None):
-    sweep_data = sweep_data or load_bound_sweep() or {}
-    rows = sweep_data.get('rows') or []
-    result_rows = [row for row in rows if row.get('status') in ('ok', 'infeasible')]
-    ok_rows = [row for row in rows if row.get('status') == 'ok']
-
-    base_reactions = sweep_data.get('base_reactions') or {}
-    glucose_lower_bound_closed, unexpected_environment_changes = _mission28_environment_status(base_reactions)
-
-    base_medium_ready = (
-        sweep_data.get('method') == MISSION28_METHOD
-        and sweep_data.get('objective') == MISSION28_GROWTH_OBJECTIVE
-        and not sweep_data.get('knocked_out_genes')
-        and glucose_lower_bound_closed
-        and not unexpected_environment_changes
+    """Require exactly the Mission 27 rescue medium: only EX_akg_e uptake open."""
+    status = _mission27_environment_status(reactions)
+    rescue_medium_ready = bool(
+        status.get('bounds_complete')
+        and status.get('setup_type') == 'candidate'
+        and status.get('candidate') == MISSION28_RESCUE_SUPPLEMENT
     )
+    return {
+        'bounds_complete': bool(status.get('bounds_complete')),
+        'changes': list(status.get('changes') or []),
+        'candidate': status.get('candidate'),
+        'setup_type': status.get('setup_type'),
+        'rescue_medium_ready': rescue_medium_ready,
+    }
 
-    expected_values = [float(value) for value in MISSION28_SWEEP_VALUES]
-    got_values = [float(value) for value in (sweep_data.get('values') or [])]
-    selected_source = sweep_data.get('reaction_id')
-    candidate_sweep_selected = (
-        selected_source in MISSION28_CANDIDATE_CARBON_SOURCES
-        and sweep_data.get('bound') == MISSION28_SWEEP_BOUND
-        and got_values == expected_values
-    )
 
-    tracking_ready = _selected_fluxes_include(
-        MISSION28_REQUIRED_TRACKED_FLUXES,
-        sweep_data.get('selected_production_fluxes') or []
-    )
-    all_points_returned = len(result_rows) >= MISSION28_MIN_RESULT_POINTS
+def _mission28_reference_from_mission27(mission27_report=None):
+    """Reuse the player's persisted visible rescue run; never re-simulate it."""
+    report = mission27_report or {}
+    if (
+        report.get('mission_id') != '27'
+        or report.get('check_version') != MISSION27_CHECK_VERSION
+        or not report.get('unique_rescue_supported')
+        or not report.get('evidence_ready')
+    ):
+        return None
 
-    first_row = result_rows[0] if result_rows else None
-    last_row = result_rows[-1] if result_rows else None
-    first_growth = _row_value(first_row, 'growth_value') if first_row else 0.0
-    last_growth = _row_value(last_row, 'growth_value') if last_row else 0.0
-    growth_drop = round(first_growth - last_growth, 3) if result_rows else 0.0
-    first_growth_viable = first_growth >= MISSION28_MIN_FIRST_GROWTH
-    growth_decreased = growth_drop >= MISSION28_MIN_GROWTH_DROP
-    final_growth_low = last_growth <= MISSION28_MAX_FINAL_GROWTH if last_row else False
+    trial = copy.deepcopy((report.get('candidate_trials') or {}).get(MISSION28_RESCUE_SUPPLEMENT))
+    if not isinstance(trial, dict):
+        return None
+    growth = _mission28_number_or_none(trial.get('growth'))
+    uptake = _mission28_number_or_none(trial.get('candidate_uptake'))
+    knocked_out = sorted(trial.get('knocked_out_genes') or [])
+    disabled = sorted(trial.get('disabled_reactions') or [])
+    if (
+        growth is None
+        or uptake is None
+        or growth < MISSION28_MIN_REFERENCE_GROWTH
+        or uptake < MISSION28_MIN_REFERENCE_SUPPLEMENT_UPTAKE
+        or knocked_out != [MISSION28_PRIMARY_GENE]
+        or MISSION28_PRIMARY_REACTION not in disabled
+        or trial.get('method') != MISSION28_METHOD
+        or trial.get('objective') != MISSION28_GROWTH_OBJECTIVE
+    ):
+        return None
 
-    growth_values = _growth_values_from_rows(result_rows)
-    decreasing_steps = _count_decreasing_steps(growth_values)
-    trend_is_gradual = decreasing_steps >= MISSION28_MIN_DECREASING_STEPS
+    return {
+        'run_type': 'rescue_reference',
+        'source': 'mission27_visible_evidence',
+        'method': trial.get('method'),
+        'objective': trial.get('objective'),
+        'growth': _mission28_clean_number(growth),
+        'knocked_out_genes': list(knocked_out),
+        'disabled_reactions': list(disabled),
+        'primary_reaction_disabled': True,
+        'environment_changes': list(trial.get('environment_changes') or []),
+        'glucose_raw_flux': trial.get('glucose_raw_flux'),
+        'glucose_uptake': trial.get('glucose_uptake'),
+        'oxygen_raw_flux': trial.get('oxygen_raw_flux'),
+        'oxygen_uptake': trial.get('oxygen_uptake'),
+        'supplement_raw_flux': trial.get('candidate_raw_flux'),
+        'supplement_uptake': _mission28_clean_number(uptake),
+        'method_diagnostics': copy.deepcopy(trial.get('method_diagnostics') or {}),
+    }
 
-    first_uptake = _row_value(first_row, 'tested_reaction_uptake') if first_row else 0.0
-    last_uptake = _row_value(last_row, 'tested_reaction_uptake') if last_row else 0.0
-    source_uptake_drop = round(first_uptake - last_uptake, 3) if result_rows else 0.0
-    source_consumed = first_uptake >= MISSION28_MIN_SOURCE_UPTAKE
-    source_uptake_decreased = source_uptake_drop >= MISSION28_MIN_SOURCE_UPTAKE_DROP
 
-    profile_differences = {}
-    changed_fluxes = []
-    if first_row and last_row:
-        first_fluxes = first_row.get('tracked_flux_values') or {}
-        last_fluxes = last_row.get('tracked_flux_values') or {}
-        for reaction_id in MISSION28_REQUIRED_TRACKED_FLUXES:
-            difference = round(float(last_fluxes.get(reaction_id, 0.0)) - float(first_fluxes.get(reaction_id, 0.0)), 3)
-            profile_differences[reaction_id] = difference
-            if abs(difference) >= MISSION28_MIN_PROFILE_CHANGE:
-                changed_fluxes.append(reaction_id)
-
-    profile_changed = len(changed_fluxes) >= MISSION28_MIN_CHANGED_FLUXES
-
-    mission28_data = {
+def _mission28_empty_report(mission27_report=None):
+    imported_reference = _mission28_reference_from_mission27(mission27_report)
+    missing = list(MISSION28_SECONDARY_GENES)
+    if imported_reference is None:
+        missing.insert(0, 'rescue_reference')
+    return {
         'mission_id': '28',
-        'check_version': 1,
-        'mission_title': 'Alternative Carbon Source Sweep',
+        'check_version': MISSION28_CHECK_VERSION,
+        'mission_title': 'Bypass Dependency Mapping',
         'target_context': MISSION28_TARGET_CONTEXT,
         'target_method': MISSION28_METHOD,
         'growth_objective': MISSION28_GROWTH_OBJECTIVE,
-        'blocked_carbon_source': MISSION28_BLOCKED_CARBON_SOURCE,
-        'candidate_carbon_sources': MISSION28_CANDIDATE_CARBON_SOURCES,
-        'selected_source': selected_source,
-        'sweep_bound': MISSION28_SWEEP_BOUND,
-        'sweep_values': expected_values,
-        'required_tracked_fluxes': MISSION28_REQUIRED_TRACKED_FLUXES,
-        'minimum_first_growth': MISSION28_MIN_FIRST_GROWTH,
-        'maximum_final_growth': MISSION28_MAX_FINAL_GROWTH,
-        'minimum_growth_drop': MISSION28_MIN_GROWTH_DROP,
-        'minimum_source_uptake': MISSION28_MIN_SOURCE_UPTAKE,
-        'minimum_source_uptake_drop': MISSION28_MIN_SOURCE_UPTAKE_DROP,
-        'minimum_profile_change': MISSION28_MIN_PROFILE_CHANGE,
-        'minimum_changed_fluxes': MISSION28_MIN_CHANGED_FLUXES,
-        'minimum_result_points': MISSION28_MIN_RESULT_POINTS,
-        'minimum_decreasing_steps': MISSION28_MIN_DECREASING_STEPS,
-        'sweep_data': sweep_data,
-        'glucose_lower_bound_closed': glucose_lower_bound_closed,
-        'unexpected_environment_changes': unexpected_environment_changes,
-        'base_medium_ready': base_medium_ready,
-        'candidate_sweep_selected': candidate_sweep_selected,
-        'tracking_ready': tracking_ready,
-        'result_point_count': len(result_rows),
-        'valid_ok_point_count': len(ok_rows),
-        'all_points_returned': all_points_returned,
-        'first_growth': round(first_growth, 3),
-        'last_growth': round(last_growth, 3),
-        'first_growth_viable': first_growth_viable,
-        'growth_drop': growth_drop,
-        'growth_decreased': growth_decreased,
-        'final_growth_low': final_growth_low,
-        'decreasing_steps': decreasing_steps,
-        'trend_is_gradual': trend_is_gradual,
-        'first_source_uptake': round(first_uptake, 3),
-        'last_source_uptake': round(last_uptake, 3),
-        'source_uptake_drop': source_uptake_drop,
-        'source_consumed': source_consumed,
-        'source_uptake_decreased': source_uptake_decreased,
-        'profile_differences': profile_differences,
-        'changed_fluxes': changed_fluxes,
-        'changed_flux_count': len(changed_fluxes),
-        'profile_changed': profile_changed,
-        'ready_to_deliver': (
-            base_medium_ready
-            and candidate_sweep_selected
-            and tracking_ready
-            and all_points_returned
-            and source_consumed
-            and source_uptake_decreased
-            and first_growth_viable
-            and growth_decreased
-            and final_growth_low
-            and trend_is_gradual
-            and profile_changed
-        ),
+        'primary_gene': MISSION28_PRIMARY_GENE,
+        'primary_gene_name': MISSION28_PRIMARY_GENE_NAME,
+        'primary_reaction': MISSION28_PRIMARY_REACTION,
+        'rescue_supplement': MISSION28_RESCUE_SUPPLEMENT,
+        'rescue_supplement_name': MISSION28_RESCUE_SUPPLEMENT_NAME,
+        'secondary_genes': list(MISSION28_SECONDARY_GENES),
+        'secondary_gene_names': copy.deepcopy(MISSION28_SECONDARY_GENE_NAMES),
+        'secondary_reactions': copy.deepcopy(MISSION28_SECONDARY_REACTIONS),
+        'rescue_reference': imported_reference,
+        'reference_imported_from_mission27': imported_reference is not None,
+        'secondary_trials': {},
+        'recorded_run_count': 1 if imported_reference is not None else 0,
+        'required_run_count': MISSION28_REQUIRED_RUN_COUNT,
+        'missing_conditions': missing,
+        'growth_retention_by_candidate': {},
+        'supplement_uptake_by_candidate': {},
+        'dependency_candidates': [],
+        'unique_dependency_candidate': None,
+        'unique_transport_dependency_supported': False,
+        'evidence_ready': False,
+        'answer_ready': False,
+        'ready_to_deliver': False,
+        'current_run_type': None,
+        'current_candidate': None,
+        'current_run_valid': False,
+        'current_run_recorded': False,
+        'current_issues': [],
+        'current_run': None,
+        'latest_attempt': None,
     }
-    if error or sweep_data.get('error'):
-        mission28_data['error'] = error or sweep_data.get('error')
-    save_mission28_bound_sweep_check(mission28_data)
-    return mission28_data
 
 
+def initialise_mission28_dependency_screen(mission27_report=None):
+    report = _mission28_empty_report(mission27_report)
+    save_mission28_dependency_check(report)
+    return report
+
+
+def _build_mission28_data(
+    method_name,
+    selected_objective,
+    objective_result,
+    genes,
+    reactions,
+    production_fluxes=None,
+    medium_fluxes=None,
+    existing_report=None,
+    mission27_report=None,
+    objective_error=None,
+):
+    """Validate and accumulate one visible rescue-reference or double-KO run."""
+    existing_report = existing_report or {}
+    if (
+        existing_report.get('mission_id') != '28'
+        or existing_report.get('check_version') != MISSION28_CHECK_VERSION
+    ):
+        existing_report = _mission28_empty_report(mission27_report)
+
+    rescue_reference = copy.deepcopy(existing_report.get('rescue_reference'))
+    secondary_trials = copy.deepcopy(existing_report.get('secondary_trials') or {})
+    reference_imported = bool(existing_report.get('reference_imported_from_mission27'))
+
+    environment = _mission28_environment_status(reactions)
+    knocked_out_genes = sorted(_knocked_out_genes(genes))
+    disabled_reactions = _mission28_disabled_reactions(knocked_out_genes)
+    primary_reaction_disabled = MISSION28_PRIMARY_REACTION in disabled_reactions
+
+    run_type = None
+    candidate = None
+    if environment.get('rescue_medium_ready') and knocked_out_genes == [MISSION28_PRIMARY_GENE]:
+        run_type = 'rescue_reference'
+    elif environment.get('rescue_medium_ready') and len(knocked_out_genes) == 2 and MISSION28_PRIMARY_GENE in knocked_out_genes:
+        secondary = [gene for gene in knocked_out_genes if gene != MISSION28_PRIMARY_GENE]
+        if len(secondary) == 1 and secondary[0] in MISSION28_SECONDARY_GENES:
+            run_type = 'secondary_trial'
+            candidate = secondary[0]
+
+    objective_numeric = _mission28_number_or_none(objective_result)
+    result_infeasible = 'INFEASIBLE' in str(objective_result or '').upper()
+    raw_fluxes, uptake_fluxes, _secretion_fluxes = _mission21_measured_medium_values(medium_fluxes)
+    diagnostics = _method_diagnostics_from_production_data(production_fluxes)
+    biomass_raw = _mission28_number_or_none(_mission13_biomass_value(production_fluxes))
+    primary_flux = _mission28_number_or_none(diagnostics.get('primary_objective_flux'))
+    method_score = _mission28_number_or_none(diagnostics.get('method_score'))
+    total_absolute_flux = _mission28_number_or_none(diagnostics.get('total_absolute_flux'))
+    method_score_name = diagnostics.get('method_score_name')
+    try:
+        active_reaction_count = int(diagnostics.get('active_reaction_count'))
+    except Exception:
+        active_reaction_count = None
+
+    glucose_raw = _mission28_number_or_none(raw_fluxes.get(MISSION27_GLUCOSE_REACTION))
+    oxygen_raw = _mission28_number_or_none(raw_fluxes.get(MISSION27_OXYGEN_REACTION))
+    supplement_raw = _mission28_number_or_none(raw_fluxes.get(MISSION28_RESCUE_SUPPLEMENT))
+    glucose_uptake = _mission28_number_or_none(uptake_fluxes.get(MISSION27_GLUCOSE_REACTION))
+    oxygen_uptake = _mission28_number_or_none(uptake_fluxes.get(MISSION27_OXYGEN_REACTION))
+    supplement_uptake = _mission28_number_or_none(uptake_fluxes.get(MISSION28_RESCUE_SUPPLEMENT))
+
+    expected_candidate_reaction = MISSION28_SECONDARY_REACTIONS.get(candidate)
+    candidate_reaction_disabled = bool(
+        expected_candidate_reaction and expected_candidate_reaction in disabled_reactions
+    )
+
+    issues = []
+    if objective_error:
+        issues.append(objective_error)
+    if method_name != MISSION28_METHOD:
+        issues.append('Use pFBA for the Mission 28 rescue reference and every secondary-knockout trial.')
+    if selected_objective != MISSION28_GROWTH_OBJECTIVE:
+        issues.append('Use the biomass objective for every Mission 28 run.')
+    if not environment.get('bounds_complete'):
+        issues.append('The environmental-bound payload is incomplete.')
+    if not environment.get('rescue_medium_ready'):
+        issues.append('Keep exactly the 2-oxoglutarate rescue supplement open and every unrelated environmental bound at model default.')
+    if run_type is None:
+        issues.append(
+            f'Use exactly {MISSION28_PRIMARY_GENE} / {MISSION28_PRIMARY_GENE_NAME} for the rescue reference, or that gene plus exactly one highlighted secondary candidate.'
+        )
+    if run_type in {'rescue_reference', 'secondary_trial'} and not primary_reaction_disabled:
+        issues.append(f'The primary knockout must keep {MISSION28_PRIMARY_REACTION} disabled by the GPR.')
+    if run_type == 'secondary_trial' and not candidate_reaction_disabled:
+        issues.append('The secondary knockout must disable its expected candidate reaction through the GPR.')
+
+    if result_infeasible or objective_numeric is None:
+        issues.append('Mission 28 requires a numeric visible biomass result; an infeasible result is not a measured zero-growth solution.')
+    elif objective_numeric < -MISSION28_PRIMARY_TOLERANCE:
+        issues.append('The biomass result is outside the valid non-negative range.')
+
+    required_medium = [MISSION27_GLUCOSE_REACTION, MISSION27_OXYGEN_REACTION, MISSION28_RESCUE_SUPPLEMENT]
+    missing_medium = [reaction_id for reaction_id in required_medium if reaction_id not in raw_fluxes]
+    if medium_fluxes and medium_fluxes.get('error'):
+        issues.append('The Exchange Flux Report is unavailable for this run.')
+    elif missing_medium:
+        issues.append('Numeric glucose, oxygen and 2-oxoglutarate exchange evidence is required.')
+    else:
+        if (
+            glucose_raw is None or oxygen_raw is None or supplement_raw is None
+            or glucose_uptake is None or oxygen_uptake is None or supplement_uptake is None
+        ):
+            issues.append('The required exchange evidence contains non-numeric values.')
+        else:
+            if glucose_raw > MISSION28_FLUX_TOLERANCE:
+                issues.append('Glucose must not be secreted in the controlled rescue medium.')
+            if oxygen_raw > MISSION28_FLUX_TOLERANCE:
+                issues.append('Oxygen must not be secreted in the controlled rescue medium.')
+            if supplement_raw > MISSION28_FLUX_TOLERANCE:
+                issues.append('2-Oxoglutarate must not be secreted in the rescue trial.')
+            if glucose_uptake is not None and glucose_uptake > MISSION28_EXPECTED_DEFAULT_UPTAKE + MISSION28_CAPACITY_TOLERANCE:
+                issues.append('Glucose uptake exceeds the model-default capacity.')
+            if supplement_uptake is not None and supplement_uptake > MISSION28_EXPECTED_SUPPLEMENT_CAPACITY + MISSION28_CAPACITY_TOLERANCE:
+                issues.append('2-Oxoglutarate uptake exceeds the controlled supplement capacity.')
+
+    if production_fluxes and production_fluxes.get('error'):
+        issues.append('The visible simulation diagnostics are unavailable.')
+    if biomass_raw is None or primary_flux is None:
+        issues.append('The visible biomass and primary-objective diagnostics are required.')
+    else:
+        if objective_numeric is not None and abs(objective_numeric - biomass_raw) > MISSION28_PRIMARY_TOLERANCE:
+            issues.append('The displayed objective value does not match the biomass-reaction flux.')
+        if abs(biomass_raw - primary_flux) > MISSION28_PRIMARY_TOLERANCE:
+            issues.append('The primary objective diagnostic does not match biomass.')
+    if diagnostics.get('method') != MISSION28_METHOD:
+        issues.append('The method diagnostic does not identify pFBA.')
+    if diagnostics.get('objective_reaction') != MISSION28_GROWTH_OBJECTIVE:
+        issues.append('The method diagnostic does not identify the biomass objective.')
+    if method_score_name != MISSION28_EXPECTED_SCORE_NAME:
+        issues.append('The pFBA secondary-score meaning is missing or incorrect.')
+    if method_score is None or total_absolute_flux is None:
+        issues.append('The visible pFBA secondary score or total absolute flux is missing.')
+    elif abs(method_score - total_absolute_flux) > MISSION28_PRIMARY_TOLERANCE:
+        issues.append('The pFBA method score does not match total absolute flux.')
+    if active_reaction_count is None:
+        issues.append('The visible pFBA result is missing the active-reaction diagnostic.')
+
+    if objective_numeric is not None and supplement_uptake is not None:
+        if run_type == 'rescue_reference':
+            if objective_numeric < MISSION28_MIN_REFERENCE_GROWTH:
+                issues.append('The rescue reference must retain clear positive growth.')
+            if supplement_uptake < MISSION28_MIN_REFERENCE_SUPPLEMENT_UPTAKE:
+                issues.append('The rescue reference must show measurable 2-oxoglutarate uptake.')
+            if glucose_uptake is not None and abs(glucose_uptake - MISSION28_EXPECTED_DEFAULT_UPTAKE) > MISSION28_CAPACITY_TOLERANCE:
+                issues.append('Keep model-default glucose availability in the rescue reference.')
+            if oxygen_uptake is not None and oxygen_uptake < MISSION28_MIN_AEROBIC_OXYGEN_UPTAKE:
+                issues.append('The rescue reference must retain measurable oxygen uptake.')
+        elif run_type == 'secondary_trial' and candidate == MISSION28_EXPECTED_DEPENDENCY:
+            if objective_numeric > MISSION28_MAX_DEPENDENCY_GROWTH:
+                issues.append('The transporter knockout should abolish the model-predicted rescue growth.')
+            if supplement_uptake > MISSION28_MAX_DEPENDENCY_UPTAKE:
+                issues.append('The transporter knockout should abolish measurable 2-oxoglutarate uptake.')
+        elif run_type == 'secondary_trial':
+            reference_growth = _mission28_number_or_none((rescue_reference or {}).get('growth'))
+            if reference_growth is not None and reference_growth > MISSION28_PRIMARY_TOLERANCE:
+                retention = objective_numeric / reference_growth
+                if retention < MISSION28_MIN_NONDEPENDENCY_RETENTION:
+                    issues.append('This control knockout retains too little of the established rescue growth.')
+            if supplement_uptake < MISSION28_MIN_NONDEPENDENCY_UPTAKE:
+                issues.append('This control knockout should retain measurable 2-oxoglutarate uptake.')
+
+    current_run_valid = not issues
+    current_run_recorded = False
+    current_run = None
+    if current_run_valid:
+        current_run = {
+            'run_type': run_type,
+            'candidate': candidate,
+            'candidate_name': MISSION28_SECONDARY_GENE_NAMES.get(candidate) if candidate else None,
+            'expected_disabled_reaction': expected_candidate_reaction,
+            'candidate_reaction_disabled': bool(candidate_reaction_disabled),
+            'method': method_name,
+            'objective': selected_objective,
+            'growth': _mission28_clean_number(objective_numeric),
+            'knocked_out_genes': list(knocked_out_genes),
+            'disabled_reactions': list(disabled_reactions),
+            'primary_reaction_disabled': bool(primary_reaction_disabled),
+            'environment_changes': list(environment.get('changes') or []),
+            'glucose_raw_flux': _mission28_clean_number(glucose_raw),
+            'glucose_uptake': _mission28_clean_number(glucose_uptake),
+            'oxygen_raw_flux': _mission28_clean_number(oxygen_raw),
+            'oxygen_uptake': _mission28_clean_number(oxygen_uptake),
+            'supplement_raw_flux': _mission28_clean_number(supplement_raw),
+            'supplement_uptake': _mission28_clean_number(supplement_uptake),
+            'method_diagnostics': {
+                'method': diagnostics.get('method'),
+                'objective_reaction': diagnostics.get('objective_reaction'),
+                'primary_objective_flux': _mission28_clean_number(primary_flux),
+                'method_score': _mission28_clean_number(method_score),
+                'method_score_name': method_score_name,
+                'total_absolute_flux': _mission28_clean_number(total_absolute_flux),
+                'active_reaction_count': active_reaction_count,
+            },
+        }
+        if run_type == 'rescue_reference':
+            current_run['source'] = 'current_visible_run'
+            rescue_reference = current_run
+            reference_imported = False
+        elif run_type == 'secondary_trial':
+            secondary_trials[candidate] = current_run
+        current_run_recorded = True
+
+    missing_conditions = []
+    if not isinstance(rescue_reference, dict):
+        missing_conditions.append('rescue_reference')
+    missing_conditions.extend(
+        candidate for candidate in MISSION28_SECONDARY_GENES
+        if not isinstance(secondary_trials.get(candidate), dict)
+    )
+    recorded_run_count = MISSION28_REQUIRED_RUN_COUNT - len(missing_conditions)
+    evidence_ready = not missing_conditions
+
+    reference_growth = _mission28_number_or_none((rescue_reference or {}).get('growth'))
+    growth_retention_by_candidate = {}
+    supplement_uptake_by_candidate = {}
+    dependency_candidates = []
+    controls_supported = True
+    if evidence_ready and reference_growth is not None and reference_growth > MISSION28_PRIMARY_TOLERANCE:
+        for candidate_id in MISSION28_SECONDARY_GENES:
+            trial = secondary_trials.get(candidate_id) or {}
+            growth = _mission28_number_or_none(trial.get('growth'))
+            uptake = _mission28_number_or_none(trial.get('supplement_uptake'))
+            retention = None if growth is None else growth / reference_growth
+            growth_retention_by_candidate[candidate_id] = (
+                _mission28_clean_number(retention) if retention is not None else None
+            )
+            supplement_uptake_by_candidate[candidate_id] = (
+                _mission28_clean_number(uptake) if uptake is not None else None
+            )
+            if (
+                growth is not None and growth <= MISSION28_MAX_DEPENDENCY_GROWTH
+                and uptake is not None and uptake <= MISSION28_MAX_DEPENDENCY_UPTAKE
+                and trial.get('primary_reaction_disabled')
+                and trial.get('candidate_reaction_disabled')
+            ):
+                dependency_candidates.append(candidate_id)
+            elif (
+                retention is None or retention < MISSION28_MIN_NONDEPENDENCY_RETENTION
+                or uptake is None or uptake < MISSION28_MIN_NONDEPENDENCY_UPTAKE
+                or not trial.get('primary_reaction_disabled')
+                or not trial.get('candidate_reaction_disabled')
+            ):
+                controls_supported = False
+
+    unique_dependency_candidate = dependency_candidates[0] if len(dependency_candidates) == 1 else None
+    unique_transport_dependency_supported = bool(
+        evidence_ready
+        and reference_growth is not None
+        and reference_growth >= MISSION28_MIN_REFERENCE_GROWTH
+        and _mission28_number_or_none((rescue_reference or {}).get('supplement_uptake')) >= MISSION28_MIN_REFERENCE_SUPPLEMENT_UPTAKE
+        and unique_dependency_candidate == MISSION28_EXPECTED_DEPENDENCY
+        and controls_supported
+    )
+
+    latest_attempt = {
+        'method': method_name,
+        'objective': selected_objective,
+        'run_type': run_type,
+        'candidate': candidate,
+        'knocked_out_genes': list(knocked_out_genes),
+        'valid': current_run_valid,
+        'recorded': current_run_recorded,
+        'issues': list(issues),
+    }
+
+    report = _mission28_empty_report()
+    report.update({
+        'rescue_reference': rescue_reference,
+        'reference_imported_from_mission27': reference_imported,
+        'secondary_trials': secondary_trials,
+        'recorded_run_count': recorded_run_count,
+        'missing_conditions': missing_conditions,
+        'growth_retention_by_candidate': growth_retention_by_candidate,
+        'supplement_uptake_by_candidate': supplement_uptake_by_candidate,
+        'dependency_candidates': dependency_candidates,
+        'unique_dependency_candidate': unique_dependency_candidate,
+        'unique_transport_dependency_supported': unique_transport_dependency_supported,
+        'evidence_ready': evidence_ready,
+        'answer_ready': unique_transport_dependency_supported,
+        'ready_to_deliver': unique_transport_dependency_supported,
+        'current_run_type': run_type,
+        'current_candidate': candidate,
+        'current_run_valid': current_run_valid,
+        'current_run_recorded': current_run_recorded,
+        'current_issues': list(issues),
+        'current_run': current_run,
+        'latest_attempt': latest_attempt,
+    })
+    save_mission28_dependency_check(report)
+    return report
+
+
+def run_mission28_dependency_check(simulation_results=None):
+    """Validate the already displayed Mission 28 result without re-simulating."""
+    method_name, selected_objective, genes, reactions = _read_simulation_file()
+    objective_result = None
+    production_fluxes = None
+    medium_fluxes = None
+    objective_error = None
+    try:
+        if simulation_results is not None:
+            result_objective = simulation_results[0]
+            objective_result = simulation_results[1]
+            production_fluxes = simulation_results[2] if len(simulation_results) > 2 else None
+            medium_fluxes = simulation_results[3] if len(simulation_results) > 3 else None
+            if result_objective != selected_objective:
+                objective_error = 'The displayed simulation result does not match the currently selected objective.'
+        else:
+            objective_error = 'Run a visible Mission 28 simulation before recording evidence.'
+    except Exception:
+        objective_error = 'Could not read the current visible Mission 28 simulation result.'
+
+    return _build_mission28_data(
+        method_name,
+        selected_objective,
+        objective_result,
+        genes,
+        reactions,
+        production_fluxes=production_fluxes,
+        medium_fluxes=medium_fluxes,
+        existing_report=load_mission28_dependency_check() or {},
+        mission27_report=load_mission27_rescue_check() or {},
+        objective_error=objective_error,
+    )
+
+
+def run_mission28_dependency_check_remote(backend_url, simulation_results=None):
+    """Browser parity wrapper using the same visible backend response."""
+    del backend_url
+    return run_mission28_dependency_check(simulation_results)
+
+
+def _normalise_mission28_text(value):
+    text = str(value or '').replace('α', 'alpha').replace('Α', 'alpha')
+    text = unicodedata.normalize('NFKD', text)
+    return ''.join(char for char in text if not unicodedata.combining(char)).lower().strip()
+
+
+def normalise_mission28_answer(answer):
+    text = _normalise_mission28_text(answer)
+    if not text:
+        return None
+    patterns = (
+        r'\bb2587\b',
+        r'\bkgtp\b',
+        r'\bakgt2r\b',
+        r'\b(?:2|two)[-\s]*(?:oxo|keto)glutarate\s+transporter\b',
+        r'\balpha[-\s]*ketoglutarate\s+transporter\b',
+    )
+    return MISSION28_EXPECTED_DEPENDENCY if any(re.search(pattern, text) for pattern in patterns) else None
+
+
+def mission28_answer_matches(answer, report_data=None):
+    report = report_data if report_data is not None else (load_mission28_dependency_check() or {})
+    return bool(
+        report.get('mission_id') == '28'
+        and report.get('check_version') == MISSION28_CHECK_VERSION
+        and report.get('answer_ready')
+        and report.get('unique_transport_dependency_supported')
+        and normalise_mission28_answer(answer) == report.get('unique_dependency_candidate')
+    )
+
+
+def build_mission28_dependency_report_text(report_data=None):
+    report = report_data or {}
+    if report.get('mission_id') != '28' or report.get('check_version') != MISSION28_CHECK_VERSION:
+        return (
+            'No dependency evidence has been recorded yet.\n\n'
+            'Experimental objective:\n'
+            'Use the validated 2-oxoglutarate rescue from Mission 27 as a controlled reference. Keep b0720 / gltA knocked out, keep EX_akg_e as the only opened supplement, and use pFBA with the biomass objective.\n\n'
+            'Dependency screen:\n'
+            'Test each highlighted secondary gene in a separate visible run. Change only one secondary knockout at a time while keeping the rescue medium unchanged. For every trial, compare predicted growth, measured 2-oxoglutarate uptake, and the reactions disabled through the GPR.\n\n'
+            'What to determine:\n'
+            'Identify the secondary knockout that removes both supplement uptake and the rescued-growth phenotype while citrate synthase remains disabled. Activate the mission to begin recording the reference and five controlled secondary-knockout trials.'
+        )
+
+    def fmt(value):
+        return 'pending' if value is None else f'{float(value):.3f}'
+
+    lines = [
+        'Mission 28 Bypass Dependency Mapping',
+        '',
+        'Controlled protocol:',
+        f'- Method: {MISSION28_METHOD}',
+        f'- Objective: {MISSION28_GROWTH_OBJECTIVE}',
+        f'- Fixed lesion: {MISSION28_PRIMARY_GENE} / {MISSION28_PRIMARY_GENE_NAME}',
+        f'- Fixed rescue supplement: {MISSION28_RESCUE_SUPPLEMENT} / {MISSION28_RESCUE_SUPPLEMENT_NAME}',
+        '- Secondary trials: add exactly one highlighted candidate knockout while keeping the rescue medium unchanged',
+        '',
+        f"Runs recorded: {report.get('recorded_run_count', 0)}/{report.get('required_run_count', MISSION28_REQUIRED_RUN_COUNT)}",
+        '',
+        'Rescue reference:',
+    ]
+
+    reference = report.get('rescue_reference')
+    if isinstance(reference, dict):
+        lines.extend([
+            f"- Growth: {fmt(reference.get('growth'))}",
+            f"- 2-Oxoglutarate uptake: {fmt(reference.get('supplement_uptake'))}",
+            f"- {MISSION28_PRIMARY_REACTION} disabled: {'yes' if reference.get('primary_reaction_disabled') else 'no'}",
+            f"- Source: {'Mission 27 visible evidence' if report.get('reference_imported_from_mission27') else 'current visible run'}",
+        ])
+    else:
+        lines.append('- Pending')
+
+    lines.extend([
+        '',
+        'Secondary-knockout trials:',
+        'Candidate | growth | retention | 2OG uptake | GPR-disabled reactions',
+    ])
+    trials = report.get('secondary_trials') or {}
+    retention = report.get('growth_retention_by_candidate') or {}
+    for candidate_id in MISSION28_SECONDARY_GENES:
+        trial = trials.get(candidate_id)
+        label = f'{candidate_id}/{MISSION28_SECONDARY_GENE_NAMES[candidate_id]}'
+        if not isinstance(trial, dict):
+            lines.append(f'{label} | pending | pending | pending | pending')
+            continue
+        retention_value = retention.get(candidate_id)
+        retention_text = 'pending' if retention_value is None else f'{100.0 * float(retention_value):.1f}%'
+        disabled_text = ', '.join(trial.get('disabled_reactions') or []) or 'none'
+        lines.append(
+            f"{label} | {fmt(trial.get('growth'))} | {retention_text} | {fmt(trial.get('supplement_uptake'))} | {disabled_text}"
+        )
+
+    latest = report.get('latest_attempt') or {}
+    if latest and not latest.get('recorded'):
+        lines.extend(['', 'Latest run was not recorded:'])
+        for issue in latest.get('issues') or ['The visible run did not match the controlled Mission 28 protocol.']:
+            lines.append(f'- {issue}')
+        if report.get('recorded_run_count', 0):
+            lines.append('Previously valid Mission 28 dependency evidence remains available.')
+    elif report.get('current_run_recorded'):
+        current = report.get('current_run') or {}
+        if current.get('run_type') == 'rescue_reference':
+            recorded = 'rescue_reference'
+        else:
+            recorded = f"secondary_trial[{current.get('candidate')}]"
+        lines.extend(['', f'Latest valid visible run recorded: {recorded}.'])
+
+    lines.append('')
+    if report.get('evidence_ready'):
+        lines.extend([
+            'Evidence complete.',
+            'Compare rescue retention, measured 2-oxoglutarate uptake and the GPR-disabled reactions.',
+            'Question: Which secondary gene knockout abolished the rescue by preventing 2-oxoglutarate uptake while citrate synthase remained disabled?',
+        ])
+    else:
+        lines.append('Evidence incomplete.')
+        missing = report.get('missing_conditions') or []
+        if missing:
+            lines.append('Missing conditions: ' + ', '.join(missing))
+
+    lines.extend([
+        '',
+        'Interpretation note: external supplement availability is not the same as metabolic uptake; the rescue depends on functions that make the supplement accessible to the network.',
+        'The conclusion is conditional on this model, pFBA biomass objective, medium, bounds and tested secondary-gene set.',
+        'All growth, exchange and GPR evidence comes from visible simulation results. No hidden validation simulation is used.',
+    ])
+    return '\n'.join(lines)
+
+
+# Backwards-compatible name retained for stale imports from the old sweep-based
+# Mission 28.  It now exposes the redesigned dependency report and never runs a
+# Bound Sweep.
 def run_mission28_bound_sweep_check(sweep_data=None):
-    sweep_data = sweep_data or load_bound_sweep()
-    if not sweep_data or not sweep_data.get('rows'):
-        return _build_mission28_data(sweep_data, error='Run a Bound Sweep before delivering Mission 28.')
-    return _build_mission28_data(sweep_data)
+    del sweep_data
+    return load_mission28_dependency_check() or _mission28_empty_report(load_mission27_rescue_check() or {})
 
 def run_simul():
     method_name, objective_name, genes, reactions = _read_simulation_file()

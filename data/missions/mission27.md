@@ -1,60 +1,73 @@
-# Mission 27 — Glucose Limitation Sweep
+# Mission 27 — Metabolic Bypass Rescue
 
-**Scientist:** Dr. Luna  
-**Lab:** Laboratory 5 — Comparative Experiment Lab  
-**Theme:** Medium sensitivity / carbon limitation
+**Scientist:** Dr. Ribeiro  
+**Laboratory theme:** Diagnosis, rescue and metabolic robustness  
+**Prerequisite:** Mission 26
 
-## Mission idea
+## Learning objective
 
-The player uses **Bound Sweep** to test how the model responds when glucose uptake becomes progressively restricted.
+Demonstrate that an environmental supplementation can bypass the predicted consequence of a genetic knockout without restoring the blocked gene-associated reaction.
 
-This mission is harder than Mission 26 because the player must not only run the sweep, but also provide a full product/byproduct evidence panel and interpret the collapse trend.
+This is a model-conditional rescue claim. It applies only to the current metabolic model, pFBA biomass objective, medium, bounds and tested candidate set.
 
-## Required simulator setup
+## Controlled protocol
 
-Base setup before the sweep:
+Use:
 
-- Method: `FBA`
+- Method: `pFBA`
 - Objective: `BIOMASS_Ecoli_core_w_GAM`
-- Genes: no knockouts
-- Environment: unchanged
+- Target gene: `b0720 / gltA`
+- GPR-disabled reaction in knockout runs: `CS` (citrate synthase)
 
-Bound Sweep Setup:
+Record two references with the completely default environment:
 
-- Variable: `EX_glc__D_e` lower bound
-- Preset values: `-1000, -500, -100, -50, -10, 0`
+1. Wild type, all genes active
+2. Single `b0720 / gltA` knockout
 
-Production Flux evidence required:
+Then keep only `b0720` knocked out and test each candidate separately by opening exactly one candidate lower bound. Glucose, oxygen and every unrelated environmental bound must remain at model default.
 
-- `EX_ac_e`
-- `EX_etoh_e`
-- `EX_for_e`
-- `EX_lac__D_e`
-- `EX_succ_e`
+Candidate exchanges:
 
-## What the player should observe
+- `EX_akg_e` — 2-Oxoglutarate
+- `EX_pyr_e` — Pyruvate
+- `EX_succ_e` — Succinate
+- `EX_fum_e` — Fumarate
+- `EX_mal__L_e` — L-Malate
 
-As the glucose lower bound moves closer to `0`, less glucose can be consumed.
+No Production Flux selection is required. The mission uses growth, medium exchange values, GPR-disabled reactions and method-aware pFBA diagnostics from the visible simulation result.
 
-The expected trend is:
+## Expected scientific pattern
 
-- glucose uptake decreases;
-- growth drops strongly;
-- the final point shows severe or no growth;
-- several product/byproduct fluxes decrease because the cell has less carbon available.
+Approximate primary biomass fluxes:
 
-## Success criteria
+| Condition | Growth |
+|---|---:|
+| Wild type, default medium | 0.873922 |
+| `b0720` knockout, default medium | 0.000000 |
+| Knockout + `EX_akg_e` | 1.395438 |
+| Knockout + `EX_pyr_e` | 0.000000 |
+| Knockout + `EX_succ_e` | 0.000000 |
+| Knockout + `EX_fum_e` | 0.000000 |
+| Knockout + `EX_mal__L_e` | 0.000000 |
 
-The mission is ready to deliver when:
+The report must show that `CS` remains disabled in every knockout trial. A positive growth result therefore represents an operational bypass in this model, not repair of `gltA` or restoration of citrate synthase.
 
-- the base setup is clean;
-- the glucose lower-bound sweep is selected;
-- all required sweep values are returned;
-- the full Production Flux panel was selected;
-- growth drops strongly across the sweep;
-- final growth is very low;
-- several tracked product/byproduct fluxes decrease.
+## Final question
 
-## Optional hint
+> Which candidate exchange restored predicted growth while citrate synthase remained disabled?
 
-Do not look only at the final row. The important part is the trend: when carbon input goes down, growth and secretion should fall together.
+The report presents the seven visible runs but does not state the final answer for the player.
+
+## Robustness requirements
+
+- Runs may be completed in any order.
+- Repeating a valid condition updates that condition without duplicating evidence.
+- An invalid later attempt does not erase valid references or candidate trials.
+- Exactly one candidate lower bound may be opened per candidate trial.
+- Wild type is allowed only for the default reference.
+- Knockout references and candidate trials require exactly `b0720` knocked out.
+- `INFEASIBLE` is not treated as numeric zero growth.
+- Numeric glucose, oxygen and candidate exchange evidence is required.
+- pFBA primary and secondary diagnostics must be internally consistent.
+- State must remain JSON serializable and usable in desktop and browser modes.
+- No hidden validation simulation or extra HTTP request is used.

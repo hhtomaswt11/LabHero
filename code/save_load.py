@@ -826,19 +826,19 @@ def clear_mission26_bound_sweep_check():
     _delete_save_artifact('mission26_bound_sweep_check', 'mission26_bound_sweep_check.txt')
 
 
-def save_mission27_bound_sweep_check(data):
+def save_mission27_rescue_check(data):
     if _IS_WEB:
-        _MEMSTORE['mission27_bound_sweep_check'] = data
+        _MEMSTORE['mission27_rescue_check'] = data
         return
-    with open(get_save_path('mission27_bound_sweep_check.txt'), 'w') as report_file:
+    with open(get_save_path('mission27_rescue_check.txt'), 'w') as report_file:
         json.dump(data, report_file)
 
 
-def load_mission27_bound_sweep_check():
+def load_mission27_rescue_check():
     if _IS_WEB:
-        return _MEMSTORE.get('mission27_bound_sweep_check')
+        return _MEMSTORE.get('mission27_rescue_check')
     try:
-        with open(get_save_path('mission27_bound_sweep_check.txt')) as report_file:
+        with open(get_save_path('mission27_rescue_check.txt')) as report_file:
             return json.load(report_file)
     except FileNotFoundError:
         return None
@@ -846,24 +846,39 @@ def load_mission27_bound_sweep_check():
         return None
 
 
+def clear_mission27_rescue_check():
+    _delete_save_artifact('mission27_rescue_check', 'mission27_rescue_check.txt')
+
+
+# Backwards-compatible helpers retained for stale imports and old activation
+# code. The redesigned Mission 27 no longer stores Bound Sweep evidence.
+def save_mission27_bound_sweep_check(data):
+    save_mission27_rescue_check(data)
+
+
+def load_mission27_bound_sweep_check():
+    return load_mission27_rescue_check()
+
+
 def clear_mission27_bound_sweep_check():
+    clear_mission27_rescue_check()
     _delete_save_artifact('mission27_bound_sweep_check', 'mission27_bound_sweep_check.txt')
 
 
 
-def save_mission28_bound_sweep_check(data):
+def save_mission28_dependency_check(data):
     if _IS_WEB:
-        _MEMSTORE['mission28_bound_sweep_check'] = data
+        _MEMSTORE['mission28_dependency_check'] = data
         return
-    with open(get_save_path('mission28_bound_sweep_check.txt'), 'w') as report_file:
+    with open(get_save_path('mission28_dependency_check.txt'), 'w') as report_file:
         json.dump(data, report_file)
 
 
-def load_mission28_bound_sweep_check():
+def load_mission28_dependency_check():
     if _IS_WEB:
-        return _MEMSTORE.get('mission28_bound_sweep_check')
+        return _MEMSTORE.get('mission28_dependency_check')
     try:
-        with open(get_save_path('mission28_bound_sweep_check.txt')) as report_file:
+        with open(get_save_path('mission28_dependency_check.txt')) as report_file:
             return json.load(report_file)
     except FileNotFoundError:
         return None
@@ -871,5 +886,20 @@ def load_mission28_bound_sweep_check():
         return None
 
 
-def clear_mission28_bound_sweep_check():
+def clear_mission28_dependency_check():
+    _delete_save_artifact('mission28_dependency_check', 'mission28_dependency_check.txt')
     _delete_save_artifact('mission28_bound_sweep_check', 'mission28_bound_sweep_check.txt')
+
+
+# Backwards-compatible helpers retained for stale imports. Mission 28 no
+# longer uses Bound Sweep evidence.
+def save_mission28_bound_sweep_check(data):
+    save_mission28_dependency_check(data)
+
+
+def load_mission28_bound_sweep_check():
+    return load_mission28_dependency_check()
+
+
+def clear_mission28_bound_sweep_check():
+    clear_mission28_dependency_check()

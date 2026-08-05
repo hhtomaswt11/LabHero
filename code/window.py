@@ -490,193 +490,10 @@ def _build_simulation_results_text(results):
 
 
 def _build_mission27_text(report_data):
-    if not report_data:
-        return 'Mission 27 Glucose Sweep Check\n\nRun a Bound Sweep to generate the mission report.'
-
-    if report_data.get('error') and not report_data.get('sweep_data'):
-        return f"Mission 27 Glucose Sweep Check\nError: {report_data.get('error')}"
-
-    clean_status = (
-        'Base setup: clean sensitivity setup detected.'
-        if report_data.get('clean_base_setup')
-        else 'Base setup: keep FBA, biomass objective, no knockouts and unchanged environment.'
-    )
-    sweep_status = (
-        'Sweep variable: glucose lower-bound sweep selected.'
-        if report_data.get('glucose_sweep_selected')
-        else 'Sweep variable: select the D-Glucose lower bound in Bound Sweep Setup.'
-    )
-    tracking_status = (
-        'Production Flux: full product/byproduct panel selected by the player.'
-        if report_data.get('tracking_ready')
-        else 'Production Flux: select the full product/byproduct panel before running the sweep.'
-    )
-    points_status = (
-        'Sweep points: all required glucose-limitation points returned results.'
-        if report_data.get('all_points_returned')
-        else 'Sweep points: the glucose sweep is missing result points.'
-    )
-    growth_status = (
-        'Growth trend: growth falls strongly as glucose becomes limiting.'
-        if report_data.get('growth_decreased')
-        else 'Growth trend: the drop is not strong enough for a carbon-limitation experiment.'
-    )
-    collapse_status = (
-        'Collapse zone: final point shows severe/no growth.'
-        if report_data.get('final_growth_low')
-        else 'Collapse zone: the final point does not show strong enough limitation.'
-    )
-    gradual_status = (
-        'Trend shape: several decreasing steps detected, not just one isolated change.'
-        if report_data.get('trend_is_gradual')
-        else 'Trend shape: look for a progressive decrease across several rows.'
-    )
-    uptake_status = (
-        'Glucose uptake: uptake decreases across the sweep.'
-        if report_data.get('glucose_uptake_decreased')
-        else 'Glucose uptake: the tested uptake did not decrease enough.'
-    )
-    profile_status = (
-        'Product profile: secretion profile decreases with carbon limitation.'
-        if report_data.get('profile_decreased')
-        else 'Product profile: not enough tracked products/byproducts decreased.'
-    )
-    final_status = (
-        'Glucose limitation sweep ready. Return to Dr. Luna and deliver it.'
-        if report_data.get('ready_to_deliver')
-        else 'Not ready yet. Use the Bound Sweep Report to identify the glucose-limitation trend.'
-    )
-
-    decreased_fluxes = report_data.get('decreased_fluxes') or []
-    decreased_text = ', '.join(decreased_fluxes) if decreased_fluxes else 'none'
-
-    return (
-        'Mission 27 Glucose Sweep Check\n\n'
-        f"Context: {report_data.get('target_context')}\n"
-        f"Variable: {report_data.get('sweep_reaction')} {report_data.get('sweep_bound')} bound\n"
-        f"Values tested: {', '.join(str(v).rstrip('0').rstrip('.') for v in report_data.get('sweep_values') or [])}\n"
-        f"Result points: {report_data.get('result_point_count')} / {report_data.get('minimum_result_points')}\n"
-        f"Decreasing growth steps: {report_data.get('decreasing_steps')} / {report_data.get('minimum_decreasing_steps')}\n\n"
-        f"Growth trend:\n"
-        f"- First point growth: {_format_sweep_number(report_data.get('first_growth'))}\n"
-        f"- Last point growth: {_format_sweep_number(report_data.get('last_growth'))}\n"
-        f"- Growth drop: {_format_sweep_number(report_data.get('growth_drop'))}\n"
-        f"- Required minimum drop: {_format_sweep_number(report_data.get('minimum_growth_drop'))}\n"
-        f"- Final growth must be <= {_format_sweep_number(report_data.get('maximum_final_growth'))}\n\n"
-        f"Glucose uptake trend:\n"
-        f"- First point glucose uptake: {_format_sweep_number(report_data.get('first_glucose_uptake'))}\n"
-        f"- Last point glucose uptake: {_format_sweep_number(report_data.get('last_glucose_uptake'))}\n"
-        f"- Glucose uptake drop: {_format_sweep_number(report_data.get('glucose_uptake_drop'))}\n"
-        f"- Required minimum uptake drop: {_format_sweep_number(report_data.get('minimum_uptake_drop'))}\n\n"
-        f"Decreased tracked fluxes: {decreased_text}\n"
-        f"Decreased flux count: {report_data.get('decreased_flux_count', 0)} / {report_data.get('minimum_changed_fluxes')}\n\n"
-        f"{clean_status}\n"
-        f"{sweep_status}\n"
-        f"{tracking_status}\n"
-        f"{points_status}\n"
-        f"{growth_status}\n"
-        f"{collapse_status}\n"
-        f"{gradual_status}\n"
-        f"{uptake_status}\n"
-        f"{profile_status}\n\n"
-        f"{final_status}"
-    )
-
-
+    return build_mission27_rescue_report_text(report_data)
 
 def _build_mission28_text(report_data):
-    if not report_data:
-        return 'Mission 28 Carbon Source Sweep Check\n\nRun a Bound Sweep to generate the mission report.'
-
-    if report_data.get('error') and not report_data.get('sweep_data'):
-        return f"Mission 28 Carbon Source Sweep Check\nError: {report_data.get('error')}"
-
-    base_status = (
-        'Base medium: glucose uptake blocked, with no unrelated medium changes.'
-        if report_data.get('base_medium_ready')
-        else 'Base medium: close only glucose uptake before the sweep.'
-    )
-    sweep_status = (
-        'Sweep variable: candidate alternative carbon-source lower bound selected.'
-        if report_data.get('candidate_sweep_selected')
-        else 'Sweep variable: choose one candidate carbon-source lower bound in Bound Sweep Setup.'
-    )
-    tracking_status = (
-        'Production Flux: full product/byproduct panel selected.'
-        if report_data.get('tracking_ready')
-        else 'Production Flux: select the full product/byproduct panel before running the sweep.'
-    )
-    points_status = (
-        'Sweep points: all required source-availability points returned results.'
-        if report_data.get('all_points_returned')
-        else 'Sweep points: missing result points.'
-    )
-    source_status = (
-        'Source uptake: selected source is consumed and decreases across the sweep.'
-        if report_data.get('source_consumed') and report_data.get('source_uptake_decreased')
-        else 'Source uptake: the selected source is not showing a clear uptake trend.'
-    )
-    growth_status = (
-        'Growth trend: viable at high source availability, then drops strongly.'
-        if report_data.get('first_growth_viable') and report_data.get('growth_decreased')
-        else 'Growth trend: the source does not show enough rescue/limitation yet.'
-    )
-    collapse_status = (
-        'Collapse zone: final point shows severe/no growth.'
-        if report_data.get('final_growth_low')
-        else 'Collapse zone: final point should show severe/no growth.'
-    )
-    profile_status = (
-        'Product profile: enough tracked products/byproducts changed.'
-        if report_data.get('profile_changed')
-        else 'Product profile: not enough tracked products/byproducts changed.'
-    )
-    final_status = (
-        'Alternative carbon-source sweep ready. Return to Dr. Luna and deliver it.'
-        if report_data.get('ready_to_deliver')
-        else 'Not ready yet. Use the Bound Sweep Report to identify a stronger carbon-source trend.'
-    )
-
-    selected_source = report_data.get('selected_source') or 'none'
-    changed_fluxes = report_data.get('changed_fluxes') or []
-    changed_text = ', '.join(changed_fluxes) if changed_fluxes else 'none'
-    unexpected = report_data.get('unexpected_environment_changes') or []
-    unexpected_text = ', '.join(unexpected) if unexpected else 'none'
-
-    return (
-        'Mission 28 Carbon Source Sweep Check\n\n'
-        f"Context: {report_data.get('target_context')}\n"
-        f"Blocked carbon source: {report_data.get('blocked_carbon_source')}\n"
-        f"Selected sweep source: {selected_source}\n"
-        f"Candidate sources: {', '.join(report_data.get('candidate_carbon_sources') or [])}\n"
-        f"Values tested: {', '.join(str(v).rstrip('0').rstrip('.') for v in report_data.get('sweep_values') or [])}\n"
-        f"Unexpected medium changes: {unexpected_text}\n"
-        f"Result points: {report_data.get('result_point_count')} / {report_data.get('minimum_result_points')}\n"
-        f"Decreasing growth steps: {report_data.get('decreasing_steps')} / {report_data.get('minimum_decreasing_steps')}\n\n"
-        f"Growth trend:\n"
-        f"- First point growth: {_format_sweep_number(report_data.get('first_growth'))}\n"
-        f"- Minimum first growth: {_format_sweep_number(report_data.get('minimum_first_growth'))}\n"
-        f"- Last point growth: {_format_sweep_number(report_data.get('last_growth'))}\n"
-        f"- Final growth must be <= {_format_sweep_number(report_data.get('maximum_final_growth'))}\n"
-        f"- Growth drop: {_format_sweep_number(report_data.get('growth_drop'))}\n"
-        f"- Required growth drop: {_format_sweep_number(report_data.get('minimum_growth_drop'))}\n\n"
-        f"Source uptake trend:\n"
-        f"- First source uptake: {_format_sweep_number(report_data.get('first_source_uptake'))}\n"
-        f"- Last source uptake: {_format_sweep_number(report_data.get('last_source_uptake'))}\n"
-        f"- Source uptake drop: {_format_sweep_number(report_data.get('source_uptake_drop'))}\n"
-        f"- Required uptake drop: {_format_sweep_number(report_data.get('minimum_source_uptake_drop'))}\n\n"
-        f"Changed tracked fluxes: {changed_text}\n"
-        f"Changed flux count: {report_data.get('changed_flux_count', 0)} / {report_data.get('minimum_changed_fluxes')}\n\n"
-        f"{base_status}\n"
-        f"{sweep_status}\n"
-        f"{tracking_status}\n"
-        f"{points_status}\n"
-        f"{source_status}\n"
-        f"{growth_status}\n"
-        f"{collapse_status}\n"
-        f"{profile_status}\n\n"
-        f"{final_status}"
-    )
+    return build_mission28_dependency_report_text(report_data)
 
 def _build_mission07_text(objective_data):
     return build_mission07_objective_comparison_report_text(objective_data)
@@ -1006,6 +823,8 @@ class Window:
             ('22', list(MISSION22_TARGET_GENES)),
             ('25', [MISSION25_TARGET_GENE]),
             ('26', [MISSION26_TARGET_GENE]),
+            ('27', [MISSION27_TARGET_GENE]),
+            ('28', [MISSION28_PRIMARY_GENE, *MISSION28_SECONDARY_GENES]),
         ]
         for mission_id, candidates in gene_mission_candidates:
             if mission_id in self.player.missions_activated and mission_id not in self.player.missions_completed:
@@ -1473,17 +1292,26 @@ class Window:
                 else:
                     mission25_data = run_mission25_context_check(self.results)
 
+            mission27_data = None
+            if '27' in self.player.missions_activated and '27' not in self.player.missions_completed:
+                if sys.platform == 'emscripten':
+                    mission27_data = run_mission27_rescue_check_remote(BACKEND_URL, self.results)
+                else:
+                    mission27_data = run_mission27_rescue_check(self.results)
+
+            mission28_data = None
+            if '28' in self.player.missions_activated and '28' not in self.player.missions_completed:
+                if sys.platform == 'emscripten':
+                    mission28_data = run_mission28_dependency_check_remote(BACKEND_URL, self.results)
+                else:
+                    mission28_data = run_mission28_dependency_check(self.results)
 
             bound_sweep_data = None
             mission26_data = None
-            mission27_data = None
-            mission28_data = None
             bound_sweep_mission_active = (
                 ('23' in self.player.missions_activated and '23' not in self.player.missions_completed)
                 or ('24' in self.player.missions_activated and '24' not in self.player.missions_completed)
                 or ('26' in self.player.missions_activated and '26' not in self.player.missions_completed)
-                or ('27' in self.player.missions_activated and '27' not in self.player.missions_completed)
-                or ('28' in self.player.missions_activated and '28' not in self.player.missions_completed)
             )
             if bound_sweep_mission_active:
                 if sys.platform == 'emscripten':
@@ -1514,10 +1342,6 @@ class Window:
                         )
                     else:
                         mission26_data = run_mission26_interaction_curve_check(bound_sweep_data)
-                if '27' in self.player.missions_activated and '27' not in self.player.missions_completed:
-                    mission27_data = run_mission27_bound_sweep_check(bound_sweep_data)
-                if '28' in self.player.missions_activated and '28' not in self.player.missions_completed:
-                    mission28_data = run_mission28_bound_sweep_check(bound_sweep_data)
 
             menu_compare_runs = pygame_menu.Menu(
                 height=720,
@@ -1854,7 +1678,7 @@ class Window:
                     padding=(20, 20, 20, 20),
                     background_color='white',
                     font_size=24,
-                    label_id='mission27_bound_sweep_check'
+                    label_id='mission27_rescue_check'
                 )
                 menu_simul.add.vertical_margin(20)
 
@@ -1865,7 +1689,7 @@ class Window:
                     padding=(20, 20, 20, 20),
                     background_color='white',
                     font_size=24,
-                    label_id='mission28_bound_sweep_check'
+                    label_id='mission28_dependency_check'
                 )
                 menu_simul.add.vertical_margin(20)
 
