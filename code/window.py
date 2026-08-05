@@ -303,16 +303,22 @@ def _build_bound_sweep_report_text(sweep_data):
 
     reaction_id = sweep_data.get('reaction_id')
     reaction_name = sweep_data.get('reaction_name') or reaction_id
-    bound_label = sweep_data.get('bound_label') or sweep_data.get('bound')
+    bound = sweep_data.get('bound')
+    bound_label = sweep_data.get('bound_label') or bound
     tracked_fluxes = sweep_data.get('tracked_fluxes') or []
     rows = sweep_data.get('rows') or []
 
-    if reaction_id == 'EX_o2_e':
-        uptake_label = 'O2 uptake'
-    elif reaction_id == 'EX_glc__D_e':
-        uptake_label = 'Glucose uptake'
+    if bound == 'upper':
+        bound_value_label = 'UB value'
+        measured_label = 'Tested export'
     else:
-        uptake_label = 'Tested uptake'
+        bound_value_label = 'LB value'
+        if reaction_id == 'EX_o2_e':
+            measured_label = 'O2 uptake'
+        elif reaction_id == 'EX_glc__D_e':
+            measured_label = 'Glucose uptake'
+        else:
+            measured_label = 'Tested uptake'
 
     lines = [
         'Bound Sweep Report',
@@ -322,9 +328,10 @@ def _build_bound_sweep_report_text(sweep_data):
         'A sweep runs the same setup several times while changing only this bound.',
         '',
         'Rows:',
-        f'LB value | growth | {uptake_label} | tracked products',
+        f'{bound_value_label} | growth | {measured_label} | tracked products',
     ]
 
+    measured_values = []
     for row in rows:
         values = row.get('tracked_flux_values') or {}
         product_parts = []
@@ -332,14 +339,18 @@ def _build_bound_sweep_report_text(sweep_data):
             label = PRODUCTION_FLUX_NAMES.get(flux_id, flux_id)
             product_parts.append(f"{label}: {_format_sweep_number(values.get(flux_id))}")
         product_text = '; '.join(product_parts) if product_parts else 'none'
-        tested_uptake = row.get('tested_reaction_uptake')
-        if tested_uptake is None:
-            tested_uptake = row.get('oxygen_uptake')
+        if bound == 'upper':
+            measured = row.get('tested_reaction_raw_flux')
+        else:
+            measured = row.get('tested_reaction_uptake')
+            if measured is None:
+                measured = row.get('oxygen_uptake')
+        measured_values.append(measured)
         status_note = '' if row.get('status') == 'ok' else f" {row.get('status', 'unknown')}"
         lines.append(
             f"{_format_sweep_number(row.get('bound_value'))} | "
             f"{_format_sweep_number(row.get('growth_value'))}{status_note} | "
-            f"{_format_sweep_number(tested_uptake)} | "
+            f"{_format_sweep_number(measured)} | "
             f"{product_text}"
         )
 
@@ -348,29 +359,35 @@ def _build_bound_sweep_report_text(sweep_data):
         last = rows[-1]
         try:
             growth_drop = float(first.get('growth_value', 0.0)) - float(last.get('growth_value', 0.0))
-            first_uptake = first.get('tested_reaction_uptake', first.get('oxygen_uptake', 0.0))
-            last_uptake = last.get('tested_reaction_uptake', last.get('oxygen_uptake', 0.0))
-            uptake_drop = float(first_uptake or 0.0) - float(last_uptake or 0.0)
+            first_measured = measured_values[0]
+            last_measured = measured_values[-1]
+            measured_drop = float(first_measured or 0.0) - float(last_measured or 0.0)
             lines.extend([
                 '',
                 'Trend summary:',
                 f"- Growth change from first to last point: {_format_sweep_number(growth_drop)} drop",
-                f"- {uptake_label} change from first to last point: {_format_sweep_number(uptake_drop)} drop",
+                f"- {measured_label} change from first to last point: {_format_sweep_number(measured_drop)} drop",
             ])
         except Exception:
             pass
 
-    if reaction_id == 'EX_nh4_e':
+    if reaction_id == 'EX_nh4_e' and bound == 'lower':
         guide_lines = [
             '- Lower bound closer to 0 means less ammonium can be consumed.',
             '- Compare the non-limiting point with the first point where growth decreases.',
             '- A secretion may appear at the onset of limitation and then change non-linearly across tighter bounds.',
         ]
+    elif reaction_id == 'EX_co2_e' and bound == 'upper':
+        guide_lines = [
+            '- An upper-bound cap is non-binding while realised CO2 export remains below it.',
+            '- Identify the first cap that the solution reaches, then inspect which tracked secretion appears.',
+            '- Compare the next tighter cap to determine whether another compensatory route activates later.',
+        ]
     elif reaction_id == 'EX_glc__D_e':
         guide_lines = [
             '- Lower bound closer to 0 means less glucose can be consumed.',
             '- When carbon intake becomes limiting, growth and secretion should fall together.',
-            '- Do not read only the final row: identify the trend and the collapse zone.'
+            '- Do not read only the final row: identify the trend and the collapse zone.',
         ]
     elif reaction_id == 'EX_o2_e':
         guide_lines = [
@@ -387,6 +404,7 @@ def _build_bound_sweep_report_text(sweep_data):
 
     lines.extend(['', 'Interpretation guide:'] + guide_lines)
     return '\n'.join(lines)
+
 
 def _build_mission26_text(report_data):
     if not report_data:
@@ -888,160 +906,12 @@ def _build_mission23_text(report_data):
     return build_mission23_nutrient_sensitivity_report_text(report_data)
 
 
-def _build_mission24_text(compare_data):
-    if not compare_data:
-        return 'Mission 24 Method Comparison\n\nRun two simulations to generate a comparison.'
-
-    if compare_data.get('error') and not compare_data.get('run_a'):
-        return f"Mission 24 Method Comparison\n\n{compare_data.get('error')}"
-
-    fba_status = (
-        'FBA run found.'
-        if compare_data.get('fba_run_found')
-        else 'Missing FBA run. Use FBA with biomass objective, no knockouts and unchanged environment.'
-    )
-    pfba_status = (
-        'pFBA run found.'
-        if compare_data.get('pfba_run_found')
-        else 'Missing pFBA run. Use pFBA with the same objective, genes and environment.'
-    )
-    method_status = (
-        'Method change detected: FBA vs pFBA.'
-        if compare_data.get('method_changed')
-        else 'Method change not detected yet. The two runs must use different methods.'
-    )
-    setup_status = (
-        'Controlled setup: objective, genes and environment stayed the same.'
-        if compare_data.get('same_objective') and compare_data.get('same_clean_setup')
-        else 'Controlled setup: keep objective, genes and environment unchanged in both runs.'
-    )
-    tracking_status = (
-        'Evidence: full production-flux panel was tracked in both runs.'
-        if compare_data.get('tracking_ready')
-        else 'Evidence: track the full production-flux panel in both runs.'
-    )
-    final_status = (
-        'Method comparison ready. Return to Dr. Vega and deliver the report.'
-        if compare_data.get('ready_to_deliver')
-        else 'Not ready yet. Compare FBA with pFBA while keeping the setup controlled.'
-    )
-
-    def fmt(value):
-        return 'not available' if value is None else f'{float(value):.3f}'
-
-    required_fluxes = compare_data.get('required_tracked_fluxes') or []
-    fba_values = compare_data.get('fba_tracked_flux_values') or {}
-    pfba_values = compare_data.get('pfba_tracked_flux_values') or {}
-    differences = compare_data.get('tracked_flux_differences') or {}
-
-    flux_lines = []
-    for reaction_id in required_fluxes:
-        label = PRODUCTION_FLUX_LABELS.get(reaction_id, reaction_id)
-        flux_lines.append(
-            f"- {label}: FBA {fmt(fba_values.get(reaction_id))} -> pFBA {fmt(pfba_values.get(reaction_id))} "
-            f"({fmt(differences.get(reaction_id))})"
-        )
-    flux_text = '\n'.join(flux_lines) if flux_lines else 'none'
-
-    return (
-        'Mission 24 Method Comparison\n\n'
-        f"Target: FBA vs pFBA using the same growth setup\n"
-        f"Objective: {compare_data.get('growth_objective')}\n"
-        f"Methods: {compare_data.get('baseline_method')} -> {compare_data.get('target_method')}\n\n"
-        f"Objective values:\n"
-        f"- FBA objective value: {fmt(compare_data.get('fba_objective_value'))}\n"
-        f"- pFBA objective value: {fmt(compare_data.get('pfba_objective_value'))}\n\n"
-        f"Tracked production-flux panel:\n{flux_text}\n\n"
-        f"{fba_status}\n"
-        f"{pfba_status}\n"
-        f"{method_status}\n"
-        f"{setup_status}\n"
-        f"{tracking_status}\n\n"
-        f"{final_status}"
-    )
+def _build_mission24_text(report_data):
+    return build_mission24_export_capacity_report_text(report_data)
 
 
-def _build_mission25_text(compare_data):
-    if not compare_data:
-        return 'Mission 25 Final Controlled Report\n\nRun two simulations to generate the final comparison.'
-
-    if compare_data.get('error') and not compare_data.get('run_a'):
-        return f"Mission 25 Final Controlled Report\n\n{compare_data.get('error')}"
-
-    baseline_status = (
-        'Run A baseline found.'
-        if compare_data.get('baseline_run_found')
-        else 'Missing Run A. Use FBA, biomass objective, no knockouts and unchanged environment.'
-    )
-    oxygen_status = (
-        'Run B oxygen-limited setup found.'
-        if compare_data.get('oxygen_limited_run_found')
-        else f"Missing Run B. Close only the lower bound of {compare_data.get('oxygen_reaction')}."
-    )
-    tracking_status = (
-        'Evidence: full production-flux panel was tracked in both runs.'
-        if compare_data.get('tracking_ready')
-        else 'Evidence: track the full production-flux panel in both runs.'
-    )
-    growth_status = (
-        'Growth comparison: oxygen limitation reduced growth clearly.'
-        if compare_data.get('growth_decreased')
-        else 'Growth comparison: growth drop is not clear enough yet.'
-    )
-    profile_status = (
-        'Production profile: tracked products changed after oxygen limitation.'
-        if compare_data.get('production_profile_changed')
-        else 'Production profile: not enough tracked products changed yet.'
-    )
-    final_status = (
-        'Final controlled report ready. Return to Dr. Vega and deliver the report.'
-        if compare_data.get('ready_to_deliver')
-        else 'Not ready yet. Keep the comparison controlled and check Compare Runs.'
-    )
-
-    def fmt(value):
-        return 'not available' if value is None else f'{float(value):.3f}'
-
-    required_fluxes = compare_data.get('required_tracked_fluxes') or []
-    baseline_values = compare_data.get('baseline_tracked_flux_values') or {}
-    oxygen_values = compare_data.get('oxygen_limited_tracked_flux_values') or {}
-    differences = compare_data.get('tracked_flux_differences') or {}
-
-    flux_lines = []
-    for reaction_id in required_fluxes:
-        label = PRODUCTION_FLUX_LABELS.get(reaction_id, reaction_id)
-        flux_lines.append(
-            f"- {label}: baseline {fmt(baseline_values.get(reaction_id))} -> oxygen-limited {fmt(oxygen_values.get(reaction_id))} "
-            f"({fmt(differences.get(reaction_id))})"
-        )
-    flux_text = '\n'.join(flux_lines) if flux_lines else 'none'
-
-    changed_fluxes = compare_data.get('changed_fluxes') or []
-    changed_text = ', '.join(changed_fluxes) if changed_fluxes else 'none'
-
-    return (
-        'Mission 25 Final Controlled Report\n\n'
-        f"Target: aerobic baseline vs oxygen-limited medium\n"
-        f"Method: {compare_data.get('target_method')}\n"
-        f"Objective: {compare_data.get('growth_objective')}\n"
-        f"Controlled variable: oxygen uptake ({compare_data.get('oxygen_reaction')})\n\n"
-        f"Growth comparison:\n"
-        f"- Baseline growth: {fmt(compare_data.get('baseline_growth'))}\n"
-        f"- Oxygen-limited growth: {fmt(compare_data.get('oxygen_limited_growth'))}\n"
-        f"- Growth drop: {fmt(compare_data.get('growth_drop'))}\n\n"
-        f"Oxygen uptake comparison:\n"
-        f"- Baseline oxygen uptake: {fmt(compare_data.get('baseline_oxygen_uptake'))}\n"
-        f"- Oxygen-limited oxygen uptake: {fmt(compare_data.get('oxygen_limited_oxygen_uptake'))}\n\n"
-        f"Tracked production-flux profile:\n{flux_text}\n\n"
-        f"Changed tracked fluxes: {changed_text}\n"
-        f"Changed flux count: {compare_data.get('changed_flux_count', 0)} / {compare_data.get('minimum_changed_fluxes')}\n\n"
-        f"{baseline_status}\n"
-        f"{oxygen_status}\n"
-        f"{tracking_status}\n"
-        f"{growth_status}\n"
-        f"{profile_status}\n\n"
-        f"{final_status}"
-    )
+def _build_mission25_text(report_data):
+    return build_mission25_context_report_text(report_data)
 
 
 class Window:
@@ -1203,6 +1073,7 @@ class Window:
             ('14', MISSION14_CANDIDATE_GENES),
             ('19', [MISSION19_TARGET_GENE]),
             ('22', list(MISSION22_TARGET_GENES)),
+            ('25', [MISSION25_TARGET_GENE]),
         ]
         for mission_id, candidates in gene_mission_candidates:
             if mission_id in self.player.missions_activated and mission_id not in self.player.missions_completed:
@@ -1498,6 +1369,7 @@ class Window:
             title='Sweep variable: ',
             items=[
                 ('Ammonium lower bound (EX_nh4_e)', 'EX_nh4_e:lower'),
+                ('Carbon dioxide upper bound (EX_co2_e)', 'EX_co2_e:upper'),
                 ('Oxygen lower bound (EX_o2_e)', 'EX_o2_e:lower'),
                 ('D-Glucose lower bound (EX_glc__D_e)', 'EX_glc__D_e:lower'),
                 ('Acetate lower bound (EX_ac_e)', 'EX_ac_e:lower'),
@@ -1518,6 +1390,7 @@ class Window:
             title='Sweep values: ',
             items=[
                 ('Ammonium sensitivity: -5, -4, -2, -1', 'ammonium_sensitivity'),
+                ('CO2 export capacity: 25, 20, 10, 0', 'co2_export_capacity'),
                 ('O2 transition: -20, -10, -5, 0', 'oxygen_transition'),
                 ('Glucose limitation: -1000, -500, -100, -50, -10, 0', 'glucose_limitation'),
                 ('Alternative carbon: -20, -10, -5, -1, 0', 'alternative_carbon_limitation'),
@@ -1660,12 +1533,13 @@ class Window:
             mission23_data = None
 
             mission24_data = None
-            if '24' in self.player.missions_activated and '24' not in self.player.missions_completed:
-                mission24_data = run_mission24_comparison_check(compare_runs)
 
             mission25_data = None
             if '25' in self.player.missions_activated and '25' not in self.player.missions_completed:
-                mission25_data = run_mission25_comparison_check(compare_runs)
+                if sys.platform == 'emscripten':
+                    mission25_data = run_mission25_context_check_remote(BACKEND_URL, self.results)
+                else:
+                    mission25_data = run_mission25_context_check(self.results)
 
 
             bound_sweep_data = None
@@ -1674,6 +1548,7 @@ class Window:
             mission28_data = None
             luna_sweep_active = (
                 ('23' in self.player.missions_activated and '23' not in self.player.missions_completed)
+                or ('24' in self.player.missions_activated and '24' not in self.player.missions_completed)
                 or ('26' in self.player.missions_activated and '26' not in self.player.missions_completed)
                 or ('27' in self.player.missions_activated and '27' not in self.player.missions_completed)
                 or ('28' in self.player.missions_activated and '28' not in self.player.missions_completed)
@@ -1693,6 +1568,13 @@ class Window:
                         )
                     else:
                         mission23_data = run_mission23_sensitivity_check(bound_sweep_data)
+                if '24' in self.player.missions_activated and '24' not in self.player.missions_completed:
+                    if sys.platform == 'emscripten':
+                        mission24_data = run_mission24_export_capacity_check_remote(
+                            BACKEND_URL, bound_sweep_data
+                        )
+                    else:
+                        mission24_data = run_mission24_export_capacity_check(bound_sweep_data)
                 if '26' in self.player.missions_activated and '26' not in self.player.missions_completed:
                     mission26_data = run_mission26_bound_sweep_check(bound_sweep_data)
                 if '27' in self.player.missions_activated and '27' not in self.player.missions_completed:

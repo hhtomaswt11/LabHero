@@ -1,12 +1,12 @@
-Mission 23 — Nutrient Sensitivity Curve
+Mission 25 — Context-Dependent Gene Essentiality
 
 Changed files:
 - MISSION_PROGRESS_OVERVIEW.md
-- code/mission23.py
+- PATCH_MANIFEST.txt
+- code/mission25.py
 - code/simulation.py
 - code/window.py
-- data/missions/mission23.md
 - data/missions/mission25.md
-- tests/test_mission23.py
+- tests/test_mission25.py
 
-The patch reconstructs Mission 23 around a four-point ammonium lower-bound pFBA sweep, adds local/browser sweep parity, robust persisted evidence, direct-answer validation and regression tests.
+The patch replaces the obsolete two-run aerobic/anaerobic report with a four-cell oxygen-by-genotype matrix for b3956 / ppc. It adds robust visible-result validation, accumulated JSON-safe evidence, answer interpretation, gene highlighting, desktop/browser parity and dedicated regression tests without changing Missions 1–24.

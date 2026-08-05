@@ -64,13 +64,13 @@ class Mission23:
         ]
         intro24_dialogue = [
             f"Good work, {self.player.player_name}.",
-            "You identified a response that emerged along a graded nutrient perturbation.",
-            "Mission 24 will extend Dr. Luna's sensitivity laboratory with a harder analysis.",
+            "You found the onset of a response under graded nutrient limitation.",
+            "Now restrict an export route gradually and read the order of changes.",
         ]
         active24_dialogue = [
-            "Mission 24 is active. Follow its controlled sensitivity protocol.",
-            "Use every visible result rather than one isolated endpoint.",
-            "Deliver only after the complete evidence supports your conclusion.",
+            "Mission 24 is active. Configure the CO2 upper-bound sweep.",
+            "Find the non-binding cap, then the first binding cap.",
+            "Submit the first compensatory secretion supported by the curve.",
         ]
         completed24_dialogue = [
             f"Excellent analysis, {self.player.player_name}.",

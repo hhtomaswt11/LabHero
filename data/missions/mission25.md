@@ -1,58 +1,63 @@
-# Mission 25 — Final Controlled Report
+# Mission 25 — Context-Dependent Gene Essentiality
 
 ## Scientist
-Dr. Vega
+Dr. Smith
 
 ## Lab
-Laboratory 5 — Comparative Experiment Lab
+Laboratory 9 — Context and Dependency Lab
 
 ## Main idea
-This is the final Dr. Vega mission. The player must make a complete controlled comparison: two simulations, one variable changed, and clear evidence from the results.
-
-A controlled comparison means the player changes only one thing between Run A and Run B. In this mission, the changed variable is oxygen availability.
+The same gene knockout can have a very different predicted growth effect in two environmental contexts. The player must construct a complete two-by-two matrix rather than interpreting one isolated mutant result.
 
 ## Scientific concept
-Oxygen availability can strongly affect cell growth and the product/byproduct profile. The player should compare an aerobic baseline with an oxygen-limited setup and use Production Flux evidence to see how exported products change.
+Gene essentiality is conditional on the model, objective and environment. A gene that is nearly dispensable with oxygen available may become operationally essential when oxygen uptake is blocked because the available metabolic alternatives have changed.
 
-## Required comparison
-Run A is the baseline aerobic setup.
-Run B is the oxygen-limited setup.
+The mission tests `b3956 / ppc`, whose GPR controls the `PPC` reaction in the E. coli core model.
 
-The player must keep method, objective, genes and tracked products unchanged between both runs.
+## Controlled matrix
+Record four visible FBA simulations with objective `BIOMASS_Ecoli_core_w_GAM`:
 
-## How to pass
-Run A — aerobic baseline:
-- Method: FBA
-- Objective: BIOMASS_Ecoli_core_w_GAM
-- Genes: no knockouts
-- Environment: unchanged
-- Production Flux: track EX_ac_e, EX_etoh_e, EX_for_e, EX_lac__D_e, EX_succ_e
-- Run Simulation
+1. Aerobic wild type — every gene active and every environmental bound at model default.
+2. Aerobic knockout — same environment with only `b3956 / ppc` disabled.
+3. Anaerobic wild type — every gene active, with only the lower bound of `EX_o2_e` closed.
+4. Anaerobic knockout — the same oxygen-blocked medium with only `b3956 / ppc` disabled.
 
-Run B — oxygen-limited setup:
-- Method: FBA
-- Objective: BIOMASS_Ecoli_core_w_GAM
-- Genes: no knockouts
-- Environment: close only the lower bound of EX_o2_e
-- Production Flux: track EX_ac_e, EX_etoh_e, EX_for_e, EX_lac__D_e, EX_succ_e
-- Run Simulation
+The order is unrestricted. Repeating a valid condition replaces that matrix cell without duplicating evidence. An invalid later run does not erase previously recorded cells.
 
-Then:
-- Open New Results -> Compare Runs
-- Return to Dr. Vega
-- Deliver Final Report
+## Required visible evidence
+Every matrix cell must include:
 
-## Completion check
-The mission is completed when:
-- the baseline run is detected
-- the oxygen-limited run is detected
-- the full production-flux panel is tracked in both runs
-- growth decreases after oxygen limitation
-- at least two tracked production fluxes change between the runs
+- numeric biomass-objective flux;
+- numeric biomass-reaction flux;
+- numeric glucose and oxygen exchange values;
+- FBA primary-objective diagnostics;
+- total absolute flux and active-reaction count;
+- complete environmental-bound data;
+- either no knockout or exactly the target single-gene knockout.
 
-## Difficulty progression
-Mission 21 introduced simple environment comparison.
-Mission 22 compared normal strain vs knockout.
-Mission 23 studied a graded ammonium-sensitivity curve and the onset of a new secretion.
-Mission 24 compared different simulation methods.
-Mission 25 combines controlled comparison with production-flux evidence, closing Dr. Vega's section.
+No Production Flux selection is required because the experimental question concerns within-context growth retention.
+
+## Expected model results
+Approximate values are:
+
+| Context | Genotype | Growth | Oxygen uptake |
+|---|---|---:|---:|
+| Aerobic | wild type | 0.874 | 21.799 |
+| Aerobic | `b3956` knockout | 0.871 | 21.938 |
+| Anaerobic | wild type | 0.212 | 0.000 |
+| Anaerobic | `b3956` knockout | 0.000 | 0.000 |
+
+The aerobic knockout retains approximately 99.6% of its matching wild-type growth. The anaerobic knockout retains approximately 0% of its matching wild-type growth.
+
+## Player conclusion
+After all four cells are recorded, the player answers:
+
+> In which oxygen context did the same knockout produce the strongest predicted growth defect?
+
+The report presents both within-context retention values but does not state the answer. English and European Portuguese descriptions of the oxygen context are accepted.
+
+## Scientific limitation
+The conclusion is operational and conditional. It does not establish that `ppc` is universally essential in real E. coli across all media, objectives or experimental conditions.
+
+## Web-service readiness
+The mission validates the structured result already returned by the normal simulation endpoint. It launches no hidden solver or HTTP request, accumulates only JSON-serialisable state and uses identical validation logic for desktop and browser execution.

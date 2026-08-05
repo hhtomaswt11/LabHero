@@ -6,7 +6,7 @@ import time
 from utils import *
 
 class Player(pygame.sprite.Sprite):
-    def __init__(self, pos, group, collision_sprites, tree_sprites, interaction, soil_layer, toggle_shop, desk_menu, books, ecoli, inventory2, talk_1, talk_2, talk_3, talk_7, talk_11, talk_16, talk_21, talk_23, dialogues, skin_manager=None):
+    def __init__(self, pos, group, collision_sprites, tree_sprites, interaction, soil_layer, toggle_shop, desk_menu, books, ecoli, inventory2, talk_1, talk_2, talk_3, talk_7, talk_11, talk_16, talk_21, talk_23, talk_25, dialogues, skin_manager=None):
         super().__init__(group)
 
         self.skin_manager = skin_manager
@@ -61,6 +61,7 @@ class Player(pygame.sprite.Sprite):
         self.talk_16 = talk_16
         self.talk_21 = talk_21
         self.talk_23 = talk_23
+        self.talk_25 = talk_25
         self.desk_menu = desk_menu
         self.books = books
         self.ecoli = ecoli
@@ -312,6 +313,8 @@ class Player(pygame.sprite.Sprite):
                         self.talk_21()
                     elif collided_interaction_sprite[0].name == 'Mission23':
                         self.talk_23()
+                    elif collided_interaction_sprite[0].name == 'Mission25':
+                        self.talk_25()
                     elif collided_interaction_sprite[0].name == 'Desk':
                         animation_text_save('... please wait ...', time=100)
                         self.desk_menu()

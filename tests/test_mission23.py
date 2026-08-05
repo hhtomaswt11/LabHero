@@ -327,6 +327,19 @@ class Mission23RegressionTests(unittest.TestCase):
     def test_state_is_json_serialisable(self):
         json.dumps(self._build())
 
+    def test_opening_report_is_informative_without_repeating_menu_title(self):
+        text = simulation.build_mission23_nutrient_sensitivity_report_text({})
+        self.assertNotIn('Mission 23 Nutrient Sensitivity Curve', text)
+        self.assertIn('controlled four-point sensitivity experiment', text)
+        self.assertIn('varying only ammonium uptake capacity', text)
+        self.assertIn('pFBA diagnostics', text)
+
+    def test_default_bound_toggles_use_native_python_booleans(self):
+        reactions = simulation._build_default_reactions_data()
+        self.assertTrue(reactions)
+        self.assertTrue(all(type(value) is bool for value in reactions.values()))
+        json.dumps(reactions)
+
     def test_validator_and_remote_wrapper_launch_no_solver_or_http_request(self):
         source = inspect.getsource(simulation.run_mission23_sensitivity_check)
         source += inspect.getsource(simulation._build_mission23_data)

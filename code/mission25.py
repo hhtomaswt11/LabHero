@@ -6,194 +6,328 @@ from save_load import *
 from timers import Timer
 from options_values import mytheme
 from functions import animation_text_save
+from button import Button
 from async_menu import run_menu
 from utils import *
 from simulation import (
+    MISSION25_CHECK_VERSION,
     MISSION25_METHOD,
     MISSION25_GROWTH_OBJECTIVE,
+    MISSION25_TARGET_GENE,
+    MISSION25_TARGET_GENE_NAME,
     MISSION25_OXYGEN_REACTION,
-    MISSION25_REQUIRED_TRACKED_FLUXES,
-    MISSION25_MIN_GROWTH_DROP,
-    MISSION25_MIN_CHANGED_FLUXES,
+    build_mission25_context_report_text,
+    initialise_mission25_context_matrix,
+    is_mission25_unlocked,
+    mission25_answer_matches,
 )
 
 
-class Mission25_info:
-    """Mission 25 — Final Controlled Report.
-
-    Final Dr. Vega mission. The player repeats a familiar environment
-    comparison, but now produces a fuller report with growth and production
-    flux evidence.
-    """
+class Mission25:
+    """Dr. Smith interaction entry point beginning with Mission 25."""
 
     def __init__(self, toggle_menu, player) -> None:
         self.player = player
         self.missions_activated = self.player.missions_activated
         self.missions_completed = self.player.missions_completed
+        self.toggle_menu = toggle_menu
+        self.screen = pygame.display.get_surface()
+        font_path = get_resource_path('font/LycheeSoda.ttf')
+        self.font = pygame.font.Font(font_path, 30)
+        self.font_name = pygame.font.Font(font_path, 24)
+        self.timer = Timer(200)
+        self.menu25 = Mission25_info(self.toggle_menu, self.player)
+        self.pending = None
 
+    def input(self):
+        keys = pygame.key.get_pressed()
+        self.timer.update()
+        if keys[pygame.K_ESCAPE]:
+            self.toggle_menu()
+
+    async def update(self):
+        locked_dialogue = [
+            f"Hello {self.player.player_name}. I'm Dr. Smith.",
+            "Dr. Luna is still completing your sensitivity training.",
+            "Finish Mission 24 before beginning my first experiment.",
+        ]
+        intro_dialogue = [
+            f"Welcome, {self.player.player_name}. I'm Dr. Smith.",
+            "A gene effect can change when the surrounding environment changes.",
+            "Mission 25 asks you to prove that relationship with a controlled matrix.",
+        ]
+        active_dialogue = [
+            "Mission 25 is active.",
+            "Complete every cell of the oxygen-by-genotype matrix.",
+            "Return when the visible evidence supports one context-dependent conclusion.",
+        ]
+        completed_dialogue = [
+            f"Good work, {self.player.player_name}.",
+            "You separated a model- and context-specific gene effect from a universal claim.",
+            "My next experiment will build on that conditional dependency.",
+        ]
+
+        self.input()
+        if '25' in self.missions_completed:
+            self.menu_message(completed_dialogue, buttons=False)
+        elif '25' in self.missions_activated:
+            self.menu_message(active_dialogue, menu_to_open=self.menu25)
+        elif is_mission25_unlocked(self.missions_completed):
+            self.menu_message(intro_dialogue, menu_to_open=self.menu25)
+        else:
+            self.menu_message(locked_dialogue, buttons=False)
+
+        if self.pending is not None:
+            coro_factory = self.pending
+            self.pending = None
+            await coro_factory()
+
+    def menu_message(self, message, buttons=True, menu_to_open=None):
+        pygame.draw.rect(self.screen, (255, 215, 0), [0, 500, 1280, 220], width=5)
+        pygame.draw.rect(self.screen, (186, 214, 177), [5, 505, 1270, 210])
+
+        image = pygame.image.load(get_resource_path('graphics/dialogues/smith.jpg')).convert()
+        if image.get_size() != (150, 150):
+            image = pygame.transform.smoothscale(image, (150, 150))
+        self.screen.blit(image, (25, 520))
+
+        pygame.draw.rect(self.screen, 'white', [25, 675, 150, 25])
+        name = self.font_name.render('Dr. Smith', True, 'black')
+        self.screen.blit(name, (47, 677))
+
+        for line, message_line in enumerate(message):
+            message_line = prepare_dialogue_text(message_line, self.player.player_name)
+            surface = self.font.render(message_line, True, 'black')
+            self.screen.blit(surface, (200, 525 + (line * 20) + (15 * line)))
+
+        if buttons:
+            def click_yes():
+                self.pending = (menu_to_open or self.menu25).update
+
+            Button(200, 650, 150, 50, self.screen, 'Yes', click_yes).process()
+            Button(370, 650, 220, 50, self.screen, 'Not now', self.toggle_menu).process()
+
+        pygame.display.flip()
+
+
+class Mission25_info:
+    """Mission 25 — Context-Dependent Gene Essentiality."""
+
+    def __init__(self, toggle_menu, player) -> None:
+        self.player = player
+        self.missions_activated = self.player.missions_activated
+        self.missions_completed = self.player.missions_completed
         self.toggle_menu = toggle_menu
         self.display_surface = pygame.display.get_surface()
         font_path = get_resource_path('font/LycheeSoda.ttf')
         self.font = pygame.font.Font(font_path, 30)
         self.timer = Timer(200)
-
         self.mission25 = '25' in self.missions_activated
 
-        success_path = get_resource_path('audio/success_3.ogg')
-        self.success = pygame.mixer.Sound(success_path)
+        self.success = pygame.mixer.Sound(get_resource_path('audio/success_3.ogg'))
         self.success.set_volume(1.2)
-
-        failed_path = get_resource_path('audio/failed.ogg')
-        self.failed = pygame.mixer.Sound(failed_path)
+        self.failed = pygame.mixer.Sound(get_resource_path('audio/failed.ogg'))
         self.failed.set_volume(1.2)
 
     async def setup(self):
         menu = pygame_menu.Menu(
             height=720,
+            center_content=False,
             onclose=self.toggle_menu,
             theme=mytheme,
             title='Mission 25',
             width=1280,
         )
 
-        menu_text = pygame_menu.Menu(
+        if not is_mission25_unlocked(self.missions_completed):
+            menu.add.vertical_margin(40)
+            menu.add.label(
+                "Mission 25 is locked. Complete Mission 24 before beginning Dr. Smith's first experiment.",
+                wordwrap=True,
+                align=pygame_menu.locals.ALIGN_CENTER,
+                padding=(25, 25, 25, 25),
+                background_color='white',
+                font_size=30,
+            )
+            menu.add.button('Back', pygame_menu.events.BACK, background_color=(70, 70, 70))
+            await run_menu(menu, self.display_surface)
+            return
+
+        hint3 = pygame_menu.Menu(
+            height=720, center_content=False, onclose=pygame_menu.events.BACK,
+            theme=mytheme, title='Mission 25 Hint 3', width=1280,
+        )
+        hint3.add.label(
+            f"Technical hint: use {MISSION25_METHOD} with objective {MISSION25_GROWTH_OBJECTIVE}. Keep every environmental bound at model default for the aerobic cells. For the anaerobic cells, close only the lower bound of {MISSION25_OXYGEN_REACTION}. Use either every gene active or only {MISSION25_TARGET_GENE} / {MISSION25_TARGET_GENE_NAME} knocked out.",
+            wordwrap=True,
+            align=pygame_menu.locals.ALIGN_LEFT,
+            padding=(20, 20, 20, 20),
+        )
+        hint3.add.button('Back', pygame_menu.events.BACK, background_color=(70, 70, 70))
+
+        hint2 = pygame_menu.Menu(
+            height=720, center_content=False, onclose=pygame_menu.events.BACK,
+            theme=mytheme, title='Mission 25 Hint 2', width=1280,
+        )
+        hint2.add.label(
+            'Experimental hint: construct four cells—wild type and knockout with oxygen available, then the same two genotypes with oxygen uptake blocked. Compare knockout growth with its own wild-type reference inside each oxygen context.',
+            wordwrap=True,
+            align=pygame_menu.locals.ALIGN_LEFT,
+            padding=(20, 20, 20, 20),
+        )
+        hint2.add.button('Reveal technical hint', hint3, background_color=(255, 215, 0), font_color='black')
+        hint2.add.button('Back', pygame_menu.events.BACK, background_color=(70, 70, 70))
+
+        hint1 = pygame_menu.Menu(
+            height=720, center_content=False, onclose=pygame_menu.events.BACK,
+            theme=mytheme, title='Mission 25 Hint 1', width=1280,
+        )
+        hint1.add.label(
+            'Conceptual hint: essentiality is conditional. A gene may be dispensable when one route is available but operationally essential when the environment removes an alternative route.',
+            wordwrap=True,
+            align=pygame_menu.locals.ALIGN_LEFT,
+            padding=(20, 20, 20, 20),
+        )
+        hint1.add.button('Reveal next hint', hint2, background_color=(255, 215, 0), font_color='black')
+        hint1.add.button('Back', pygame_menu.events.BACK, background_color=(70, 70, 70))
+
+        briefing = pygame_menu.Menu(
             height=720,
-            onclose=self.toggle_menu,
+            center_content=False,
+            onclose=pygame_menu.events.BACK,
             theme=mytheme,
             title='Mission 25 Briefing',
             width=1280,
         )
-
-        tracked_flux_text = ', '.join(MISSION25_REQUIRED_TRACKED_FLUXES)
-
-        menu_text.add.label(
+        briefing.add.label(
             f"""
-            Mission 25: Final Controlled Report.
+            Dr. Smith wants a two-by-two controlled matrix for the highlighted gene {MISSION25_TARGET_GENE} / {MISSION25_TARGET_GENE_NAME}.
 
-            This is Dr. Vega's final comparison task.
-            A controlled comparison should change only one variable between
-            two simulations. This makes the cause of the result difference clear.
+            Factors:
+            - Oxygen context: available or uptake blocked
+            - Genotype: wild type or the highlighted single-gene knockout
 
-            Use the same setup in both runs: {MISSION25_METHOD}, biomass objective,
-            no gene knockouts, and the same Production Flux panel.
+            Keep the biomass objective, simulation method, carbon-source setup and every unrelated environmental bound equivalent across the matrix. The report records growth, glucose uptake, oxygen uptake and method-aware diagnostics from each visible simulation.
 
-            Run A is the aerobic baseline.
-            Run B changes only oxygen availability by closing the lower bound of
-            {MISSION25_OXYGEN_REACTION}.
+            Compare knockout-to-reference growth retention separately inside the two oxygen contexts. Then submit the context in which the same knockout caused the more severe growth defect.
 
-            Track this product/byproduct panel in both runs:
-            {tracked_flux_text}
-
-            Then open Compare Runs to check both growth and production-profile changes.
+            Report the result only for this model, objective and medium. Do not interpret it as universal biological essentiality.
             """,
             max_char=-1,
             wordwrap=True,
             align=pygame_menu.locals.ALIGN_LEFT,
-            margin=(0, 0),
+            padding=(20, 20, 20, 20),
         )
-        menu_text.add.button('Back', pygame_menu.events.BACK, background_color=(70, 70, 70))
-        menu_text.add.vertical_margin(20)
+        briefing.add.button('Optional Hints', hint1, background_color=(230, 230, 180), font_color='black')
+        briefing.add.button('Back', pygame_menu.events.BACK, background_color=(70, 70, 70))
 
         menu.add.vertical_margin(20)
         menu.add.label(
-            'Mission 25: Final Controlled Report',
+            'Mission 25: Context-Dependent Gene Essentiality',
             wordwrap=False,
             align=pygame_menu.locals.ALIGN_CENTER,
             font_size=34,
         )
-
         menu.add.label(
-            f"""
-            Dr. Vega wants one complete controlled report.
-
-            Question:
-            How does removing oxygen affect both growth and the product/byproduct profile?
-
-            Run A — aerobic baseline:
-            - Method: {MISSION25_METHOD}
-            - Objective: {MISSION25_GROWTH_OBJECTIVE}
-            - Genes: no knockouts
-            - Environment: unchanged
-            - Production Flux: track {tracked_flux_text}
-
-            Run B — oxygen-limited setup:
-            - Method: {MISSION25_METHOD}
-            - Objective: {MISSION25_GROWTH_OBJECTIVE}
-            - Genes: no knockouts
-            - Environment: close only the lower bound of {MISSION25_OXYGEN_REACTION}
-            - Production Flux: track {tracked_flux_text}
-
-            After the second simulation, open New Results -> Compare Runs.
-            Growth should drop by at least {MISSION25_MIN_GROWTH_DROP:.1f}, and at least
-            {MISSION25_MIN_CHANGED_FLUXES} tracked production fluxes should change.
-            """,
+            f'Build a controlled oxygen-by-genotype matrix for {MISSION25_TARGET_GENE} / {MISSION25_TARGET_GENE_NAME}.',
             wordwrap=True,
             align=pygame_menu.locals.ALIGN_CENTER,
-            font_size=30,
+            font_size=28,
         )
+        menu.add.button('Mission 25 Briefing', briefing, font_color='black', background_color=(255, 215, 0))
+        menu.add.button('Optional Hints', hint1, font_color='black', background_color=(230, 230, 180))
+        menu.add.vertical_margin(25)
 
-        menu.add.button('Mission 25 Briefing', menu_text, font_color='black', background_color=(255, 215, 0, 255))
-        menu.add.vertical_margin(50)
+        report = load_mission25_comparison_check()
+        report_label_options = {
+            'wordwrap': True,
+            'align': pygame_menu.locals.ALIGN_LEFT,
+            'padding': (20, 20, 20, 20),
+            'font_size': 22,
+        }
+        if report:
+            report_label_options['background_color'] = 'white'
+        menu.add.label(
+            build_mission25_context_report_text(report),
+            **report_label_options,
+        )
+        menu.add.vertical_margin(20)
 
-        if self.mission25:
-            menu.add.button('Deliver Final Report', action=self.deliver_results, background_color=(50, 100, 100))
-            menu.add.vertical_margin(50)
+        if '25' in self.missions_completed:
+            menu.add.label('Mission Completed', font_color=(40, 120, 40))
+        elif self.mission25 or '25' in self.missions_activated:
+            self.mission25 = True
+            menu.add.label(
+                'Question: In which oxygen context did the same knockout produce the strongest predicted growth defect?',
+                wordwrap=True,
+                align=pygame_menu.locals.ALIGN_LEFT,
+                font_size=24,
+            )
+            menu.add.text_input(
+                'Oxygen context: ',
+                default='',
+                input_underline='_',
+                maxchar=80,
+                onreturn=self.deliver_results,
+            )
             menu.add.label('Mission Activated', font_color=(150, 150, 150))
-            menu.add.vertical_margin(20)
         else:
-            if '24' in self.missions_completed:
-                menu.add.button('Activate Mission', action=self.activate_mission25, background_color=(50, 100, 100))
-            else:
-                menu.add.label('Complete Mission 24 before activating this mission.', font_color=(150, 40, 40))
+            menu.add.button('Activate Mission', action=self.activate_mission25, background_color=(50, 100, 100))
 
         menu.add.vertical_margin(20)
         await run_menu(menu, self.display_surface)
 
     def activate_mission25(self):
-        if '24' not in self.missions_completed:
+        if not is_mission25_unlocked(self.missions_completed):
             self.failed.play()
-            animation_text_save('Complete Mission 24 first.', time=2500)
+            animation_text_save('Complete Mission 24 before starting Mission 25.', time=3000)
+            return
+        if '25' in self.missions_completed:
+            return
+        if '25' in self.missions_activated:
+            self.mission25 = True
             return
 
-        clear_compare_runs()
         clear_mission25_comparison_check()
+        initialise_mission25_context_matrix()
         self.mission25 = True
-        if '25' not in self.missions_activated:
-            self.missions_activated.insert(0, '25')
+        self.missions_activated.insert(0, '25')
         animation_text_save('Mission 25 Activated')
         save_file(self.player.get_save_data())
 
-    def deliver_results(self):
-        report_data = load_mission25_comparison_check()
-
-        if (not report_data
-                or report_data.get('mission_id') != '25'
-                or report_data.get('check_version') != 1):
+    def deliver_results(self, answer):
+        if not is_mission25_unlocked(self.missions_completed):
             self.failed.play()
-            animation_text_save('Run the Mission 25 comparison first!', time=2500)
+            animation_text_save('Complete Mission 24 first!', time=2500)
+            return
+        if '25' not in self.missions_activated:
+            self.failed.play()
+            animation_text_save('Activate Mission 25 before delivering a conclusion.', time=2800)
             return
 
-        if report_data.get('ready_to_deliver'):
-            self.success.play()
-            if '25' not in self.missions_completed:
-                self.missions_completed.insert(0, '25')
-            animation_text_save('Congratulations! Mission 25 completed!', time=2500)
-            save_file(self.player.get_save_data())
+        report = load_mission25_comparison_check()
+        if (
+            not report
+            or report.get('mission_id') != '25'
+            or report.get('check_version') != MISSION25_CHECK_VERSION
+        ):
+            self.failed.play()
+            animation_text_save('Record the current-format Mission 25 matrix first.', time=3000)
+            return
+        if not report.get('evidence_ready') or not report.get('relationship_supported'):
+            self.failed.play()
+            animation_text_save('Complete all four controlled matrix cells before answering.', time=3000)
+            return
+        if not mission25_answer_matches(answer, report):
+            self.failed.play()
+            animation_text_save('Recompare knockout growth retention inside each oxygen context.', time=3200)
             return
 
-        self.failed.play()
-        if not report_data.get('baseline_run_found'):
-            animation_text_save('Missing Run A. Use the aerobic baseline with the full flux panel.', time=3000)
-        elif not report_data.get('oxygen_limited_run_found'):
-            animation_text_save('Missing Run B. Close only the oxygen lower bound and run again.', time=3000)
-        elif not report_data.get('tracking_ready'):
-            animation_text_save('Track the full production-flux panel in both runs.', time=3000)
-        elif not report_data.get('growth_decreased'):
-            animation_text_save('Growth has not dropped clearly after oxygen limitation yet.', time=3000)
-        elif not report_data.get('production_profile_changed'):
-            animation_text_save('The production profile has not changed enough yet.', time=3000)
-        else:
-            animation_text_save('Almost there. Open Compare Runs and check the final report.', time=3000)
+        self.success.play()
+        if '25' not in self.missions_completed:
+            self.missions_completed.insert(0, '25')
+        animation_text_save('Congratulations! Mission 25 completed!', time=2500)
+        save_file(self.player.get_save_data())
 
     def input(self):
         keys = pygame.key.get_pressed()
