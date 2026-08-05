@@ -495,6 +495,10 @@ def _build_mission27_text(report_data):
 def _build_mission28_text(report_data):
     return build_mission28_dependency_report_text(report_data)
 
+
+def _build_mission29_text(report_data):
+    return build_mission29_redundancy_report_text(report_data)
+
 def _build_mission07_text(objective_data):
     return build_mission07_objective_comparison_report_text(objective_data)
 
@@ -825,6 +829,7 @@ class Window:
             ('26', [MISSION26_TARGET_GENE]),
             ('27', [MISSION27_TARGET_GENE]),
             ('28', [MISSION28_PRIMARY_GENE, *MISSION28_SECONDARY_GENES]),
+            ('29', list(MISSION29_SINGLE_GENES)),
         ]
         for mission_id, candidates in gene_mission_candidates:
             if mission_id in self.player.missions_activated and mission_id not in self.player.missions_completed:
@@ -1306,6 +1311,13 @@ class Window:
                 else:
                     mission28_data = run_mission28_dependency_check(self.results)
 
+            mission29_data = None
+            if '29' in self.player.missions_activated and '29' not in self.player.missions_completed:
+                if sys.platform == 'emscripten':
+                    mission29_data = run_mission29_redundancy_check_remote(BACKEND_URL, self.results)
+                else:
+                    mission29_data = run_mission29_redundancy_check(self.results)
+
             bound_sweep_data = None
             mission26_data = None
             bound_sweep_mission_active = (
@@ -1690,6 +1702,17 @@ class Window:
                     background_color='white',
                     font_size=24,
                     label_id='mission28_dependency_check'
+                )
+                menu_simul.add.vertical_margin(20)
+
+            if mission29_data is not None:
+                menu_simul.add.label(
+                    _build_mission29_text(mission29_data),
+                    wordwrap=True,
+                    padding=(20, 20, 20, 20),
+                    background_color='white',
+                    font_size=24,
+                    label_id='mission29_redundancy_check'
                 )
                 menu_simul.add.vertical_margin(20)
 

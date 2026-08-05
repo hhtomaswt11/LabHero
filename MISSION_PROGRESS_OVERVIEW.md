@@ -158,3 +158,15 @@ Resumo curto das missões implementadas até agora, organizado por laboratório.
 **Tema:** resgate metabólico por suplementação ambiental sem restauração da reação genética bloqueada.  
 **Explica:** uma perturbação ambiental pode contornar operacionalmente a consequência de um knockout no modelo. Um resgate de crescimento não repara o gene nem reativa a reação desativada pela GPR; apenas demonstra que existe um bypass sob o meio, objetivo, bounds e candidatos testados.  
 **Como passar:** depois da Missão 26, usar `pFBA` com objetivo `BIOMASS_Ecoli_core_w_GAM`. Registar uma referência wild type e uma referência com apenas `b0720 / gltA` desligado, ambas no meio completamente default. Depois manter esse knockout e abrir individualmente apenas o lower bound de `EX_akg_e`, `EX_pyr_e`, `EX_succ_e`, `EX_fum_e` e `EX_mal__L_e`, sem alterar glucose, oxigénio ou outros bounds. O relatório acumula os sete runs, exige `CS` desativada nos trials e preserva evidência válida após tentativas inválidas. Entregar o candidato que restaura crescimento previsto mantendo citrate synthase desativada.
+
+### Mission 28 — Bypass Dependency Mapping
+**Tema:** dependência mecanística de um resgate metabólico por suplementação.  
+**Explica:** disponibilidade externa de um metabolito não equivale a acesso metabólico. O resgate por 2-oxoglutarato depende da função de transporte que permite a sua captação enquanto `CS` permanece desativada.  
+**Como passar:** depois da Missão 27, usar `pFBA`, objetivo `BIOMASS_Ecoli_core_w_GAM`, manter `b0720 / gltA` desligado e abrir apenas `EX_akg_e`. Registar ou reutilizar a referência resgatada e testar separadamente um segundo knockout entre `b2587`, `b1761`, `b0728`, `b3236` e `b3403`. O relatório exige crescimento, uptake de 2-oxoglutarato e reações desativadas pela GPR, preservando evidência válida após tentativas inválidas. Entregar o knockout que elimina simultaneamente a captação do suplemento e o crescimento resgatado.
+
+## Lab 10 — Dr. Li
+
+### Mission 29 — Isoenzyme Redundancy Screen
+**Tema:** redundância funcional, lógica GPR `OR` e interação sinteticamente letal.  
+**Explica:** um knockout individual pode ser fenotipicamente neutro quando outra isoenzima mantém a reação ativa. A remoção conjunta das duas alternativas pode revelar uma dependência não aditiva que não era visível nos singles.  
+**Como passar:** depois da Missão 28, usar `pFBA`, objetivo `BIOMASS_Ecoli_core_w_GAM` e ambiente aeróbio completamente default. Registar uma referência wild type; os seis single knockouts `b0118`, `b1276`, `b1723`, `b3916`, `b1676` e `b1854`; e os três double knockouts correspondentes `b0118+b1276`, `b1723+b3916` e `b1676+b1854`. O relatório acumula dez runs por qualquer ordem, valida a GPR, calcula retenções e preserva evidência válida após tentativas inválidas. Entregar o par em que ambos os singles mantêm crescimento, mas o double knockout elimina o crescimento previsto.

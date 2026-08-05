@@ -16420,3 +16420,657 @@ def run_mission14_reduction_check_remote(backend_url, simulation_results=None):
 def run_mission15_diagnostic_report_check_remote(backend_url, simulation_results=None):
     """Reuse the visible browser result; Mission 15 launches no hidden requests."""
     return run_mission15_diagnostic_report_check(simulation_results)
+# Mission 29 — Isoenzyme Redundancy and Synthetic Lethality
+# Dr. Li begins a network-robustness programme by comparing three matched
+# isoenzyme pairs. The player records a wild-type reference, all six single
+# knockouts and the three corresponding double knockouts under one unchanged
+# aerobic medium. The conclusion is inferred from visible pFBA evidence only.
+MISSION29_CHECK_VERSION = 2
+MISSION29_METHOD = 'pFBA'
+MISSION29_GROWTH_OBJECTIVE = 'BIOMASS_Ecoli_core_w_GAM'
+MISSION29_TARGET_CONTEXT = 'isoenzyme redundancy and synthetic-lethal interaction screen'
+MISSION29_PAIR_ORDER = ['aconitase', 'phosphofructokinase', 'pyruvate_kinase']
+MISSION29_PAIRS = {
+    'aconitase': ('b0118', 'b1276'),
+    'phosphofructokinase': ('b1723', 'b3916'),
+    'pyruvate_kinase': ('b1676', 'b1854'),
+}
+MISSION29_PAIR_LABELS = {
+    'aconitase': 'Aconitase isoenzymes',
+    'phosphofructokinase': 'Phosphofructokinase isoenzymes',
+    'pyruvate_kinase': 'Pyruvate-kinase isoenzymes',
+}
+MISSION29_GENE_NAMES = {
+    'b0118': 'acnB',
+    'b1276': 'acnA',
+    'b1723': 'pfkB',
+    'b3916': 'pfkA',
+    'b1676': 'pykF',
+    'b1854': 'pykA',
+}
+MISSION29_PAIR_REACTIONS = {
+    'aconitase': ['ACONTa', 'ACONTb'],
+    'phosphofructokinase': ['PFK'],
+    'pyruvate_kinase': ['PYK'],
+}
+MISSION29_SINGLE_GENES = [
+    gene_id
+    for pair_id in MISSION29_PAIR_ORDER
+    for gene_id in MISSION29_PAIRS[pair_id]
+]
+MISSION29_EXPECTED_SYNTHETIC_PAIR = 'aconitase'
+MISSION29_REQUIRED_RUN_COUNT = 1 + len(MISSION29_SINGLE_GENES) + len(MISSION29_PAIR_ORDER)
+MISSION29_EXPECTED_SCORE_NAME = 'total_absolute_flux'
+MISSION29_EXPECTED_DEFAULT_UPTAKE = 10.0
+MISSION29_MIN_REFERENCE_GROWTH = 0.5
+MISSION29_MIN_SINGLE_RETENTION = 0.95
+MISSION29_MAX_SYNTHETIC_PAIR_RETENTION = 0.01
+MISSION29_MIN_CONTROL_PAIR_RETENTION = 0.10
+MISSION29_MIN_AEROBIC_OXYGEN_UPTAKE = 0.1
+MISSION29_FLUX_TOLERANCE = 0.01
+MISSION29_PRIMARY_TOLERANCE = 0.001
+MISSION29_CAPACITY_TOLERANCE = 0.05
+
+
+def is_mission29_unlocked(missions_completed):
+    """Mission 29 is Dr. Li's first mission and requires Mission 28."""
+    return '28' in (missions_completed or [])
+
+
+def _mission29_number_or_none(value):
+    numeric = _as_float_or_none(value)
+    return float(numeric) if numeric is not None else None
+
+
+def _mission29_clean_number(value, decimals=6):
+    numeric = float(value)
+    if abs(numeric) < DISPLAY_ZERO_TOLERANCE:
+        numeric = 0.0
+    return round(numeric, decimals)
+
+
+def _mission29_pair_for_gene(gene_id):
+    for pair_id in MISSION29_PAIR_ORDER:
+        if gene_id in MISSION29_PAIRS[pair_id]:
+            return pair_id
+    return None
+
+
+def _mission29_pair_for_knockouts(knocked_out_genes):
+    knocked = tuple(sorted(knocked_out_genes or []))
+    for pair_id in MISSION29_PAIR_ORDER:
+        if knocked == tuple(sorted(MISSION29_PAIRS[pair_id])):
+            return pair_id
+    return None
+
+
+def _mission29_disabled_reactions(knocked_out_genes):
+    """Evaluate GPR consequences without launching a metabolic simulation."""
+    knocked_out_genes = sorted(knocked_out_genes or [])
+    if not knocked_out_genes:
+        return []
+    try:
+        if model is not None:
+            return sorted(disabled_reaction_ids(model, knocked_out_genes))
+    except Exception:
+        pass
+
+    disabled = []
+    knocked = set(knocked_out_genes)
+    for pair_id in MISSION29_PAIR_ORDER:
+        if set(MISSION29_PAIRS[pair_id]).issubset(knocked):
+            disabled.extend(MISSION29_PAIR_REACTIONS[pair_id])
+    return sorted(set(disabled))
+
+
+def _mission29_environment_status(reactions):
+    status = _mission27_environment_status(reactions)
+    return {
+        'bounds_complete': bool(status.get('bounds_complete')),
+        'changes': list(status.get('changes') or []),
+        'setup_type': status.get('setup_type'),
+        'default_environment_ready': bool(
+            status.get('bounds_complete') and status.get('setup_type') == 'default'
+        ),
+    }
+
+
+def _mission29_empty_report():
+    missing = ['wild_type_reference']
+    missing.extend(f'single:{gene_id}' for gene_id in MISSION29_SINGLE_GENES)
+    missing.extend(f'pair:{pair_id}' for pair_id in MISSION29_PAIR_ORDER)
+    return {
+        'mission_id': '29',
+        'check_version': MISSION29_CHECK_VERSION,
+        'mission_title': 'Isoenzyme Redundancy Screen',
+        'target_context': MISSION29_TARGET_CONTEXT,
+        'target_method': MISSION29_METHOD,
+        'growth_objective': MISSION29_GROWTH_OBJECTIVE,
+        'pair_order': list(MISSION29_PAIR_ORDER),
+        'pairs': copy.deepcopy(MISSION29_PAIRS),
+        'pair_labels': copy.deepcopy(MISSION29_PAIR_LABELS),
+        'gene_names': copy.deepcopy(MISSION29_GENE_NAMES),
+        'pair_reactions': copy.deepcopy(MISSION29_PAIR_REACTIONS),
+        'wild_type_reference': None,
+        'single_trials': {},
+        'pair_trials': {},
+        'recorded_run_count': 0,
+        'required_run_count': MISSION29_REQUIRED_RUN_COUNT,
+        'missing_conditions': missing,
+        'single_growth_retention': {},
+        'pair_growth_retention': {},
+        'pair_interaction_summary': {},
+        'synthetic_lethal_candidates': [],
+        'unique_synthetic_pair': None,
+        'unique_synthetic_lethality_supported': False,
+        'evidence_ready': False,
+        'answer_ready': False,
+        'ready_to_deliver': False,
+        'current_run_type': None,
+        'current_gene': None,
+        'current_pair': None,
+        'current_run_valid': False,
+        'current_run_recorded': False,
+        'current_issues': [],
+        'current_run': None,
+        'latest_attempt': None,
+    }
+
+
+def initialise_mission29_redundancy_screen():
+    report = _mission29_empty_report()
+    save_mission29_redundancy_check(report)
+    return report
+
+
+def _build_mission29_data(
+    method_name,
+    selected_objective,
+    objective_result,
+    genes,
+    reactions,
+    production_fluxes=None,
+    medium_fluxes=None,
+    existing_report=None,
+    objective_error=None,
+):
+    """Validate and accumulate one visible Mission 29 reference/single/pair run."""
+    existing_report = existing_report or {}
+    if (
+        existing_report.get('mission_id') != '29'
+        or existing_report.get('check_version') != MISSION29_CHECK_VERSION
+    ):
+        existing_report = _mission29_empty_report()
+
+    wild_type_reference = copy.deepcopy(existing_report.get('wild_type_reference'))
+    single_trials = copy.deepcopy(existing_report.get('single_trials') or {})
+    pair_trials = copy.deepcopy(existing_report.get('pair_trials') or {})
+
+    environment = _mission29_environment_status(reactions)
+    knocked_out_genes = sorted(_knocked_out_genes(genes))
+    disabled_reactions = _mission29_disabled_reactions(knocked_out_genes)
+
+    run_type = None
+    current_gene = None
+    current_pair = None
+    if not knocked_out_genes:
+        run_type = 'wild_type_reference'
+    elif len(knocked_out_genes) == 1 and knocked_out_genes[0] in MISSION29_SINGLE_GENES:
+        run_type = 'single_trial'
+        current_gene = knocked_out_genes[0]
+        current_pair = _mission29_pair_for_gene(current_gene)
+    elif len(knocked_out_genes) == 2:
+        pair_id = _mission29_pair_for_knockouts(knocked_out_genes)
+        if pair_id:
+            run_type = 'pair_trial'
+            current_pair = pair_id
+
+    objective_numeric = _mission29_number_or_none(objective_result)
+    result_infeasible = 'INFEASIBLE' in str(objective_result or '').upper()
+    raw_fluxes, uptake_fluxes, _secretion_fluxes = _mission21_measured_medium_values(medium_fluxes)
+    diagnostics = _method_diagnostics_from_production_data(production_fluxes)
+    biomass_raw = _mission29_number_or_none(_mission13_biomass_value(production_fluxes))
+    primary_flux = _mission29_number_or_none(diagnostics.get('primary_objective_flux'))
+    method_score = _mission29_number_or_none(diagnostics.get('method_score'))
+    total_absolute_flux = _mission29_number_or_none(diagnostics.get('total_absolute_flux'))
+    method_score_name = diagnostics.get('method_score_name')
+    try:
+        active_reaction_count = int(diagnostics.get('active_reaction_count'))
+    except Exception:
+        active_reaction_count = None
+
+    glucose_raw = _mission29_number_or_none(raw_fluxes.get(MISSION27_GLUCOSE_REACTION))
+    oxygen_raw = _mission29_number_or_none(raw_fluxes.get(MISSION27_OXYGEN_REACTION))
+    glucose_uptake = _mission29_number_or_none(uptake_fluxes.get(MISSION27_GLUCOSE_REACTION))
+    oxygen_uptake = _mission29_number_or_none(uptake_fluxes.get(MISSION27_OXYGEN_REACTION))
+
+    issues = []
+    if objective_error:
+        issues.append(objective_error)
+    if method_name != MISSION29_METHOD:
+        issues.append('Use pFBA for every Mission 29 reference, single knockout and double knockout.')
+    if selected_objective != MISSION29_GROWTH_OBJECTIVE:
+        issues.append(f'Use {MISSION29_GROWTH_OBJECTIVE} as the primary objective.')
+    if not environment.get('bounds_complete'):
+        issues.append('The visible environmental-bounds payload is incomplete.')
+    elif not environment.get('default_environment_ready'):
+        issues.append('Keep the complete environmental medium at model default for every Mission 29 run.')
+    if run_type is None:
+        issues.append(
+            'Use wild type, exactly one highlighted candidate gene, or exactly one of the three defined highlighted gene pairs.'
+        )
+    if result_infeasible:
+        issues.append('An INFEASIBLE result is not valid Mission 29 growth evidence.')
+    if objective_numeric is None:
+        issues.append('The visible growth value is missing or non-numeric.')
+    elif objective_numeric < -MISSION29_PRIMARY_TOLERANCE:
+        issues.append('The visible growth value is outside the accepted non-negative range.')
+
+    if glucose_raw is None or glucose_uptake is None:
+        issues.append('Numeric glucose exchange evidence is required.')
+    else:
+        if glucose_raw > MISSION29_FLUX_TOLERANCE:
+            issues.append('Glucose must not be secreted in this controlled aerobic screen.')
+        if glucose_uptake > MISSION29_EXPECTED_DEFAULT_UPTAKE + MISSION29_CAPACITY_TOLERANCE:
+            issues.append('Measured glucose uptake exceeds the model-default capacity.')
+    if oxygen_raw is None or oxygen_uptake is None:
+        issues.append('Numeric oxygen exchange evidence is required.')
+    else:
+        if oxygen_raw > MISSION29_FLUX_TOLERANCE:
+            issues.append('Oxygen must not be secreted in this controlled aerobic screen.')
+        if oxygen_uptake < MISSION29_MIN_AEROBIC_OXYGEN_UPTAKE:
+            issues.append('The run must remain aerobic with positive measured oxygen uptake.')
+
+    if biomass_raw is None:
+        issues.append('The visible biomass flux is missing from the structured result.')
+    if primary_flux is None:
+        issues.append('The visible primary-objective diagnostic is missing.')
+    if objective_numeric is not None and biomass_raw is not None:
+        if abs(objective_numeric - biomass_raw) > MISSION29_PRIMARY_TOLERANCE:
+            issues.append('The visible growth value does not match the biomass reaction flux.')
+    if biomass_raw is not None and primary_flux is not None:
+        if abs(biomass_raw - primary_flux) > MISSION29_PRIMARY_TOLERANCE:
+            issues.append('The primary-objective diagnostic does not match the biomass flux.')
+    if diagnostics.get('method') != MISSION29_METHOD:
+        issues.append('The visible method diagnostics do not describe pFBA.')
+    if diagnostics.get('objective_reaction') != MISSION29_GROWTH_OBJECTIVE:
+        issues.append('The visible method diagnostics do not describe the biomass objective.')
+    if method_score_name != MISSION29_EXPECTED_SCORE_NAME:
+        issues.append('The pFBA score label is missing or incorrect.')
+    if method_score is None or total_absolute_flux is None:
+        issues.append('The pFBA secondary score is missing or non-numeric.')
+    elif abs(method_score - total_absolute_flux) > MISSION29_PRIMARY_TOLERANCE:
+        issues.append('The pFBA method score does not match total absolute flux.')
+    if active_reaction_count is None:
+        issues.append('The visible active-reaction count is missing.')
+
+    if run_type == 'wild_type_reference':
+        if objective_numeric is not None and objective_numeric < MISSION29_MIN_REFERENCE_GROWTH:
+            issues.append('The wild-type reference must show positive default-medium growth.')
+        if any(
+            reaction_id in disabled_reactions
+            for reactions_list in MISSION29_PAIR_REACTIONS.values()
+            for reaction_id in reactions_list
+        ):
+            issues.append('The wild-type reference must not disable a screened isoenzyme reaction through the GPR.')
+    elif run_type == 'single_trial' and current_pair:
+        expected_reactions = MISSION29_PAIR_REACTIONS[current_pair]
+        if any(reaction_id in disabled_reactions for reaction_id in expected_reactions):
+            issues.append('A single isoenzyme knockout must leave the matched reaction available through its partner gene.')
+    elif run_type == 'pair_trial' and current_pair:
+        expected_reactions = MISSION29_PAIR_REACTIONS[current_pair]
+        missing_disabled = [reaction_id for reaction_id in expected_reactions if reaction_id not in disabled_reactions]
+        if missing_disabled:
+            issues.append(
+                'The complete pair knockout must disable its matched GPR reaction(s): ' + ', '.join(missing_disabled) + '.'
+            )
+
+    current_run_valid = not issues
+    current_run_recorded = False
+    current_run = None
+    if current_run_valid:
+        current_run = {
+            'run_type': run_type,
+            'gene': current_gene,
+            'gene_name': MISSION29_GENE_NAMES.get(current_gene) if current_gene else None,
+            'pair': current_pair,
+            'pair_label': MISSION29_PAIR_LABELS.get(current_pair) if current_pair else None,
+            'method': method_name,
+            'objective': selected_objective,
+            'growth': _mission29_clean_number(objective_numeric),
+            'knocked_out_genes': list(knocked_out_genes),
+            'disabled_reactions': list(disabled_reactions),
+            'environment_changes': list(environment.get('changes') or []),
+            'glucose_raw_flux': _mission29_clean_number(glucose_raw),
+            'glucose_uptake': _mission29_clean_number(glucose_uptake),
+            'oxygen_raw_flux': _mission29_clean_number(oxygen_raw),
+            'oxygen_uptake': _mission29_clean_number(oxygen_uptake),
+            'method_diagnostics': {
+                'method': diagnostics.get('method'),
+                'objective_reaction': diagnostics.get('objective_reaction'),
+                'primary_objective_flux': _mission29_clean_number(primary_flux),
+                'method_score': _mission29_clean_number(method_score),
+                'method_score_name': method_score_name,
+                'total_absolute_flux': _mission29_clean_number(total_absolute_flux),
+                'active_reaction_count': active_reaction_count,
+            },
+        }
+        if run_type == 'wild_type_reference':
+            wild_type_reference = current_run
+        elif run_type == 'single_trial':
+            single_trials[current_gene] = current_run
+        elif run_type == 'pair_trial':
+            pair_trials[current_pair] = current_run
+        current_run_recorded = True
+
+    recorded_run_count = (
+        (1 if wild_type_reference else 0)
+        + len(single_trials)
+        + len(pair_trials)
+    )
+    missing_conditions = []
+    if not wild_type_reference:
+        missing_conditions.append('wild_type_reference')
+    missing_conditions.extend(
+        f'single:{gene_id}' for gene_id in MISSION29_SINGLE_GENES if gene_id not in single_trials
+    )
+    missing_conditions.extend(
+        f'pair:{pair_id}' for pair_id in MISSION29_PAIR_ORDER if pair_id not in pair_trials
+    )
+
+    single_growth_retention = {}
+    pair_growth_retention = {}
+    pair_interaction_summary = {}
+    synthetic_candidates = []
+    reference_growth = _mission29_number_or_none((wild_type_reference or {}).get('growth'))
+    if reference_growth is not None and reference_growth > MISSION29_PRIMARY_TOLERANCE:
+        for gene_id, trial in single_trials.items():
+            growth = _mission29_number_or_none(trial.get('growth'))
+            if growth is not None:
+                single_growth_retention[gene_id] = _mission29_clean_number(growth / reference_growth)
+        for pair_id, trial in pair_trials.items():
+            growth = _mission29_number_or_none(trial.get('growth'))
+            if growth is not None:
+                pair_growth_retention[pair_id] = _mission29_clean_number(growth / reference_growth)
+
+        for pair_id in MISSION29_PAIR_ORDER:
+            gene_a, gene_b = MISSION29_PAIRS[pair_id]
+            ret_a = single_growth_retention.get(gene_a)
+            ret_b = single_growth_retention.get(gene_b)
+            pair_ret = pair_growth_retention.get(pair_id)
+            pair_trial = pair_trials.get(pair_id) or {}
+            expected_reactions = MISSION29_PAIR_REACTIONS[pair_id]
+            disabled_ok = bool(pair_trial) and all(
+                reaction_id in (pair_trial.get('disabled_reactions') or [])
+                for reaction_id in expected_reactions
+            )
+            if ret_a is not None and ret_b is not None and pair_ret is not None:
+                min_single = min(ret_a, ret_b)
+                pair_interaction_summary[pair_id] = {
+                    'single_a_retention': ret_a,
+                    'single_b_retention': ret_b,
+                    'minimum_single_retention': _mission29_clean_number(min_single),
+                    'pair_retention': pair_ret,
+                    'interaction_drop': _mission29_clean_number(min_single - pair_ret),
+                    'matched_reactions_disabled': disabled_ok,
+                }
+                if (
+                    ret_a >= MISSION29_MIN_SINGLE_RETENTION
+                    and ret_b >= MISSION29_MIN_SINGLE_RETENTION
+                    and pair_ret <= MISSION29_MAX_SYNTHETIC_PAIR_RETENTION
+                    and disabled_ok
+                ):
+                    synthetic_candidates.append(pair_id)
+
+    evidence_ready = recorded_run_count == MISSION29_REQUIRED_RUN_COUNT and not missing_conditions
+    unique_synthetic_pair = synthetic_candidates[0] if len(synthetic_candidates) == 1 else None
+    controls_remain_viable = bool(
+        evidence_ready
+        and unique_synthetic_pair
+        and all(
+            pair_growth_retention.get(pair_id, 0.0) >= MISSION29_MIN_CONTROL_PAIR_RETENTION
+            for pair_id in MISSION29_PAIR_ORDER
+            if pair_id != unique_synthetic_pair
+        )
+    )
+    unique_synthetic_supported = bool(
+        evidence_ready
+        and controls_remain_viable
+        and unique_synthetic_pair is not None
+    )
+
+    latest_attempt = {
+        'method': method_name,
+        'objective': selected_objective,
+        'run_type': run_type,
+        'gene': current_gene,
+        'pair': current_pair,
+        'knocked_out_genes': list(knocked_out_genes),
+        'valid': current_run_valid,
+        'recorded': current_run_recorded,
+        'issues': list(issues),
+    }
+
+    report = _mission29_empty_report()
+    report.update({
+        'wild_type_reference': wild_type_reference,
+        'single_trials': single_trials,
+        'pair_trials': pair_trials,
+        'recorded_run_count': recorded_run_count,
+        'missing_conditions': missing_conditions,
+        'single_growth_retention': single_growth_retention,
+        'pair_growth_retention': pair_growth_retention,
+        'pair_interaction_summary': pair_interaction_summary,
+        'synthetic_lethal_candidates': synthetic_candidates,
+        'unique_synthetic_pair': unique_synthetic_pair,
+        'unique_synthetic_lethality_supported': unique_synthetic_supported,
+        'evidence_ready': evidence_ready,
+        'answer_ready': unique_synthetic_supported,
+        'ready_to_deliver': unique_synthetic_supported,
+        'current_run_type': run_type,
+        'current_gene': current_gene,
+        'current_pair': current_pair,
+        'current_run_valid': current_run_valid,
+        'current_run_recorded': current_run_recorded,
+        'current_issues': list(issues),
+        'current_run': current_run,
+        'latest_attempt': latest_attempt,
+    })
+    save_mission29_redundancy_check(report)
+    return report
+
+
+def run_mission29_redundancy_check(simulation_results=None):
+    """Validate the already displayed Mission 29 result without re-simulating."""
+    method_name, selected_objective, genes, reactions = _read_simulation_file()
+    objective_result = None
+    production_fluxes = None
+    medium_fluxes = None
+    objective_error = None
+    try:
+        if simulation_results is not None:
+            result_objective = simulation_results[0]
+            objective_result = simulation_results[1]
+            production_fluxes = simulation_results[2] if len(simulation_results) > 2 else None
+            medium_fluxes = simulation_results[3] if len(simulation_results) > 3 else None
+            if result_objective != selected_objective:
+                objective_error = 'The displayed simulation result does not match the currently selected objective.'
+        else:
+            objective_error = 'Run a visible Mission 29 simulation before recording evidence.'
+    except Exception:
+        objective_error = 'Could not read the current visible Mission 29 simulation result.'
+
+    return _build_mission29_data(
+        method_name,
+        selected_objective,
+        objective_result,
+        genes,
+        reactions,
+        production_fluxes=production_fluxes,
+        medium_fluxes=medium_fluxes,
+        existing_report=load_mission29_redundancy_check() or {},
+        objective_error=objective_error,
+    )
+
+
+def run_mission29_redundancy_check_remote(backend_url, simulation_results=None):
+    """Browser parity wrapper using the same visible backend response."""
+    del backend_url
+    return run_mission29_redundancy_check(simulation_results)
+
+
+def _normalise_mission29_text(value):
+    text = unicodedata.normalize('NFKD', str(value or ''))
+    return ''.join(char for char in text if not unicodedata.combining(char)).lower().strip()
+
+
+def normalise_mission29_answer(answer):
+    text = _normalise_mission29_text(answer)
+    compact = re.sub(r'[^a-z0-9]+', ' ', text).strip()
+    tokens = set(compact.split())
+    pair_aliases = {
+        'aconitase': [
+            ({'b0118', 'b1276'}, None),
+            ({'acnb', 'acna'}, None),
+            ({'aconta', 'acontb'}, None),
+            (set(), r'\baconitase(?:\s+isoenzyme|\s+isoenzymes|\s+pair)?\b'),
+        ],
+        'phosphofructokinase': [
+            ({'b1723', 'b3916'}, None),
+            ({'pfkb', 'pfka'}, None),
+            (set(), r'\bphosphofructokinase(?:\s+isoenzyme|\s+isoenzymes|\s+pair)?\b'),
+        ],
+        'pyruvate_kinase': [
+            ({'b1676', 'b1854'}, None),
+            ({'pykf', 'pyka'}, None),
+            (set(), r'\bpyruvate\s+kinase(?:\s+isoenzyme|\s+isoenzymes|\s+pair)?\b'),
+        ],
+    }
+    matches = []
+    for pair_id, aliases in pair_aliases.items():
+        if any((required and required.issubset(tokens)) or (pattern and re.search(pattern, compact)) for required, pattern in aliases):
+            matches.append(pair_id)
+    return matches[0] if len(matches) == 1 else None
+
+
+def mission29_answer_matches(answer, report_data=None):
+    report = report_data if report_data is not None else (load_mission29_redundancy_check() or {})
+    return bool(
+        report.get('mission_id') == '29'
+        and report.get('check_version') == MISSION29_CHECK_VERSION
+        and report.get('answer_ready')
+        and report.get('unique_synthetic_lethality_supported')
+        and normalise_mission29_answer(answer) == report.get('unique_synthetic_pair')
+    )
+
+
+def _mission29_run_growth_text(run):
+    if not isinstance(run, dict):
+        return 'pending'
+    growth = _mission29_number_or_none(run.get('growth'))
+    return 'pending' if growth is None else f'{growth:.3f}'
+
+
+def build_mission29_redundancy_report_text(report_data=None):
+    report = report_data or {}
+    if not report:
+        return (
+            'No redundancy evidence has been recorded yet.\n\n'
+            'Experimental objective:\n'
+            'Keep the aerobic default medium fixed and use pFBA with the biomass objective. '
+            'Record wild type, both single knockouts and the matched double knockout for each highlighted isoenzyme pair.\n\n'
+            'What to determine:\n'
+            'Compare single-gene retention with double-knockout retention and the GPR-disabled reactions. '
+            'Identify a non-additive interaction in which either single perturbation is tolerated but the matched pair abolishes predicted growth.'
+        )
+
+    lines = [
+        'Mission 29 Isoenzyme Redundancy Screen',
+        '',
+        'Controlled protocol:',
+        f'- Method: {MISSION29_METHOD}',
+        f'- Objective: {MISSION29_GROWTH_OBJECTIVE}',
+        '- Environment: completely model-default and aerobic',
+        '- For each highlighted pair: wild type reference, both single knockouts and the exact matched double knockout',
+        '',
+        f"Runs recorded: {report.get('recorded_run_count', 0)}/{report.get('required_run_count', MISSION29_REQUIRED_RUN_COUNT)}",
+        '',
+        'Wild-type reference:',
+    ]
+    wt = report.get('wild_type_reference')
+    if wt:
+        lines.extend([
+            f"- Growth: {float(wt.get('growth', 0.0)):.3f}",
+            f"- Glucose uptake: {float(wt.get('glucose_uptake', 0.0)):.3f}",
+            f"- Oxygen uptake: {float(wt.get('oxygen_uptake', 0.0)):.3f}",
+        ])
+    else:
+        lines.append('- Pending')
+
+    lines.extend([
+        '',
+        'Matched isoenzyme screen:',
+        'Pair | single A growth | single B growth | double growth | double retention | GPR-disabled reactions',
+    ])
+    singles = report.get('single_trials') or {}
+    pairs = report.get('pair_trials') or {}
+    pair_retention = report.get('pair_growth_retention') or {}
+    for pair_id in MISSION29_PAIR_ORDER:
+        gene_a, gene_b = MISSION29_PAIRS[pair_id]
+        pair_run = pairs.get(pair_id)
+        retention = pair_retention.get(pair_id)
+        retention_text = 'pending' if retention is None else f'{100.0 * float(retention):.1f}%'
+        disabled_text = 'pending'
+        if pair_run:
+            disabled_text = ', '.join(pair_run.get('disabled_reactions') or []) or 'none'
+        lines.append(
+            f"{gene_a}/{MISSION29_GENE_NAMES[gene_a]} + {gene_b}/{MISSION29_GENE_NAMES[gene_b]} | "
+            f"{_mission29_run_growth_text(singles.get(gene_a))} | "
+            f"{_mission29_run_growth_text(singles.get(gene_b))} | "
+            f"{_mission29_run_growth_text(pair_run)} | {retention_text} | {disabled_text}"
+        )
+
+    latest = report.get('latest_attempt') or {}
+    if latest:
+        lines.append('')
+        if latest.get('recorded'):
+            if latest.get('run_type') == 'wild_type_reference':
+                label = 'wild_type_reference'
+            elif latest.get('run_type') == 'single_trial':
+                label = f"single_trial[{latest.get('gene')}]"
+            elif latest.get('run_type') == 'pair_trial':
+                label = f"pair_trial[{latest.get('pair')}]"
+            else:
+                label = 'unknown'
+            lines.append(f'Latest valid visible run recorded: {label}.')
+        else:
+            lines.append('Latest run was not recorded:')
+            for issue in latest.get('issues') or ['The visible run did not match the controlled Mission 29 protocol.']:
+                lines.append(f'- {issue}')
+            if report.get('recorded_run_count', 0):
+                lines.append('Previously valid Mission 29 redundancy evidence remains available.')
+
+    lines.append('')
+    if report.get('evidence_ready'):
+        lines.extend([
+            'Evidence complete.',
+            'Compare each single knockout with its matched double knockout and inspect the GPR-disabled reactions.',
+            'Question: Which tested gene pair shows a synthetic-lethal interaction under this default aerobic model context?',
+        ])
+    else:
+        lines.append('Evidence incomplete.')
+        missing = report.get('missing_conditions') or []
+        if missing:
+            lines.append('Missing conditions: ' + ', '.join(missing))
+
+    lines.extend([
+        '',
+        'Interpretation note: redundancy can mask the effect of a single knockout. Synthetic lethality here means that both single knockouts retain predicted growth while their matched double knockout abolishes it in this model context.',
+        'The conclusion is conditional on this model, pFBA biomass objective, default aerobic medium and tested pair set.',
+        'All growth, exchange and GPR evidence comes from visible simulation results. No hidden validation simulation is used.',
+    ])
+    return '\n'.join(lines)
+
+
+def _build_mission29_text(report_data=None):
+    return build_mission29_redundancy_report_text(report_data)

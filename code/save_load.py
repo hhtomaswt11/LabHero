@@ -903,3 +903,27 @@ def load_mission28_bound_sweep_check():
 
 def clear_mission28_bound_sweep_check():
     clear_mission28_dependency_check()
+
+
+def save_mission29_redundancy_check(data):
+    if _IS_WEB:
+        _MEMSTORE['mission29_redundancy_check'] = data
+        return
+    with open(get_save_path('mission29_redundancy_check.txt'), 'w') as report_file:
+        json.dump(data, report_file)
+
+
+def load_mission29_redundancy_check():
+    if _IS_WEB:
+        return _MEMSTORE.get('mission29_redundancy_check')
+    try:
+        with open(get_save_path('mission29_redundancy_check.txt')) as report_file:
+            return json.load(report_file)
+    except FileNotFoundError:
+        return None
+    except Exception:
+        return None
+
+
+def clear_mission29_redundancy_check():
+    _delete_save_artifact('mission29_redundancy_check', 'mission29_redundancy_check.txt')

@@ -1,16 +1,25 @@
-LabHero — Mission 28 initial-description refinement
-Base archive: LabHero_chat(20260805-180906).zip
+Mission 29 — Isoenzyme Redundancy Screen
 
-Changed files:
+Added:
+- code/mission29.py
+- data/missions/mission29.md
+- tests/test_mission29.py
+
+Updated:
+- code/level.py
+- code/player.py
+- code/window.py
 - code/simulation.py
-  * Removes the duplicated "Mission 28 Bypass Dependency Mapping" title from the lower report area before evidence exists.
-  * Replaces the former one-line instruction with a fuller introduction covering the experimental objective, the controlled secondary-knockout screen, the evidence to compare, and the interpretation goal.
-  * Does not reveal the correct dependency candidate.
-- tests/test_mission28.py
-  * Adds a regression test confirming that the initial report text is detailed, does not repeat the mission title, and does not disclose the answer.
+- code/save_load.py
+- MISSION_PROGRESS_OVERVIEW.md
 
-No scientific rules, thresholds, mission state, progression, simulation behavior, web-service contract, or other missions were changed.
+Map note:
+- data/map_lb.tmx was not modified. The existing Mission29 object is now wired to Dr. Li.
 
-Validation:
-- Python compilation: OK
-- Mission 28 tests: 46 tests, OK (1 solver/backend test skipped in the dependency-light validation mode)
+Web note:
+- Mission 29 reuses the existing visible POST /simulate result and stores JSON-compatible evidence.
+- No mission-specific endpoint, hidden optimisation or browser-side solver was added.
+
+Runtime wiring correction:
+- code/window.py now defines the local Mission 29 report-text adapter used by the New Results screen.
+- tests/test_mission29.py now guards against the underscore-import NameError that caused the first visible Mission 29 run to crash.

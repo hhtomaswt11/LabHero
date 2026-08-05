@@ -58,6 +58,13 @@ SKIN_REGISTRY = [
         # price=0,
         unlocked=True
     ),
+    SkinDefinition(
+        id='alt5',
+        name='Lilac LabHero',
+        folder='graphics/character_alt5',
+        # price=0,
+        unlocked=True
+    ),
     # SkinDefinition(
     #     id='golden',
     #     name='Golden LabHero',
