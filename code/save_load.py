@@ -954,3 +954,30 @@ def clear_mission30_redundancy_threshold_check():
         'mission30_redundancy_threshold_check',
         'mission30_redundancy_threshold_check.txt',
     )
+
+
+def save_mission31_environmental_suppression_check(data):
+    if _IS_WEB:
+        _MEMSTORE['mission31_environmental_suppression_check'] = data
+        return
+    with open(get_save_path('mission31_environmental_suppression_check.txt'), 'w') as report_file:
+        json.dump(data, report_file)
+
+
+def load_mission31_environmental_suppression_check():
+    if _IS_WEB:
+        return _MEMSTORE.get('mission31_environmental_suppression_check')
+    try:
+        with open(get_save_path('mission31_environmental_suppression_check.txt')) as report_file:
+            return json.load(report_file)
+    except FileNotFoundError:
+        return None
+    except Exception:
+        return None
+
+
+def clear_mission31_environmental_suppression_check():
+    _delete_save_artifact(
+        'mission31_environmental_suppression_check',
+        'mission31_environmental_suppression_check.txt',
+    )

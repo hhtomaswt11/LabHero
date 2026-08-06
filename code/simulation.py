@@ -17747,3 +17747,652 @@ def build_mission30_redundancy_threshold_report_text(report_data=None):
 
 def _build_mission30_text(report_data=None):
     return build_mission30_redundancy_threshold_report_text(report_data)
+
+
+# Mission 31 — Environmental Suppression Matrix
+# Dr. Li closes his programme by revisiting the aconitase synthetic-lethal pair
+# from Mission 29 under four matched replacement-carbon environments. Each
+# matrix cell is one already visible pFBA result; the validator never launches
+# an additional or hidden simulation.
+MISSION31_CHECK_VERSION = 2
+MISSION31_METHOD = 'pFBA'
+MISSION31_GROWTH_OBJECTIVE = 'BIOMASS_Ecoli_core_w_GAM'
+MISSION31_TARGET_CONTEXT = 'environmental suppression matrix for the aconitase synthetic-lethal phenotype'
+MISSION31_GENE_A = 'b0118'
+MISSION31_GENE_B = 'b1276'
+MISSION31_GENE_NAMES = {
+    MISSION31_GENE_A: 'acnB',
+    MISSION31_GENE_B: 'acnA',
+}
+MISSION31_DOUBLE_KNOCKOUT = [MISSION31_GENE_A, MISSION31_GENE_B]
+MISSION31_TARGET_REACTIONS = ['ACONTa', 'ACONTb']
+MISSION31_GLUCOSE_REACTION = 'EX_glc__D_e'
+MISSION31_OXYGEN_REACTION = 'EX_o2_e'
+MISSION31_SOURCE_ORDER = ['EX_fru_e', 'EX_pyr_e', 'EX_succ_e', 'EX_glu__L_e']
+MISSION31_SOURCE_NAMES = {
+    'EX_fru_e': 'D-Fructose',
+    'EX_pyr_e': 'Pyruvate',
+    'EX_succ_e': 'Succinate',
+    'EX_glu__L_e': 'L-Glutamate',
+}
+MISSION31_GENOTYPE_ORDER = ['wild_type', 'aconitase_double']
+MISSION31_GENOTYPE_LABELS = {
+    'wild_type': 'Wild type',
+    'aconitase_double': 'b0118 + b1276 double knockout',
+}
+MISSION31_EXPECTED_SUPPRESSION_SOURCE = 'EX_glu__L_e'
+MISSION31_REQUIRED_RUN_COUNT = len(MISSION31_SOURCE_ORDER) * len(MISSION31_GENOTYPE_ORDER)
+MISSION31_EXPECTED_SCORE_NAME = 'total_absolute_flux'
+MISSION31_SOURCE_CAPACITY = 10.0
+MISSION31_MIN_WILD_TYPE_GROWTH = 0.05
+MISSION31_MIN_SUPPRESSED_GROWTH = 0.05
+MISSION31_MIN_SUPPRESSION_RETENTION = 0.90
+MISSION31_MAX_NONSUPPRESSED_GROWTH = 0.001
+MISSION31_MIN_SOURCE_UPTAKE = 0.1
+MISSION31_MIN_AEROBIC_OXYGEN_UPTAKE = 0.1
+MISSION31_FLUX_TOLERANCE = 0.01
+MISSION31_PRIMARY_TOLERANCE = 0.001
+MISSION31_CAPACITY_TOLERANCE = 0.05
+
+
+def is_mission31_unlocked(missions_completed):
+    """Mission 31 is Dr. Li's final mission and requires Mission 30."""
+    return '30' in (missions_completed or [])
+
+
+def _mission31_number_or_none(value):
+    numeric = _as_float_or_none(value)
+    return float(numeric) if numeric is not None else None
+
+
+def _mission31_clean_number(value, decimals=6):
+    numeric = float(value)
+    if abs(numeric) < DISPLAY_ZERO_TOLERANCE:
+        numeric = 0.0
+    return round(numeric, decimals)
+
+
+def _mission31_genes_complete(genes):
+    return bool(
+        isinstance(genes, dict)
+        and all(gene_id in genes for gene_id in GENES)
+    )
+
+
+def _mission31_disabled_reactions(knocked_out_genes):
+    """Evaluate GPR consequences without launching a metabolic optimisation."""
+    knocked_out_genes = sorted(knocked_out_genes or [])
+    if not knocked_out_genes:
+        return []
+    try:
+        if model is not None:
+            return sorted(disabled_reaction_ids(model, knocked_out_genes))
+    except Exception:
+        pass
+    if knocked_out_genes == sorted(MISSION31_DOUBLE_KNOCKOUT):
+        return list(MISSION31_TARGET_REACTIONS)
+    return []
+
+
+def _mission31_environment_status(reactions):
+    """Require glucose closure plus exactly one replacement source at -10 capacity.
+
+    The simulation UI stores bound-open states rather than arbitrary numbers.
+    Closing the model-default glucose lower bound sets it to zero, while opening
+    one candidate whose model-default lower bound is zero uses the shared -10
+    uptake capacity. Upper bounds and every unrelated lower bound must remain at
+    model default.
+    """
+    bounds_complete = True
+    changes = []
+    for index in range(len(REACTIONS.index)):
+        reaction_id = REACTIONS.index[index]
+        lower_open, upper_open = _reaction_bound_open_states(reactions, index)
+        if lower_open is None or upper_open is None:
+            bounds_complete = False
+            continue
+
+        default_lower_open = bool(REACTIONS.lb.iloc[index] != 0)
+        default_upper_open = bool(REACTIONS.ub.iloc[index] != 0)
+        if bool(lower_open) != default_lower_open:
+            changes.append((reaction_id, 'lower', bool(lower_open)))
+        if bool(upper_open) != default_upper_open:
+            changes.append((reaction_id, 'upper', bool(upper_open)))
+
+    source = None
+    if bounds_complete:
+        for candidate in MISSION31_SOURCE_ORDER:
+            expected = {
+                (MISSION31_GLUCOSE_REACTION, 'lower', False),
+                (candidate, 'lower', True),
+            }
+            if set(changes) == expected:
+                source = candidate
+                break
+
+    return {
+        'bounds_complete': bounds_complete,
+        'changes': [
+            f'{reaction_id} {bound} {"open" if is_open else "closed"}'
+            for reaction_id, bound, is_open in changes
+        ],
+        'source': source,
+        'replacement_medium_ready': bool(bounds_complete and source),
+    }
+
+
+def _mission31_empty_trials():
+    return {
+        source_id: {genotype: None for genotype in MISSION31_GENOTYPE_ORDER}
+        for source_id in MISSION31_SOURCE_ORDER
+    }
+
+
+def _mission31_missing_conditions(source_trials):
+    missing = []
+    source_trials = source_trials or {}
+    for source_id in MISSION31_SOURCE_ORDER:
+        source_data = source_trials.get(source_id) or {}
+        for genotype in MISSION31_GENOTYPE_ORDER:
+            if not isinstance(source_data.get(genotype), dict):
+                missing.append(f'{source_id}:{genotype}')
+    return missing
+
+
+def _mission31_empty_report():
+    trials = _mission31_empty_trials()
+    return {
+        'mission_id': '31',
+        'check_version': MISSION31_CHECK_VERSION,
+        'mission_title': 'Environmental Suppression Matrix',
+        'target_context': MISSION31_TARGET_CONTEXT,
+        'target_method': MISSION31_METHOD,
+        'growth_objective': MISSION31_GROWTH_OBJECTIVE,
+        'target_genes': list(MISSION31_DOUBLE_KNOCKOUT),
+        'gene_names': copy.deepcopy(MISSION31_GENE_NAMES),
+        'target_reactions': list(MISSION31_TARGET_REACTIONS),
+        'source_order': list(MISSION31_SOURCE_ORDER),
+        'source_names': copy.deepcopy(MISSION31_SOURCE_NAMES),
+        'genotype_order': list(MISSION31_GENOTYPE_ORDER),
+        'source_trials': trials,
+        'recorded_run_count': 0,
+        'required_run_count': MISSION31_REQUIRED_RUN_COUNT,
+        'missing_conditions': _mission31_missing_conditions(trials),
+        'growth_retention_by_source': {},
+        'suppression_candidates': [],
+        'unique_suppression_source': None,
+        'non_suppression_controls_supported': False,
+        'unique_suppression_supported': False,
+        'evidence_ready': False,
+        'answer_ready': False,
+        'ready_to_deliver': False,
+        'current_source': None,
+        'current_genotype': None,
+        'current_run_valid': False,
+        'current_run_recorded': False,
+        'current_issues': [],
+        'current_run': None,
+        'latest_attempt': None,
+    }
+
+
+def initialise_mission31_environmental_suppression_matrix():
+    report = _mission31_empty_report()
+    save_mission31_environmental_suppression_check(report)
+    return report
+
+
+def _mission31_normalise_trials(existing_report):
+    trials = _mission31_empty_trials()
+    existing = (existing_report or {}).get('source_trials') or {}
+    for source_id in MISSION31_SOURCE_ORDER:
+        source_existing = existing.get(source_id) or {}
+        for genotype in MISSION31_GENOTYPE_ORDER:
+            run = source_existing.get(genotype)
+            if isinstance(run, dict):
+                trials[source_id][genotype] = copy.deepcopy(run)
+    return trials
+
+
+def _build_mission31_data(
+    method_name,
+    selected_objective,
+    objective_result,
+    genes,
+    reactions,
+    production_fluxes=None,
+    medium_fluxes=None,
+    existing_report=None,
+    objective_error=None,
+):
+    """Validate and accumulate one visible Mission 31 matrix cell."""
+    existing_report = existing_report or {}
+    if (
+        existing_report.get('mission_id') != '31'
+        or existing_report.get('check_version') != MISSION31_CHECK_VERSION
+    ):
+        existing_report = _mission31_empty_report()
+
+    source_trials = _mission31_normalise_trials(existing_report)
+    environment = _mission31_environment_status(reactions)
+    genes_complete = _mission31_genes_complete(genes)
+    knocked_out_genes = sorted(_knocked_out_genes(genes)) if isinstance(genes, dict) else []
+    disabled_reactions = _mission31_disabled_reactions(knocked_out_genes)
+
+    genotype = None
+    if genes_complete and not knocked_out_genes:
+        genotype = 'wild_type'
+    elif genes_complete and knocked_out_genes == sorted(MISSION31_DOUBLE_KNOCKOUT):
+        genotype = 'aconitase_double'
+    source = environment.get('source')
+
+    objective_numeric = _mission31_number_or_none(objective_result)
+    result_infeasible = 'INFEASIBLE' in str(objective_result or '').upper()
+    raw_fluxes, uptake_fluxes, _secretion_fluxes = _mission21_measured_medium_values(medium_fluxes)
+    diagnostics = _method_diagnostics_from_production_data(production_fluxes)
+    biomass_raw = _mission31_number_or_none(_mission13_biomass_value(production_fluxes))
+    primary_flux = _mission31_number_or_none(diagnostics.get('primary_objective_flux'))
+    method_score = _mission31_number_or_none(diagnostics.get('method_score'))
+    total_absolute_flux = _mission31_number_or_none(diagnostics.get('total_absolute_flux'))
+    method_score_name = diagnostics.get('method_score_name')
+    try:
+        active_reaction_count = int(diagnostics.get('active_reaction_count'))
+    except Exception:
+        active_reaction_count = None
+
+    glucose_raw = _mission31_number_or_none(raw_fluxes.get(MISSION31_GLUCOSE_REACTION))
+    glucose_uptake = _mission31_number_or_none(uptake_fluxes.get(MISSION31_GLUCOSE_REACTION))
+    oxygen_raw = _mission31_number_or_none(raw_fluxes.get(MISSION31_OXYGEN_REACTION))
+    oxygen_uptake = _mission31_number_or_none(uptake_fluxes.get(MISSION31_OXYGEN_REACTION))
+    source_raw = _mission31_number_or_none(raw_fluxes.get(source)) if source else None
+    source_uptake = _mission31_number_or_none(uptake_fluxes.get(source)) if source else None
+
+    issues = []
+    if objective_error:
+        issues.append(objective_error)
+    if method_name != MISSION31_METHOD:
+        issues.append('Use pFBA for every Mission 31 matrix run.')
+    if selected_objective != MISSION31_GROWTH_OBJECTIVE:
+        issues.append(f'Use {MISSION31_GROWTH_OBJECTIVE} as the primary objective.')
+    if not genes_complete:
+        issues.append('The visible gene-state payload is incomplete.')
+    if genotype is None:
+        issues.append('Use either wild type or the exact b0118 + b1276 double knockout.')
+    if not environment.get('bounds_complete'):
+        issues.append('The visible environmental-bounds payload is incomplete.')
+    elif not environment.get('replacement_medium_ready'):
+        issues.append('Close glucose and open exactly one highlighted replacement-carbon lower bound; keep every other bound at model default.')
+    if result_infeasible:
+        issues.append('Mission 31 requires a feasible visible solution; INFEASIBLE is not numerical zero-growth evidence.')
+    if objective_numeric is None:
+        issues.append('The visible growth value is missing or non-numeric.')
+    elif objective_numeric < -MISSION31_PRIMARY_TOLERANCE:
+        issues.append('The visible growth value is outside the accepted non-negative range.')
+
+    if glucose_raw is None or glucose_uptake is None:
+        issues.append('Numeric glucose exchange evidence is required.')
+    else:
+        if abs(glucose_raw) > MISSION31_FLUX_TOLERANCE or glucose_uptake > MISSION31_FLUX_TOLERANCE:
+            issues.append('Glucose uptake must remain closed in every Mission 31 matrix run.')
+
+    if source_raw is None or source_uptake is None:
+        issues.append('Numeric replacement-source exchange evidence is required.')
+    else:
+        if source_raw > MISSION31_FLUX_TOLERANCE:
+            issues.append('The selected replacement source must be consumed rather than secreted.')
+        if source_uptake < MISSION31_MIN_SOURCE_UPTAKE:
+            issues.append('The selected replacement source must show positive measured uptake.')
+        if source_uptake > MISSION31_SOURCE_CAPACITY + MISSION31_CAPACITY_TOLERANCE:
+            issues.append('Measured replacement-source uptake exceeds the controlled -10 capacity.')
+
+    if oxygen_raw is None or oxygen_uptake is None:
+        issues.append('Numeric oxygen exchange evidence is required.')
+    else:
+        if oxygen_raw > MISSION31_FLUX_TOLERANCE:
+            issues.append('Oxygen must not be secreted in this controlled aerobic matrix.')
+        if oxygen_uptake < MISSION31_MIN_AEROBIC_OXYGEN_UPTAKE:
+            issues.append('The run must remain aerobic with positive measured oxygen uptake.')
+
+    if not isinstance(production_fluxes, dict) or production_fluxes.get('error'):
+        issues.append('The structured visible pFBA result is unavailable.')
+    if biomass_raw is None:
+        issues.append('The visible biomass flux is missing from the structured result.')
+    if primary_flux is None:
+        issues.append('The visible primary-objective diagnostic is missing.')
+    if objective_numeric is not None and biomass_raw is not None:
+        if abs(objective_numeric - biomass_raw) > MISSION31_PRIMARY_TOLERANCE:
+            issues.append('The visible growth value does not match the biomass reaction flux.')
+    if biomass_raw is not None and primary_flux is not None:
+        if abs(biomass_raw - primary_flux) > MISSION31_PRIMARY_TOLERANCE:
+            issues.append('The primary-objective diagnostic does not match the biomass flux.')
+    if diagnostics.get('method') != MISSION31_METHOD:
+        issues.append('The visible method diagnostics do not describe pFBA.')
+    if diagnostics.get('objective_reaction') != MISSION31_GROWTH_OBJECTIVE:
+        issues.append('The visible method diagnostics do not describe the biomass objective.')
+    if method_score_name != MISSION31_EXPECTED_SCORE_NAME:
+        issues.append('The pFBA score label is missing or incorrect.')
+    if method_score is None or total_absolute_flux is None:
+        issues.append('The pFBA secondary score is missing or non-numeric.')
+    elif abs(method_score - total_absolute_flux) > MISSION31_PRIMARY_TOLERANCE:
+        issues.append('The pFBA method score does not match total absolute flux.')
+    if active_reaction_count is None:
+        issues.append('The visible active-reaction count is missing.')
+
+    if genotype == 'wild_type':
+        if objective_numeric is not None and objective_numeric < MISSION31_MIN_WILD_TYPE_GROWTH:
+            issues.append('The matched wild-type source control must retain positive predicted growth.')
+        if any(reaction_id in disabled_reactions for reaction_id in MISSION31_TARGET_REACTIONS):
+            issues.append('Wild type must keep both aconitase reactions available through the GPR.')
+    elif genotype == 'aconitase_double':
+        missing_disabled = [
+            reaction_id for reaction_id in MISSION31_TARGET_REACTIONS
+            if reaction_id not in disabled_reactions
+        ]
+        if missing_disabled:
+            issues.append('The exact double knockout must disable both aconitase reactions: ' + ', '.join(missing_disabled) + '.')
+
+    current_run_valid = not issues
+    current_run_recorded = False
+    current_run = None
+    if current_run_valid:
+        current_run = {
+            'source': source,
+            'source_name': MISSION31_SOURCE_NAMES.get(source),
+            'genotype': genotype,
+            'genotype_label': MISSION31_GENOTYPE_LABELS.get(genotype),
+            'status': 'ok',
+            'method': method_name,
+            'objective': selected_objective,
+            'growth': _mission31_clean_number(objective_numeric),
+            'knocked_out_genes': list(knocked_out_genes),
+            'disabled_reactions': list(disabled_reactions),
+            'environment_changes': list(environment.get('changes') or []),
+            'glucose_raw_flux': _mission31_clean_number(glucose_raw),
+            'glucose_uptake': _mission31_clean_number(glucose_uptake),
+            'source_raw_flux': _mission31_clean_number(source_raw),
+            'source_uptake': _mission31_clean_number(source_uptake),
+            'oxygen_raw_flux': _mission31_clean_number(oxygen_raw),
+            'oxygen_uptake': _mission31_clean_number(oxygen_uptake),
+            'method_diagnostics': {
+                'method': diagnostics.get('method'),
+                'objective_reaction': diagnostics.get('objective_reaction'),
+                'primary_objective_flux': _mission31_clean_number(primary_flux),
+                'method_score': _mission31_clean_number(method_score),
+                'method_score_name': method_score_name,
+                'total_absolute_flux': _mission31_clean_number(total_absolute_flux),
+                'active_reaction_count': active_reaction_count,
+            },
+        }
+        source_trials[source][genotype] = current_run
+        current_run_recorded = True
+
+    missing_conditions = _mission31_missing_conditions(source_trials)
+    recorded_run_count = MISSION31_REQUIRED_RUN_COUNT - len(missing_conditions)
+    evidence_ready = not missing_conditions and recorded_run_count == MISSION31_REQUIRED_RUN_COUNT
+
+    growth_retention_by_source = {}
+    suppression_candidates = []
+    for source_id in MISSION31_SOURCE_ORDER:
+        source_data = source_trials.get(source_id) or {}
+        wt = source_data.get('wild_type')
+        double = source_data.get('aconitase_double')
+        if not isinstance(wt, dict) or not isinstance(double, dict):
+            continue
+        wt_growth = _mission31_number_or_none(wt.get('growth'))
+        double_growth = _mission31_number_or_none(double.get('growth'))
+        if wt_growth is None or double_growth is None or wt_growth <= MISSION31_PRIMARY_TOLERANCE:
+            continue
+        retention = _mission31_clean_number(double_growth / wt_growth)
+        growth_retention_by_source[source_id] = retention
+        disabled_ok = all(
+            reaction_id in (double.get('disabled_reactions') or [])
+            for reaction_id in MISSION31_TARGET_REACTIONS
+        )
+        if (
+            double.get('status') == 'ok'
+            and double_growth >= MISSION31_MIN_SUPPRESSED_GROWTH
+            and retention >= MISSION31_MIN_SUPPRESSION_RETENTION
+            and _mission31_number_or_none(double.get('source_uptake')) is not None
+            and float(double.get('source_uptake')) >= MISSION31_MIN_SOURCE_UPTAKE
+            and disabled_ok
+        ):
+            suppression_candidates.append(source_id)
+
+    unique_suppression_source = suppression_candidates[0] if len(suppression_candidates) == 1 else None
+    non_suppression_controls_supported = bool(
+        evidence_ready
+        and unique_suppression_source
+        and all(
+            _mission31_number_or_none(
+                ((source_trials.get(source_id) or {}).get('aconitase_double') or {}).get('growth')
+            ) is not None
+            and float((source_trials[source_id]['aconitase_double']).get('growth'))
+            <= MISSION31_MAX_NONSUPPRESSED_GROWTH
+            for source_id in MISSION31_SOURCE_ORDER
+            if source_id != unique_suppression_source
+        )
+    )
+    unique_suppression_supported = bool(
+        evidence_ready
+        and len(suppression_candidates) == 1
+        and non_suppression_controls_supported
+    )
+
+    latest_attempt = {
+        'method': method_name,
+        'objective': selected_objective,
+        'source': source,
+        'genotype': genotype,
+        'knocked_out_genes': list(knocked_out_genes),
+        'valid': current_run_valid,
+        'recorded': current_run_recorded,
+        'issues': list(issues),
+    }
+
+    report = _mission31_empty_report()
+    report.update({
+        'source_trials': source_trials,
+        'recorded_run_count': recorded_run_count,
+        'missing_conditions': missing_conditions,
+        'growth_retention_by_source': growth_retention_by_source,
+        'suppression_candidates': suppression_candidates,
+        'unique_suppression_source': unique_suppression_source,
+        'non_suppression_controls_supported': non_suppression_controls_supported,
+        'unique_suppression_supported': unique_suppression_supported,
+        'evidence_ready': evidence_ready,
+        'answer_ready': unique_suppression_supported,
+        'ready_to_deliver': unique_suppression_supported,
+        'current_source': source,
+        'current_genotype': genotype,
+        'current_run_valid': current_run_valid,
+        'current_run_recorded': current_run_recorded,
+        'current_issues': list(issues),
+        'current_run': current_run,
+        'latest_attempt': latest_attempt,
+    })
+    save_mission31_environmental_suppression_check(report)
+    return report
+
+
+def run_mission31_environmental_suppression_check(simulation_results=None):
+    """Validate the already displayed Mission 31 result without re-simulating."""
+    method_name, selected_objective, genes, reactions = _read_simulation_file()
+    objective_result = None
+    production_fluxes = None
+    medium_fluxes = None
+    objective_error = None
+    try:
+        if simulation_results is not None:
+            result_objective = simulation_results[0]
+            objective_result = simulation_results[1]
+            production_fluxes = simulation_results[2] if len(simulation_results) > 2 else None
+            medium_fluxes = simulation_results[3] if len(simulation_results) > 3 else None
+            if result_objective != selected_objective:
+                objective_error = 'The displayed simulation result does not match the currently selected objective.'
+        else:
+            objective_error = 'Run a visible Mission 31 simulation before recording evidence.'
+    except Exception:
+        objective_error = 'Could not read the current visible Mission 31 simulation result.'
+
+    return _build_mission31_data(
+        method_name,
+        selected_objective,
+        objective_result,
+        genes,
+        reactions,
+        production_fluxes=production_fluxes,
+        medium_fluxes=medium_fluxes,
+        existing_report=load_mission31_environmental_suppression_check() or {},
+        objective_error=objective_error,
+    )
+
+
+def run_mission31_environmental_suppression_check_remote(backend_url, simulation_results=None):
+    """Browser-parity wrapper that reuses the same visible /simulate response."""
+    del backend_url
+    return run_mission31_environmental_suppression_check(simulation_results)
+
+
+def _normalise_mission31_text(value):
+    text = unicodedata.normalize('NFKD', str(value or ''))
+    return ''.join(char for char in text if not unicodedata.combining(char)).lower().strip()
+
+
+def normalise_mission31_answer(answer):
+    text = _normalise_mission31_text(answer)
+    compact = re.sub(r'[^a-z0-9]+', ' ', text).strip()
+    tokens = set(compact.split())
+    aliases = {
+        'EX_fru_e': [r'\bex\s+fru\s+e\b', r'\bd\s+fructose\b', r'\bfructose\b', r'\bfru\b'],
+        'EX_pyr_e': [r'\bex\s+pyr\s+e\b', r'\bpyruvate\b', r'\bpiruvato\b', r'\bpyr\b'],
+        'EX_succ_e': [r'\bex\s+succ\s+e\b', r'\bsuccinate\b', r'\bsuccinato\b', r'\bsucc\b'],
+        'EX_glu__L_e': [
+            r'\bex\s+glu\s+l\s+e\b',
+            r'\bl\s+glutamate\b',
+            r'\bglutamate\b',
+            r'\bl\s+glutamato\b',
+            r'\bglutamato\b',
+        ],
+    }
+    matches = []
+    for source_id, patterns in aliases.items():
+        if any(re.search(pattern, compact) for pattern in patterns):
+            matches.append(source_id)
+    if 'glu' in tokens and 'EX_glu__L_e' not in matches:
+        matches.append('EX_glu__L_e')
+    return matches[0] if len(set(matches)) == 1 else None
+
+
+def mission31_answer_matches(answer, report_data=None):
+    report = report_data if report_data is not None else (load_mission31_environmental_suppression_check() or {})
+    return bool(
+        report.get('mission_id') == '31'
+        and report.get('check_version') == MISSION31_CHECK_VERSION
+        and report.get('answer_ready')
+        and report.get('unique_suppression_supported')
+        and normalise_mission31_answer(answer) == report.get('unique_suppression_source')
+    )
+
+
+def _mission31_growth_text(run):
+    if not isinstance(run, dict):
+        return 'pending'
+    growth = _mission31_number_or_none(run.get('growth'))
+    return 'pending' if growth is None else f'{growth:.3f}'
+
+
+def _mission31_uptake_text(run):
+    if not isinstance(run, dict):
+        return 'pending'
+    uptake = _mission31_number_or_none(run.get('source_uptake'))
+    return 'pending' if uptake is None else f'{uptake:.3f}'
+
+
+def build_mission31_environmental_suppression_report_text(report_data=None):
+    report = report_data or {}
+    if not report:
+        return (
+            'No Mission 31 matrix evidence has been recorded yet.\n\n'
+            'Close glucose and open exactly one highlighted replacement-carbon source at a time. '
+            'For every source, record a matched wild-type pFBA run and an exact b0118 + b1276 double-knockout run.\n\n'
+            'Positive substrate uptake alone is not a growth rescue. Compare matched growth, retention and the GPR-disabled aconitase reactions.'
+        )
+    if report.get('mission_id') != '31' or report.get('check_version') != MISSION31_CHECK_VERSION:
+        return 'Mission 31 Environmental Suppression Matrix\n\nCurrent-format matrix evidence has not been recorded yet.'
+
+    lines = [
+        'Mission 31 Environmental Suppression Matrix',
+        '',
+        'Controlled matched protocol:',
+        f'- Method: {MISSION31_METHOD}',
+        f'- Objective: {MISSION31_GROWTH_OBJECTIVE}',
+        '- Close glucose uptake and open exactly one replacement-carbon lower bound',
+        '- Keep oxygen and every unrelated bound at model default',
+        f'- Genotypes: wild type and exact {MISSION31_GENE_A}+{MISSION31_GENE_B} double knockout',
+        f'- GPR target reactions in the double knockout: {", ".join(MISSION31_TARGET_REACTIONS)}',
+        '',
+        f"Runs recorded: {report.get('recorded_run_count', 0)}/{report.get('required_run_count', MISSION31_REQUIRED_RUN_COUNT)}",
+        '',
+        'Matched source matrix:',
+        'Source | WT growth | double growth | retention | double uptake | ACONT disabled',
+    ]
+
+    trials = report.get('source_trials') or {}
+    retentions = report.get('growth_retention_by_source') or {}
+    for source_id in MISSION31_SOURCE_ORDER:
+        source_data = trials.get(source_id) or {}
+        wt = source_data.get('wild_type')
+        double = source_data.get('aconitase_double')
+        retention = retentions.get(source_id)
+        retention_text = 'pending' if retention is None else f'{100.0 * float(retention):.1f}%'
+        disabled_text = 'pending'
+        if isinstance(double, dict):
+            disabled_text = 'yes' if all(
+                reaction_id in (double.get('disabled_reactions') or [])
+                for reaction_id in MISSION31_TARGET_REACTIONS
+            ) else 'no'
+        lines.append(
+            f'{source_id} | {_mission31_growth_text(wt)} | {_mission31_growth_text(double)} | '
+            f'{retention_text} | {_mission31_uptake_text(double)} | {disabled_text}'
+        )
+
+    latest = report.get('latest_attempt') or {}
+    if latest:
+        lines.append('')
+        if latest.get('recorded'):
+            lines.append(
+                f"Latest valid visible run recorded: {latest.get('source')}:{latest.get('genotype')}."
+            )
+        else:
+            lines.append('Latest run was not recorded:')
+            for issue in latest.get('issues') or ['The visible run did not match the controlled Mission 31 protocol.']:
+                lines.append(f'- {issue}')
+            if report.get('recorded_run_count', 0):
+                lines.append('Previously valid Mission 31 matrix evidence remains available.')
+
+    lines.append('')
+    if report.get('evidence_ready'):
+        lines.extend([
+            'Evidence complete.',
+            'Compare every double knockout with its matched wild-type source control, measured source uptake and GPR-disabled reactions.',
+            'Question: Which tested replacement carbon source suppressed the aconitase no-growth phenotype while ACONTa and ACONTb remained disabled?',
+        ])
+        if not report.get('unique_suppression_supported'):
+            lines.append('The complete evidence does not currently support one unique suppression under the controlled criteria; verify the visible runs.')
+    else:
+        lines.append('Evidence incomplete.')
+        if report.get('missing_conditions'):
+            lines.append('Missing conditions: ' + ', '.join(report.get('missing_conditions') or []))
+
+    lines.extend([
+        '',
+        'Interpretation note: positive replacement-source uptake is not by itself a rescue of biomass production. A feasible growth value of 0.000 is also distinct from an INFEASIBLE solver result.',
+        'Environmental suppression here means that the matched double knockout regains strong growth without restoring ACONTa or ACONTb in this model context.',
+        'The conclusion is conditional on this model, pFBA biomass objective, aerobic bounds and tested replacement-source set.',
+        'All growth, exchange and GPR evidence comes from visible /simulate results. No hidden validation simulation is used.',
+    ])
+    return '\n'.join(lines)
+
+
+def _build_mission31_text(report_data=None):
+    return build_mission31_environmental_suppression_report_text(report_data)

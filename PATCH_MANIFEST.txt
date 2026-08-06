@@ -1,10 +1,22 @@
-Dialogue overflow correction
+Mission 31 — Environmental Suppression Matrix
 
 Changed files:
-- code/mission27.py
+- code/mission31.py
 - code/mission29.py
+- code/simulation.py
+- code/save_load.py
+- code/window.py
+- data/missions/mission31.md
+- MISSION_PROGRESS_OVERVIEW.md
+- PATCH_MANIFEST.txt
+- tests/test_mission31.py
 
-Changes:
-- Shortened the remaining dialogue lines that exceeded the 1280x720 dialogue text area.
-- Preserved all mission logic, progression, scientific validation and save behaviour.
-- The exact long Dr. Li text shown in the screenshot was already absent from the supplied current ZIP.
+Implementation:
+- Added Dr. Li's third mission and the 29 -> 30 -> 31 interaction progression.
+- Added an eight-cell matched matrix: four replacement carbon sources x wild type / b0118+b1276 double knockout.
+- Requires pFBA biomass optimisation, glucose closure, one source at the shared -10 capacity, default oxygen and no unrelated bound changes.
+- Validates complete gene/bound payloads, biomass/primary-objective consistency, pFBA diagnostics, source/glucose/oxygen exchange evidence and GPR-disabled ACONTa/ACONTb.
+- Keeps feasible numerical growth 0.000 distinct from INFEASIBLE and keeps source uptake distinct from growth rescue.
+- Derives the unique suppressing source from visible evidence rather than hardcoding it into the report.
+- Preserves valid matrix cells after invalid attempts; repeated conditions update instead of duplicating.
+- Uses JSON-serialisable state and the existing visible /simulate response with no hidden simulation or new endpoint.

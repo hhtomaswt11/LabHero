@@ -413,6 +413,10 @@ def _build_mission26_text(report_data):
 def _build_mission30_text(report_data):
     return build_mission30_redundancy_threshold_report_text(report_data)
 
+
+def _build_mission31_text(report_data):
+    return build_mission31_environmental_suppression_report_text(report_data)
+
 def _visible_biomass_flux(results):
     """Read predicted biomass from the same visible simulation solution."""
     try:
@@ -835,6 +839,7 @@ class Window:
             ('28', [MISSION28_PRIMARY_GENE, *MISSION28_SECONDARY_GENES]),
             ('29', list(MISSION29_SINGLE_GENES)),
             ('30', [MISSION30_GENE_A, MISSION30_GENE_B]),
+            ('31', [MISSION31_GENE_A, MISSION31_GENE_B]),
         ]
         for mission_id, candidates in gene_mission_candidates:
             if mission_id in self.player.missions_activated and mission_id not in self.player.missions_completed:
@@ -1324,6 +1329,15 @@ class Window:
                 else:
                     mission29_data = run_mission29_redundancy_check(self.results)
 
+            mission31_data = None
+            if '31' in self.player.missions_activated and '31' not in self.player.missions_completed:
+                if sys.platform == 'emscripten':
+                    mission31_data = run_mission31_environmental_suppression_check_remote(
+                        BACKEND_URL, self.results
+                    )
+                else:
+                    mission31_data = run_mission31_environmental_suppression_check(self.results)
+
             mission30_data = None
             bound_sweep_data = None
             mission26_data = None
@@ -1739,6 +1753,17 @@ class Window:
                     background_color='white',
                     font_size=24,
                     label_id='mission30_redundancy_threshold_check'
+                )
+                menu_simul.add.vertical_margin(20)
+
+            if mission31_data is not None:
+                menu_simul.add.label(
+                    _build_mission31_text(mission31_data),
+                    wordwrap=True,
+                    padding=(20, 20, 20, 20),
+                    background_color='white',
+                    font_size=24,
+                    label_id='mission31_environmental_suppression_check'
                 )
                 menu_simul.add.vertical_margin(20)
 

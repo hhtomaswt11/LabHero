@@ -152,7 +152,7 @@ Resumo curto das missões implementadas até agora, organizado por laboratório.
 **Explica:** a diferença entre wild type e knockout pode permanecer pequena ao longo de várias capacidades positivas de oxigénio e surgir abruptamente quando a rota ambiental alternativa é completamente removida. Um lower bound define capacidade de uptake; o primeiro ponto pode ser não-binding quando o fluxo realizado é inferior à capacidade.  
 **Como passar:** depois da Missão 25, usar FBA com objetivo `BIOMASS_Ecoli_core_w_GAM`, ambiente-base completamente default e executar dois sweeps do lower bound de `EX_o2_e` com valores `-25`, `-10`, `-1`, `0`: um com todos os genes ativos e outro com apenas `b3956 / ppc` desligado. O relatório exige crescimento, glucose, oxigénio e diagnósticos FBA numéricos em todas as linhas, associa os pontos pelo bound e preserva curvas válidas após tentativas inválidas. O knockout deve manter mais de 90% do crescimento wild type nos três valores negativos, enquanto no valor `0` o wild type permanece viável e o knockout colapsa. Entregar o lower-bound testado que suporta esse threshold, inferido das duas curvas.
 
-## Lab 10 — Dr. Ribeiro
+## Lab 10 — Dr. Ribeiro, Dr. Li and Dr. Chen
 
 ### Mission 27 — Metabolic Bypass Rescue
 **Tema:** resgate metabólico por suplementação ambiental sem restauração da reação genética bloqueada.  
@@ -164,7 +164,6 @@ Resumo curto das missões implementadas até agora, organizado por laboratório.
 **Explica:** disponibilidade externa de um metabolito não equivale a acesso metabólico. O resgate por 2-oxoglutarato depende da função de transporte que permite a sua captação enquanto `CS` permanece desativada.  
 **Como passar:** depois da Missão 27, usar `pFBA`, objetivo `BIOMASS_Ecoli_core_w_GAM`, manter `b0720 / gltA` desligado e abrir apenas `EX_akg_e`. Registar ou reutilizar a referência resgatada e testar separadamente um segundo knockout entre `b2587`, `b1761`, `b0728`, `b3236` e `b3403`. O relatório exige crescimento, uptake de 2-oxoglutarato e reações desativadas pela GPR, preservando evidência válida após tentativas inválidas. Entregar o knockout que elimina simultaneamente a captação do suplemento e o crescimento resgatado.
 
-## Lab 10 — Dr. Li
 
 ### Mission 29 — Isoenzyme Redundancy Screen
 **Tema:** redundância funcional, lógica GPR `OR` e interação sinteticamente letal.  
@@ -175,3 +174,9 @@ Resumo curto das missões implementadas até agora, organizado por laboratório.
 **Tema:** estabilidade ambiental de uma relação de redundância, curvas genótipo × oxigénio e distinção entre crescimento zero e estado `INFEASIBLE`.  
 **Explica:** uma interação genética observada num meio não é automaticamente estável quando a capacidade respiratória muda. Os single knockouts podem continuar a acompanhar o wild type enquanto o double knockout perde progressivamente retenção e, num threshold testado, deixa de possuir qualquer solução admissível. `INFEASIBLE` não é um valor numérico de biomassa e nunca deve ser convertido em `0.000`.  
 **Como passar:** depois da Missão 29, usar `pFBA`, objetivo `BIOMASS_Ecoli_core_w_GAM` e ambiente-base completamente default. No `Bound Sweep Setup`, selecionar o lower bound de `EX_o2_e` e o preset dedicado `-30`, `-10`, `-5`, `-2`. Registar quatro curvas em qualquer ordem: wild type, apenas `b1723 / pfkB`, apenas `b3916 / pfkA` e o double knockout exato `b1723+b3916`. O relatório exige glucose, oxigénio e diagnósticos pFBA em todas as linhas viáveis, preserva explicitamente o estado inviável sem fabricar zeros e mantém curvas válidas após tentativas erradas. Entregar o lower bound testado em que apenas o double knockout se torna inviável, enquanto os três controlos permanecem viáveis.
+
+### Mission 31 — Environmental Suppression Matrix
+**Tema:** supressão ambiental de um fenótipo sinteticamente letal, matriz genótipo × fonte de carbono e distinção entre uptake e resgate de crescimento.  
+**Explica:** a classificação de uma interação genética depende do ambiente testado. Um substrato pode ser captado numa solução viável com biomassa igual a zero, pelo que uptake positivo não demonstra, por si só, supressão do defeito. Uma fonte alternativa pode restaurar crescimento sem reativar as reações eliminadas pela GPR.  
+**Como passar:** depois da Missão 30, usar `pFBA`, objetivo `BIOMASS_Ecoli_core_w_GAM`, fechar o lower bound de `EX_glc__D_e` e abrir exatamente uma fonte entre `EX_fru_e`, `EX_pyr_e`, `EX_succ_e` e `EX_glu__L_e`, mantendo oxigénio e restantes bounds default. Para cada fonte, registar um wild type e o double knockout exato `b0118+b1276`, totalizando oito runs por qualquer ordem. O relatório exige crescimento, uptake da fonte, oxigénio, diagnósticos pFBA e `ACONTa`/`ACONTb` desativadas apenas no double knockout; preserva evidência após tentativas inválidas. Entregar a fonte testada que restaura forte retenção de crescimento sem restaurar as duas reações de aconitase.
+

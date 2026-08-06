@@ -9,6 +9,7 @@ from functions import animation_text_save
 from button import Button
 from async_menu import run_menu
 from mission30 import Mission30_info
+from mission31 import Mission31_info
 from utils import *
 from simulation import (
     MISSION29_CHECK_VERSION,
@@ -42,6 +43,7 @@ class Mission29:
         self.timer = Timer(200)
         self.menu29 = Mission29_info(self.toggle_menu, self.player)
         self.menu30 = Mission30_info(self.toggle_menu, self.player)
+        self.menu31 = Mission31_info(self.toggle_menu, self.player)
         self.pending = None
 
     def input(self):
@@ -76,15 +78,29 @@ class Mission29:
             "Build the four matched oxygen curves from the same default base environment.",
             "Keep INFEASIBLE distinct from a measured growth value of zero.",
         ]
-        mission30_completed_dialogue = [
+        mission31_intro_dialogue = [
             f"Excellent threshold analysis, {self.player.player_name}.",
-            "You showed that the double-knockout outcome changes as oxygen becomes limiting.",
-            "My final experiment will build on this context-sensitive network behaviour.",
+            "Now reverse the question across matched carbon environments.",
+            "Test whether another entry route suppresses the aconitase phenotype.",
+        ]
+        mission31_active_dialogue = [
+            "Mission 31 is active.",
+            "Replace glucose with one source and record matched WT and double-KO runs.",
+            "Compare growth, uptake and the two disabled aconitase reactions.",
+        ]
+        mission31_completed_dialogue = [
+            f"Excellent work, {self.player.player_name}.",
+            "You showed that synthetic lethality depends on the tested environment.",
+            "Dr. Chen will continue this laboratory programme.",
         ]
 
         self.input()
-        if '30' in self.missions_completed:
-            self.menu_message(mission30_completed_dialogue, buttons=False)
+        if '31' in self.missions_completed:
+            self.menu_message(mission31_completed_dialogue, buttons=False)
+        elif '31' in self.missions_activated:
+            self.menu_message(mission31_active_dialogue, menu_to_open=self.menu31)
+        elif '30' in self.missions_completed:
+            self.menu_message(mission31_intro_dialogue, menu_to_open=self.menu31)
         elif '30' in self.missions_activated:
             self.menu_message(mission30_active_dialogue, menu_to_open=self.menu30)
         elif '29' in self.missions_completed:
