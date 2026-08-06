@@ -981,3 +981,30 @@ def clear_mission31_environmental_suppression_check():
         'mission31_environmental_suppression_check',
         'mission31_environmental_suppression_check.txt',
     )
+
+
+def save_mission32_respiratory_cut_set_check(data):
+    if _IS_WEB:
+        _MEMSTORE['mission32_respiratory_cut_set_check'] = data
+        return
+    with open(get_save_path('mission32_respiratory_cut_set_check.txt'), 'w') as report_file:
+        json.dump(data, report_file)
+
+
+def load_mission32_respiratory_cut_set_check():
+    if _IS_WEB:
+        return _MEMSTORE.get('mission32_respiratory_cut_set_check')
+    try:
+        with open(get_save_path('mission32_respiratory_cut_set_check.txt')) as report_file:
+            return json.load(report_file)
+    except FileNotFoundError:
+        return None
+    except Exception:
+        return None
+
+
+def clear_mission32_respiratory_cut_set_check():
+    _delete_save_artifact(
+        'mission32_respiratory_cut_set_check',
+        'mission32_respiratory_cut_set_check.txt',
+    )

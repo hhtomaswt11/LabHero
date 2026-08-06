@@ -18396,3 +18396,698 @@ def build_mission31_environmental_suppression_report_text(report_data=None):
 
 def _build_mission31_text(report_data=None):
     return build_mission31_environmental_suppression_report_text(report_data)
+
+# Mission 32 — Respiratory Complex Cut-Set
+# Dr. Chen introduces nested GPR logic: obligatory subunits inside each branch
+# and alternative respiratory complexes between branches. Every condition is
+# validated from one already visible pFBA result; no hidden optimisation is run.
+MISSION32_CHECK_VERSION = 2
+MISSION32_METHOD = 'pFBA'
+MISSION32_GROWTH_OBJECTIVE = 'BIOMASS_Ecoli_core_w_GAM'
+MISSION32_TARGET_CONTEXT = 'nested CYTBD GPR and respiratory complex cut-set screen'
+MISSION32_TARGET_REACTION = 'CYTBD'
+MISSION32_GENE_NAMES = {
+    'b0978': 'cbdA',
+    'b0979': 'cbdB',
+    'b0733': 'cydA',
+    'b0734': 'cydB',
+}
+MISSION32_BRANCH_ORDER = ['cbdAB', 'cydAB']
+MISSION32_BRANCH_GENES = {
+    'cbdAB': ['b0978', 'b0979'],
+    'cydAB': ['b0733', 'b0734'],
+}
+MISSION32_CONDITION_ORDER = [
+    'wild_type',
+    'single_b0978',
+    'single_b0733',
+    'cbd_branch_pair',
+    'cyd_branch_pair',
+    'cross_branch_pair',
+]
+MISSION32_CONDITION_GENES = {
+    'wild_type': [],
+    'single_b0978': ['b0978'],
+    'single_b0733': ['b0733'],
+    'cbd_branch_pair': ['b0978', 'b0979'],
+    'cyd_branch_pair': ['b0733', 'b0734'],
+    'cross_branch_pair': ['b0978', 'b0733'],
+}
+MISSION32_CONDITION_LABELS = {
+    'wild_type': 'Wild type',
+    'single_b0978': 'b0978 / cbdA',
+    'single_b0733': 'b0733 / cydA',
+    'cbd_branch_pair': 'b0978+b0979 / cbdAB branch',
+    'cyd_branch_pair': 'b0733+b0734 / cydAB branch',
+    'cross_branch_pair': 'b0978+b0733 / cross-branch pair',
+}
+MISSION32_REQUIRED_RUN_COUNT = len(MISSION32_CONDITION_ORDER)
+MISSION32_EXPECTED_SCORE_NAME = 'total_absolute_flux'
+MISSION32_GLUCOSE_REACTION = 'EX_glc__D_e'
+MISSION32_OXYGEN_REACTION = 'EX_o2_e'
+MISSION32_ACETATE_REACTION = 'EX_ac_e'
+MISSION32_ETHANOL_REACTION = 'EX_etoh_e'
+MISSION32_FORMATE_REACTION = 'EX_for_e'
+MISSION32_EXPECTED_DEFAULT_GLUCOSE_UPTAKE = 10.0
+MISSION32_MIN_CONTROL_GROWTH = 0.50
+MISSION32_MIN_CUT_SET_GROWTH = 0.05
+MISSION32_MAX_CUT_SET_GROWTH = 0.50
+MISSION32_MIN_CONTROL_OXYGEN_UPTAKE = 0.10
+MISSION32_MAX_CUT_SET_OXYGEN_UPTAKE = 0.01
+MISSION32_MIN_CUT_SET_BYPRODUCT = 1.0
+MISSION32_MAX_CONTROL_BYPRODUCT = 0.01
+MISSION32_FLUX_TOLERANCE = 0.01
+MISSION32_PRIMARY_TOLERANCE = 0.001
+MISSION32_CAPACITY_TOLERANCE = 0.05
+
+
+def is_mission32_unlocked(missions_completed):
+    """Mission 32 begins Dr. Chen's programme and requires Mission 31."""
+    return '31' in (missions_completed or [])
+
+
+def _mission32_number_or_none(value):
+    numeric = _as_float_or_none(value)
+    return float(numeric) if numeric is not None else None
+
+
+def _mission32_clean_number(value, decimals=6):
+    numeric = float(value)
+    if abs(numeric) < DISPLAY_ZERO_TOLERANCE:
+        numeric = 0.0
+    return round(numeric, decimals)
+
+
+def _mission32_genes_complete(genes):
+    return bool(
+        isinstance(genes, dict)
+        and all(gene_id in genes for gene_id in GENES)
+    )
+
+
+def _mission32_condition_for_knockouts(knocked_out_genes):
+    knocked = tuple(sorted(knocked_out_genes or []))
+    matches = [
+        condition_id
+        for condition_id in MISSION32_CONDITION_ORDER
+        if knocked == tuple(sorted(MISSION32_CONDITION_GENES[condition_id]))
+    ]
+    return matches[0] if len(matches) == 1 else None
+
+
+def _mission32_branch_status(knocked_out_genes):
+    knocked = set(knocked_out_genes or [])
+    return {
+        branch_id: ('broken' if any(gene_id in knocked for gene_id in genes) else 'active')
+        for branch_id, genes in MISSION32_BRANCH_GENES.items()
+    }
+
+
+def _mission32_disabled_reactions(knocked_out_genes):
+    """Evaluate the complete GPR without launching a metabolic optimisation."""
+    knocked_out_genes = sorted(knocked_out_genes or [])
+    if not knocked_out_genes:
+        return []
+    try:
+        if model is not None:
+            return sorted(disabled_reaction_ids(model, knocked_out_genes))
+    except Exception:
+        pass
+
+    branch_status = _mission32_branch_status(knocked_out_genes)
+    if all(branch_status.get(branch_id) == 'broken' for branch_id in MISSION32_BRANCH_ORDER):
+        return [MISSION32_TARGET_REACTION]
+    return []
+
+
+def _mission32_environment_status(reactions):
+    status = _mission27_environment_status(reactions)
+    return {
+        'bounds_complete': bool(status.get('bounds_complete')),
+        'changes': list(status.get('changes') or []),
+        'setup_type': status.get('setup_type'),
+        'default_environment_ready': bool(
+            status.get('bounds_complete') and status.get('setup_type') == 'default'
+        ),
+    }
+
+
+def _mission32_empty_runs():
+    return {condition_id: None for condition_id in MISSION32_CONDITION_ORDER}
+
+
+def _mission32_missing_conditions(runs):
+    runs = runs or {}
+    return [
+        condition_id
+        for condition_id in MISSION32_CONDITION_ORDER
+        if not isinstance(runs.get(condition_id), dict)
+    ]
+
+
+def _mission32_empty_report():
+    runs = _mission32_empty_runs()
+    return {
+        'mission_id': '32',
+        'check_version': MISSION32_CHECK_VERSION,
+        'mission_title': 'Respiratory Complex Cut-Set',
+        'target_context': MISSION32_TARGET_CONTEXT,
+        'target_method': MISSION32_METHOD,
+        'growth_objective': MISSION32_GROWTH_OBJECTIVE,
+        'target_reaction': MISSION32_TARGET_REACTION,
+        'gene_names': copy.deepcopy(MISSION32_GENE_NAMES),
+        'branch_order': list(MISSION32_BRANCH_ORDER),
+        'branch_genes': copy.deepcopy(MISSION32_BRANCH_GENES),
+        'condition_order': list(MISSION32_CONDITION_ORDER),
+        'condition_genes': copy.deepcopy(MISSION32_CONDITION_GENES),
+        'condition_labels': copy.deepcopy(MISSION32_CONDITION_LABELS),
+        'runs': runs,
+        'recorded_run_count': 0,
+        'required_run_count': MISSION32_REQUIRED_RUN_COUNT,
+        'missing_conditions': _mission32_missing_conditions(runs),
+        'growth_retention_by_condition': {},
+        'branch_status_by_condition': {},
+        'oxygen_uptake_by_condition': {},
+        'fermentation_profile_by_condition': {},
+        'cytbd_disabled_by_condition': {},
+        'cut_set_candidates': [],
+        'unique_tested_cut_set': None,
+        'unique_tested_cut_set_genes': [],
+        'control_pattern_supported': False,
+        'unique_cut_set_supported': False,
+        'evidence_ready': False,
+        'answer_ready': False,
+        'ready_to_deliver': False,
+        'current_condition': None,
+        'current_run_valid': False,
+        'current_run_recorded': False,
+        'current_issues': [],
+        'current_run': None,
+        'latest_attempt': None,
+    }
+
+
+def initialise_mission32_respiratory_cut_set_screen():
+    report = _mission32_empty_report()
+    save_mission32_respiratory_cut_set_check(report)
+    return report
+
+
+def _mission32_normalise_runs(existing_report):
+    runs = _mission32_empty_runs()
+    existing = (existing_report or {}).get('runs') or {}
+    for condition_id in MISSION32_CONDITION_ORDER:
+        run = existing.get(condition_id)
+        if isinstance(run, dict):
+            runs[condition_id] = copy.deepcopy(run)
+    return runs
+
+
+def _build_mission32_data(
+    method_name,
+    selected_objective,
+    objective_result,
+    genes,
+    reactions,
+    production_fluxes=None,
+    medium_fluxes=None,
+    existing_report=None,
+    objective_error=None,
+):
+    """Validate and accumulate one visible Mission 32 condition."""
+    existing_report = existing_report or {}
+    if (
+        existing_report.get('mission_id') != '32'
+        or existing_report.get('check_version') != MISSION32_CHECK_VERSION
+    ):
+        existing_report = _mission32_empty_report()
+
+    runs = _mission32_normalise_runs(existing_report)
+    environment = _mission32_environment_status(reactions)
+    genes_complete = _mission32_genes_complete(genes)
+    knocked_out_genes = sorted(_knocked_out_genes(genes)) if isinstance(genes, dict) else []
+    condition = _mission32_condition_for_knockouts(knocked_out_genes) if genes_complete else None
+    branch_status = _mission32_branch_status(knocked_out_genes)
+    disabled_reactions = _mission32_disabled_reactions(knocked_out_genes)
+    cytbd_disabled = MISSION32_TARGET_REACTION in disabled_reactions
+    both_branches_broken = all(
+        branch_status.get(branch_id) == 'broken'
+        for branch_id in MISSION32_BRANCH_ORDER
+    )
+
+    objective_numeric = _mission32_number_or_none(objective_result)
+    result_infeasible = 'INFEASIBLE' in str(objective_result or '').upper()
+    raw_fluxes, uptake_fluxes, secretion_fluxes = _mission21_measured_medium_values(medium_fluxes)
+    diagnostics = _method_diagnostics_from_production_data(production_fluxes)
+    biomass_raw = _mission32_number_or_none(_mission13_biomass_value(production_fluxes))
+    primary_flux = _mission32_number_or_none(diagnostics.get('primary_objective_flux'))
+    method_score = _mission32_number_or_none(diagnostics.get('method_score'))
+    total_absolute_flux = _mission32_number_or_none(diagnostics.get('total_absolute_flux'))
+    method_score_name = diagnostics.get('method_score_name')
+    try:
+        active_reaction_count = int(diagnostics.get('active_reaction_count'))
+    except Exception:
+        active_reaction_count = None
+
+    glucose_raw = _mission32_number_or_none(raw_fluxes.get(MISSION32_GLUCOSE_REACTION))
+    glucose_uptake = _mission32_number_or_none(uptake_fluxes.get(MISSION32_GLUCOSE_REACTION))
+    oxygen_raw = _mission32_number_or_none(raw_fluxes.get(MISSION32_OXYGEN_REACTION))
+    oxygen_uptake = _mission32_number_or_none(uptake_fluxes.get(MISSION32_OXYGEN_REACTION))
+    acetate = _mission32_number_or_none(secretion_fluxes.get(MISSION32_ACETATE_REACTION))
+    ethanol = _mission32_number_or_none(secretion_fluxes.get(MISSION32_ETHANOL_REACTION))
+    formate = _mission32_number_or_none(secretion_fluxes.get(MISSION32_FORMATE_REACTION))
+
+    issues = []
+    if objective_error:
+        issues.append(objective_error)
+    if method_name != MISSION32_METHOD:
+        issues.append('Use pFBA for every Mission 32 condition.')
+    if selected_objective != MISSION32_GROWTH_OBJECTIVE:
+        issues.append(f'Use {MISSION32_GROWTH_OBJECTIVE} as the primary objective.')
+    if not genes_complete:
+        issues.append('The visible gene-state payload is incomplete.')
+    if condition is None:
+        issues.append('Use exactly one of the six highlighted Mission 32 genotypes.')
+    if not environment.get('bounds_complete'):
+        issues.append('The visible environmental-bounds payload is incomplete.')
+    elif not environment.get('default_environment_ready'):
+        issues.append('Keep the complete aerobic environment at model default for every Mission 32 run.')
+    if result_infeasible:
+        issues.append('Mission 32 requires a feasible visible solution; INFEASIBLE is not a valid condition row.')
+    if objective_numeric is None:
+        issues.append('The visible growth value is missing or non-numeric.')
+    elif objective_numeric < -MISSION32_PRIMARY_TOLERANCE:
+        issues.append('The visible growth value is outside the accepted non-negative range.')
+
+    if glucose_raw is None or glucose_uptake is None:
+        issues.append('Numeric glucose exchange evidence is required.')
+    else:
+        if glucose_raw > MISSION32_FLUX_TOLERANCE:
+            issues.append('Glucose must not be secreted in this controlled default medium.')
+        if abs(glucose_uptake - MISSION32_EXPECTED_DEFAULT_GLUCOSE_UPTAKE) > MISSION32_CAPACITY_TOLERANCE:
+            issues.append('Keep model-default glucose uptake in every Mission 32 run.')
+
+    if oxygen_raw is None or oxygen_uptake is None:
+        issues.append('Numeric oxygen exchange evidence is required.')
+    elif oxygen_raw > MISSION32_FLUX_TOLERANCE:
+        issues.append('Oxygen must not be secreted in this controlled experiment.')
+
+    if acetate is None or ethanol is None or formate is None:
+        issues.append('Numeric acetate, ethanol and formate exchange evidence is required.')
+
+    if not isinstance(production_fluxes, dict) or production_fluxes.get('error'):
+        issues.append('The structured visible pFBA result is unavailable.')
+    if biomass_raw is None:
+        issues.append('The visible biomass flux is missing from the structured result.')
+    if primary_flux is None:
+        issues.append('The visible primary-objective diagnostic is missing.')
+    if objective_numeric is not None and biomass_raw is not None:
+        if abs(objective_numeric - biomass_raw) > MISSION32_PRIMARY_TOLERANCE:
+            issues.append('The visible growth value does not match the biomass reaction flux.')
+    if biomass_raw is not None and primary_flux is not None:
+        if abs(biomass_raw - primary_flux) > MISSION32_PRIMARY_TOLERANCE:
+            issues.append('The primary-objective diagnostic does not match the biomass flux.')
+    if diagnostics.get('method') != MISSION32_METHOD:
+        issues.append('The visible method diagnostics do not describe pFBA.')
+    if diagnostics.get('objective_reaction') != MISSION32_GROWTH_OBJECTIVE:
+        issues.append('The visible method diagnostics do not describe the biomass objective.')
+    if method_score_name != MISSION32_EXPECTED_SCORE_NAME:
+        issues.append('The pFBA score label is missing or incorrect.')
+    if method_score is None or total_absolute_flux is None:
+        issues.append('The pFBA secondary score is missing or non-numeric.')
+    elif abs(method_score - total_absolute_flux) > MISSION32_PRIMARY_TOLERANCE:
+        issues.append('The pFBA method score does not match total absolute flux.')
+    if active_reaction_count is None:
+        issues.append('The visible active-reaction count is missing.')
+
+    if cytbd_disabled != both_branches_broken:
+        issues.append('The complete CYTBD GPR result is inconsistent with the two branch states.')
+
+    if condition and condition != 'cross_branch_pair':
+        if cytbd_disabled:
+            issues.append('The control condition must retain at least one complete CYTBD branch.')
+        if objective_numeric is not None and objective_numeric < MISSION32_MIN_CONTROL_GROWTH:
+            issues.append('Each control genotype must retain strong predicted growth in the default medium.')
+        if oxygen_uptake is not None and oxygen_uptake < MISSION32_MIN_CONTROL_OXYGEN_UPTAKE:
+            issues.append('Each control genotype must retain positive measured oxygen uptake.')
+        if acetate is not None and acetate > MISSION32_MAX_CONTROL_BYPRODUCT:
+            issues.append('The control condition unexpectedly secretes acetate above tolerance.')
+        if ethanol is not None and ethanol > MISSION32_MAX_CONTROL_BYPRODUCT:
+            issues.append('The control condition unexpectedly secretes ethanol above tolerance.')
+        if formate is not None and formate > MISSION32_MAX_CONTROL_BYPRODUCT:
+            issues.append('The control condition unexpectedly secretes formate above tolerance.')
+    elif condition == 'cross_branch_pair':
+        if not cytbd_disabled:
+            issues.append('The cross-branch pair must disable CYTBD through the complete GPR.')
+        if objective_numeric is not None and not (
+            MISSION32_MIN_CUT_SET_GROWTH <= objective_numeric <= MISSION32_MAX_CUT_SET_GROWTH
+        ):
+            issues.append('The cross-branch pair must retain a reduced but viable growth phenotype.')
+        if oxygen_uptake is not None and oxygen_uptake > MISSION32_MAX_CUT_SET_OXYGEN_UPTAKE:
+            issues.append('The cross-branch pair must abolish measured oxygen uptake while oxygen remains available.')
+        for label, value in (('acetate', acetate), ('ethanol', ethanol), ('formate', formate)):
+            if value is not None and value < MISSION32_MIN_CUT_SET_BYPRODUCT:
+                issues.append(f'The cross-branch phenotype must show positive {label} secretion.')
+
+    current_run_valid = not issues
+    current_run_recorded = False
+    current_run = None
+    if current_run_valid:
+        current_run = {
+            'condition': condition,
+            'condition_label': MISSION32_CONDITION_LABELS.get(condition),
+            'status': 'ok',
+            'method': method_name,
+            'objective': selected_objective,
+            'growth': _mission32_clean_number(objective_numeric),
+            'knocked_out_genes': list(knocked_out_genes),
+            'branch_status': copy.deepcopy(branch_status),
+            'disabled_reactions': list(disabled_reactions),
+            'cytbd_disabled': bool(cytbd_disabled),
+            'environment_changes': list(environment.get('changes') or []),
+            'glucose_raw_flux': _mission32_clean_number(glucose_raw),
+            'glucose_uptake': _mission32_clean_number(glucose_uptake),
+            'oxygen_raw_flux': _mission32_clean_number(oxygen_raw),
+            'oxygen_uptake': _mission32_clean_number(oxygen_uptake),
+            'acetate_secretion': _mission32_clean_number(acetate),
+            'ethanol_secretion': _mission32_clean_number(ethanol),
+            'formate_secretion': _mission32_clean_number(formate),
+            'method_diagnostics': {
+                'method': diagnostics.get('method'),
+                'objective_reaction': diagnostics.get('objective_reaction'),
+                'primary_objective_flux': _mission32_clean_number(primary_flux),
+                'method_score': _mission32_clean_number(method_score),
+                'method_score_name': method_score_name,
+                'total_absolute_flux': _mission32_clean_number(total_absolute_flux),
+                'active_reaction_count': active_reaction_count,
+            },
+        }
+        runs[condition] = current_run
+        current_run_recorded = True
+
+    missing_conditions = _mission32_missing_conditions(runs)
+    recorded_run_count = MISSION32_REQUIRED_RUN_COUNT - len(missing_conditions)
+    evidence_ready = not missing_conditions and recorded_run_count == MISSION32_REQUIRED_RUN_COUNT
+
+    growth_retention_by_condition = {}
+    wild_type = runs.get('wild_type')
+    wild_growth = _mission32_number_or_none((wild_type or {}).get('growth'))
+    if wild_growth is not None and wild_growth > MISSION32_PRIMARY_TOLERANCE:
+        for condition_id in MISSION32_CONDITION_ORDER:
+            run = runs.get(condition_id)
+            growth = _mission32_number_or_none((run or {}).get('growth'))
+            if growth is not None:
+                growth_retention_by_condition[condition_id] = _mission32_clean_number(growth / wild_growth)
+
+    branch_status_by_condition = {}
+    oxygen_uptake_by_condition = {}
+    fermentation_profile_by_condition = {}
+    cytbd_disabled_by_condition = {}
+    for condition_id in MISSION32_CONDITION_ORDER:
+        run = runs.get(condition_id)
+        if not isinstance(run, dict):
+            continue
+        branch_status_by_condition[condition_id] = copy.deepcopy(run.get('branch_status') or {})
+        oxygen_uptake_by_condition[condition_id] = run.get('oxygen_uptake')
+        fermentation_profile_by_condition[condition_id] = {
+            'acetate': run.get('acetate_secretion'),
+            'ethanol': run.get('ethanol_secretion'),
+            'formate': run.get('formate_secretion'),
+        }
+        cytbd_disabled_by_condition[condition_id] = bool(run.get('cytbd_disabled'))
+
+    cut_set_candidates = []
+    for condition_id in MISSION32_CONDITION_ORDER:
+        run = runs.get(condition_id)
+        if not isinstance(run, dict):
+            continue
+        branches = run.get('branch_status') or {}
+        both_broken = all(branches.get(branch_id) == 'broken' for branch_id in MISSION32_BRANCH_ORDER)
+        growth = _mission32_number_or_none(run.get('growth'))
+        oxygen = _mission32_number_or_none(run.get('oxygen_uptake'))
+        byproducts = [
+            _mission32_number_or_none(run.get('acetate_secretion')),
+            _mission32_number_or_none(run.get('ethanol_secretion')),
+            _mission32_number_or_none(run.get('formate_secretion')),
+        ]
+        if (
+            run.get('status') == 'ok'
+            and both_broken
+            and run.get('cytbd_disabled')
+            and growth is not None
+            and MISSION32_MIN_CUT_SET_GROWTH <= growth <= MISSION32_MAX_CUT_SET_GROWTH
+            and oxygen is not None
+            and oxygen <= MISSION32_MAX_CUT_SET_OXYGEN_UPTAKE
+            and all(value is not None and value >= MISSION32_MIN_CUT_SET_BYPRODUCT for value in byproducts)
+        ):
+            cut_set_candidates.append(condition_id)
+
+    unique_tested_cut_set = cut_set_candidates[0] if len(cut_set_candidates) == 1 else None
+    unique_tested_cut_set_genes = list(
+        MISSION32_CONDITION_GENES.get(unique_tested_cut_set, [])
+    ) if unique_tested_cut_set else []
+
+    control_pattern_supported = bool(
+        evidence_ready
+        and all(
+            isinstance(runs.get(condition_id), dict)
+            and not runs[condition_id].get('cytbd_disabled')
+            and _mission32_number_or_none(runs[condition_id].get('growth')) is not None
+            and float(runs[condition_id].get('growth')) >= MISSION32_MIN_CONTROL_GROWTH
+            and _mission32_number_or_none(runs[condition_id].get('oxygen_uptake')) is not None
+            and float(runs[condition_id].get('oxygen_uptake')) >= MISSION32_MIN_CONTROL_OXYGEN_UPTAKE
+            for condition_id in MISSION32_CONDITION_ORDER
+            if condition_id != unique_tested_cut_set
+        )
+    )
+    unique_cut_set_supported = bool(
+        evidence_ready
+        and len(cut_set_candidates) == 1
+        and control_pattern_supported
+    )
+
+    latest_attempt = {
+        'method': method_name,
+        'objective': selected_objective,
+        'condition': condition,
+        'knocked_out_genes': list(knocked_out_genes),
+        'valid': current_run_valid,
+        'recorded': current_run_recorded,
+        'issues': list(issues),
+    }
+
+    report = _mission32_empty_report()
+    report.update({
+        'runs': runs,
+        'recorded_run_count': recorded_run_count,
+        'missing_conditions': missing_conditions,
+        'growth_retention_by_condition': growth_retention_by_condition,
+        'branch_status_by_condition': branch_status_by_condition,
+        'oxygen_uptake_by_condition': oxygen_uptake_by_condition,
+        'fermentation_profile_by_condition': fermentation_profile_by_condition,
+        'cytbd_disabled_by_condition': cytbd_disabled_by_condition,
+        'cut_set_candidates': cut_set_candidates,
+        'unique_tested_cut_set': unique_tested_cut_set,
+        'unique_tested_cut_set_genes': unique_tested_cut_set_genes,
+        'control_pattern_supported': control_pattern_supported,
+        'unique_cut_set_supported': unique_cut_set_supported,
+        'evidence_ready': evidence_ready,
+        'answer_ready': unique_cut_set_supported,
+        'ready_to_deliver': unique_cut_set_supported,
+        'current_condition': condition,
+        'current_run_valid': current_run_valid,
+        'current_run_recorded': current_run_recorded,
+        'current_issues': list(issues),
+        'current_run': current_run,
+        'latest_attempt': latest_attempt,
+    })
+    save_mission32_respiratory_cut_set_check(report)
+    return report
+
+
+def run_mission32_respiratory_cut_set_check(simulation_results=None):
+    """Validate the already displayed Mission 32 result without re-simulating."""
+    method_name, selected_objective, genes, reactions = _read_simulation_file()
+    objective_result = None
+    production_fluxes = None
+    medium_fluxes = None
+    objective_error = None
+    try:
+        if simulation_results is not None:
+            result_objective = simulation_results[0]
+            objective_result = simulation_results[1]
+            production_fluxes = simulation_results[2] if len(simulation_results) > 2 else None
+            medium_fluxes = simulation_results[3] if len(simulation_results) > 3 else None
+            if result_objective != selected_objective:
+                objective_error = 'The displayed simulation result does not match the currently selected objective.'
+        else:
+            objective_error = 'Run a visible Mission 32 simulation before recording evidence.'
+    except Exception:
+        objective_error = 'Could not read the current visible Mission 32 simulation result.'
+
+    return _build_mission32_data(
+        method_name,
+        selected_objective,
+        objective_result,
+        genes,
+        reactions,
+        production_fluxes=production_fluxes,
+        medium_fluxes=medium_fluxes,
+        existing_report=load_mission32_respiratory_cut_set_check() or {},
+        objective_error=objective_error,
+    )
+
+
+def run_mission32_respiratory_cut_set_check_remote(backend_url, simulation_results=None):
+    """Browser-parity wrapper that reuses the same visible /simulate response."""
+    del backend_url
+    return run_mission32_respiratory_cut_set_check(simulation_results)
+
+
+def _normalise_mission32_text(value):
+    text = unicodedata.normalize('NFKD', str(value or ''))
+    return ''.join(char for char in text if not unicodedata.combining(char)).lower().strip()
+
+
+def normalise_mission32_answer(answer, report_data=None):
+    text = _normalise_mission32_text(answer)
+    compact = re.sub(r'[^a-z0-9]+', ' ', text).strip()
+    detected = []
+    aliases = {
+        'b0978': [r'\bb0978\b', r'\bcbd\s*a\b', r'\bcbda\b'],
+        'b0979': [r'\bb0979\b', r'\bcbd\s*b\b', r'\bcbdb\b'],
+        'b0733': [r'\bb0733\b', r'\bcyd\s*a\b', r'\bcyda\b'],
+        'b0734': [r'\bb0734\b', r'\bcyd\s*b\b', r'\bcydb\b'],
+    }
+    for gene_id, patterns in aliases.items():
+        if any(re.search(pattern, compact) for pattern in patterns):
+            detected.append(gene_id)
+    if len(set(detected)) == 2:
+        return sorted(set(detected))
+    if detected:
+        return None
+
+    conceptual_patterns = (
+        r'\bcross\s+branch\s+pair\b',
+        r'\bone\s+gene\s+from\s+each\s+branch\b',
+        r'\bone\s+subunit\s+from\s+each\s+complex\b',
+        r'\bum\s+gene\s+de\s+cada\s+ramo\b',
+        r'\buma\s+subunidade\s+de\s+cada\s+complexo\b',
+    )
+    if any(re.search(pattern, compact) for pattern in conceptual_patterns):
+        report = report_data or {}
+        genes = report.get('unique_tested_cut_set_genes') or []
+        return sorted(genes) if len(genes) == 2 else None
+    return None
+
+
+def mission32_answer_matches(answer, report_data=None):
+    report = report_data if report_data is not None else (load_mission32_respiratory_cut_set_check() or {})
+    expected_genes = sorted(report.get('unique_tested_cut_set_genes') or [])
+    return bool(
+        report.get('mission_id') == '32'
+        and report.get('check_version') == MISSION32_CHECK_VERSION
+        and report.get('answer_ready')
+        and report.get('unique_cut_set_supported')
+        and len(expected_genes) == 2
+        and normalise_mission32_answer(answer, report) == expected_genes
+    )
+
+
+def _mission32_value_text(run, key):
+    if not isinstance(run, dict):
+        return 'pending'
+    value = _mission32_number_or_none(run.get(key))
+    return 'pending' if value is None else f'{value:.3f}'
+
+
+def build_mission32_respiratory_cut_set_report_text(report_data=None):
+    report = report_data or {}
+    if not report:
+        return (
+            'No Mission 32 cut-set evidence has been recorded yet.\n\n'
+            'Keep the pFBA biomass objective and the complete aerobic default medium fixed. '
+            'Record wild type, two single knockouts, both within-branch pairs and the highlighted cross-branch pair.\n\n'
+            'Use branch status, measured oxygen uptake and the complete CYTBD GPR to determine which tested pair disables the reaction.'
+        )
+    if report.get('mission_id') != '32' or report.get('check_version') != MISSION32_CHECK_VERSION:
+        return 'Mission 32 Respiratory Complex Cut-Set\n\nCurrent-format cut-set evidence has not been recorded yet.'
+
+    lines = [
+        'Mission 32 Respiratory Complex Cut-Set',
+        '',
+        'Controlled protocol:',
+        f'- Method: {MISSION32_METHOD}',
+        f'- Objective: {MISSION32_GROWTH_OBJECTIVE}',
+        '- Environment: completely model-default and aerobic',
+        '- CYTBD GPR: (b0978 AND b0979) OR (b0733 AND b0734)',
+        '- Record the six highlighted genotypes without any additional knockout',
+        '',
+        f"Runs recorded: {report.get('recorded_run_count', 0)}/{report.get('required_run_count', MISSION32_REQUIRED_RUN_COUNT)}",
+        '',
+        'Respiratory branch screen:',
+        'Condition | growth | O2 uptake | cbdAB | cydAB | CYTBD disabled',
+    ]
+
+    runs = report.get('runs') or {}
+    for condition_id in MISSION32_CONDITION_ORDER:
+        run = runs.get(condition_id)
+        if not isinstance(run, dict):
+            lines.append(f'{MISSION32_CONDITION_LABELS[condition_id]} | pending | pending | pending | pending | pending')
+            continue
+        branches = run.get('branch_status') or {}
+        disabled_text = 'yes' if run.get('cytbd_disabled') else 'no'
+        lines.append(
+            f"{MISSION32_CONDITION_LABELS[condition_id]} | {_mission32_value_text(run, 'growth')} | "
+            f"{_mission32_value_text(run, 'oxygen_uptake')} | {branches.get('cbdAB', 'pending')} | "
+            f"{branches.get('cydAB', 'pending')} | {disabled_text}"
+        )
+
+    cross_run = runs.get('cross_branch_pair')
+    if isinstance(cross_run, dict):
+        lines.extend([
+            '',
+            'Cross-branch phenotype:',
+            f"- Acetate secretion: {_mission32_value_text(cross_run, 'acetate_secretion')}",
+            f"- Ethanol secretion: {_mission32_value_text(cross_run, 'ethanol_secretion')}",
+            f"- Formate secretion: {_mission32_value_text(cross_run, 'formate_secretion')}",
+        ])
+
+    latest = report.get('latest_attempt') or {}
+    if latest:
+        lines.append('')
+        if latest.get('recorded'):
+            lines.append(f"Latest valid visible run recorded: {latest.get('condition')}.")
+        else:
+            lines.append('Latest run was not recorded:')
+            for issue in latest.get('issues') or ['The visible run did not match the controlled Mission 32 protocol.']:
+                lines.append(f'- {issue}')
+            if report.get('recorded_run_count', 0):
+                lines.append('Previously valid Mission 32 cut-set evidence remains available.')
+
+    lines.append('')
+    if report.get('evidence_ready'):
+        lines.extend([
+            'Evidence complete.',
+            'Compare both branch states, the complete GPR result and measured oxygen uptake.',
+            'Question: Which tested knockout pair broke one required subunit in each alternative CYTBD branch, disabling the reaction while oxygen remained available?',
+        ])
+        if not report.get('unique_cut_set_supported'):
+            lines.append('The complete evidence does not currently support one unique tested cut set; verify the visible runs.')
+    else:
+        lines.append('Evidence incomplete.')
+        if report.get('missing_conditions'):
+            lines.append('Missing conditions: ' + ', '.join(report.get('missing_conditions') or []))
+
+    lines.extend([
+        '',
+        'Interpretation note: a broken protein branch is not automatically a disabled reaction; CYTBD remains available while either complete alternative branch survives.',
+        'The highlighted cross-branch result remains a feasible reduced-growth solution, not an INFEASIBLE state, and its loss of oxygen uptake is accompanied by fermentative byproduct secretion.',
+        'The conclusion is limited to this model, pFBA biomass objective, default aerobic medium and tested knockout set. Other cross-branch combinations implied by the GPR were not tested here.',
+        'All growth, exchange and GPR evidence comes from the visible /simulate result. No hidden validation simulation is used.',
+    ])
+    return '\n'.join(lines)
+
+
+def _build_mission32_text(report_data=None):
+    return build_mission32_respiratory_cut_set_report_text(report_data)

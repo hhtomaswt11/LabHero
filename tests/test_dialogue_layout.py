@@ -28,7 +28,7 @@ from utils import (  # noqa: E402
 DIALOGUE_MODULES = (
     'mission01', 'mission02', 'mission03', 'mission04', 'mission05',
     'mission06', 'mission07', 'mission11', 'mission16', 'mission21',
-    'mission23', 'mission25', 'mission26',
+    'mission23', 'mission25', 'mission26', 'mission32',
 )
 MAX_SAFE_LINE_WIDTH = 1040
 MAX_LINES_WITH_BUTTONS = 3

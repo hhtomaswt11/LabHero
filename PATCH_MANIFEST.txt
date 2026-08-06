@@ -20,3 +20,27 @@ Implementation:
 - Derives the unique suppressing source from visible evidence rather than hardcoding it into the report.
 - Preserves valid matrix cells after invalid attempts; repeated conditions update instead of duplicating.
 - Uses JSON-serialisable state and the existing visible /simulate response with no hidden simulation or new endpoint.
+
+Mission 32 — Respiratory Complex Cut-Set
+
+Changed files:
+- code/mission32.py
+- code/player.py
+- code/level.py
+- code/simulation.py
+- code/save_load.py
+- code/window.py
+- data/missions/mission32.md
+- MISSION_PROGRESS_OVERVIEW.md
+- PATCH_MANIFEST.txt
+- tests/test_mission32.py
+- tests/test_dialogue_layout.py
+
+Implementation:
+- Connected the existing Tiled Mission32 object to Player, Level and Dr. Chen dialogue flow.
+- Added six visible pFBA conditions for the nested CYTBD GPR `(b0978 AND b0979) OR (b0733 AND b0734)`.
+- Validates complete gene/bound payloads, a completely default aerobic environment, biomass/primary-objective consistency, pFBA diagnostics and full exchange evidence.
+- Distinguishes a broken branch from a disabled reaction and oxygen availability from measured oxygen uptake.
+- Requires a feasible reduced-growth cross-branch phenotype with CYTBD disabled and fermentative byproducts, never converting missing or INFEASIBLE evidence into zero.
+- Derives the unique tested cut set from accumulated visible evidence, preserves valid runs after invalid attempts and updates repeated conditions without duplication.
+- Uses JSON-serialisable state and the existing `/simulate` response with no hidden simulation or new backend endpoint.
