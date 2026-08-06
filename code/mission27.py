@@ -67,13 +67,13 @@ class Mission27:
         ]
         mission28_intro_dialogue = [
             f"Excellent work, {self.player.player_name}.",
-            "You found a supplement that restores predicted growth without restoring citrate synthase.",
-            "Now determine which network function makes that rescue possible.",
+            "You restored growth while citrate synthase remained disabled.",
+            "Now identify the network function that makes that rescue possible.",
         ]
         mission28_active_dialogue = [
             "Mission 28 is active.",
-            "Keep the gltA lesion and the 2-oxoglutarate rescue medium fixed.",
-            "Change exactly one secondary gene at a time and compare both rescue growth and supplement uptake.",
+            "Keep the gltA lesion and 2-oxoglutarate rescue medium fixed.",
+            "Change one secondary gene at a time; compare growth and supplement uptake.",
         ]
         completed_dialogue = [
             f"Excellent work, {self.player.player_name}.",

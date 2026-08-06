@@ -3,6 +3,7 @@ import json
 import sys
 import re
 import unicodedata
+import warnings
 
 from save_load import *
 from options_values import *
@@ -1861,7 +1862,17 @@ def _simulate_local_objective_with_production_fluxes(method_name, objective_name
         else:
             simul, constraints = _build_local_constraints(genes, reactions)
             simul.objective = objective_name
-            result = simul.simulate(method=method_name, constraints=constraints)
+            # Some missions deliberately include a status-aware infeasible
+            # endpoint.  COBRApy emits a terminal warning before MEWpy returns
+            # that structured status; suppress only this expected warning and
+            # preserve the row as INFEASIBLE below.
+            with warnings.catch_warnings():
+                warnings.filterwarnings(
+                    'ignore',
+                    message=r"Solver status is 'infeasible'\.",
+                    category=UserWarning,
+                )
+                result = simul.simulate(method=method_name, constraints=constraints)
             raw_solver_value = _solver_scalar_value(result)
     except Exception as error:
         # COBRA pFBA raises on an infeasible primary problem instead of returning
@@ -14101,6 +14112,7 @@ def _selected_sweep_value(menu_data, key, default_value):
             'oxygen_transition',
             'glucose_limitation',
             'alternative_carbon_limitation',
+            'pfk_redundancy_threshold',
         },
     }
     candidates = list(strings(value))
@@ -14168,6 +14180,7 @@ def _normalise_sweep_config(sweep_menu_data=None):
         'oxygen_transition': list(MISSION26_SWEEP_VALUES),
         'glucose_limitation': [-1000.0, -500.0, -100.0, -50.0, -10.0, 0.0],
         'alternative_carbon_limitation': list(MISSION28_SWEEP_VALUES),
+        'pfk_redundancy_threshold': list(MISSION30_SWEEP_VALUES),
     }
     resolved_variable = (
         variable if variable in sweep_options
@@ -14341,7 +14354,13 @@ def run_bound_sweep(sweep_menu_data=None):
             constraints = _apply_numeric_bound_to_constraints(
                 constraints, config.get('reaction_id'), config.get('bound'), bound_value
             )
-            result = simul.simulate(method=method_name, constraints=constraints)
+            with warnings.catch_warnings():
+                warnings.filterwarnings(
+                    'ignore',
+                    message=r"Solver status is 'infeasible'\.",
+                    category=UserWarning,
+                )
+                result = simul.simulate(method=method_name, constraints=constraints)
             normalised = _normalise_result(result)
             if normalised == 'Status: INFEASIBLE':
                 data['rows'].append(_bound_sweep_infeasible_row(bound_value))
@@ -17074,3 +17093,657 @@ def build_mission29_redundancy_report_text(report_data=None):
 
 def _build_mission29_text(report_data=None):
     return build_mission29_redundancy_report_text(report_data)
+
+# Mission 30 — Redundancy Breakdown Threshold
+# Dr. Li extends the static Mission 29 screen into a matched oxygen-capacity
+# experiment.  Wild type, both phosphofructokinase single knockouts and their
+# exact double knockout are swept through the same oxygen lower bounds.  The
+# final double-knockout row is deliberately status-aware: it must be recorded as
+# INFEASIBLE, never converted into a numerical zero-growth result.
+MISSION30_CHECK_VERSION = 2
+MISSION30_METHOD = 'pFBA'
+MISSION30_GROWTH_OBJECTIVE = 'BIOMASS_Ecoli_core_w_GAM'
+MISSION30_TARGET_CONTEXT = 'oxygen-dependent breakdown of phosphofructokinase isoenzyme redundancy'
+MISSION30_SWEEP_REACTION = 'EX_o2_e'
+MISSION30_SWEEP_BOUND = 'lower'
+MISSION30_SWEEP_PRESET = 'pfk_redundancy_threshold'
+MISSION30_SWEEP_VALUES = [-30.0, -10.0, -5.0, -2.0]
+MISSION30_PAIR_ID = 'phosphofructokinase'
+MISSION30_GENE_A = 'b1723'
+MISSION30_GENE_B = 'b3916'
+MISSION30_GENE_NAMES = {
+    MISSION30_GENE_A: 'pfkB',
+    MISSION30_GENE_B: 'pfkA',
+}
+MISSION30_TARGET_REACTION = 'PFK'
+MISSION30_CURVE_ORDER = ['wild_type', 'single_b1723', 'single_b3916', 'double']
+MISSION30_CURVE_GENES = {
+    'wild_type': [],
+    'single_b1723': [MISSION30_GENE_A],
+    'single_b3916': [MISSION30_GENE_B],
+    'double': [MISSION30_GENE_A, MISSION30_GENE_B],
+}
+MISSION30_CURVE_LABELS = {
+    'wild_type': 'Wild type',
+    'single_b1723': 'b1723 / pfkB single knockout',
+    'single_b3916': 'b3916 / pfkA single knockout',
+    'double': 'b1723 + b3916 double knockout',
+}
+MISSION30_REQUIRED_MEDIUM_FLUXES = ['EX_glc__D_e', 'EX_o2_e']
+MISSION30_EXPECTED_SCORE_NAME = 'total_absolute_flux'
+MISSION30_EXPECTED_THRESHOLD_BOUND = -2.0
+MISSION30_MIN_VIABLE_GROWTH = 0.05
+MISSION30_MIN_SINGLE_RETENTION = 0.99
+MISSION30_MIN_DOUBLE_POSITIVE_GROWTH = 0.01
+MISSION30_FLUX_TOLERANCE = 0.02
+MISSION30_PRIMARY_TOLERANCE = 0.002
+MISSION30_GROWTH_TOLERANCE = 0.005
+MISSION30_CAPACITY_TOLERANCE = 0.05
+
+
+def is_mission30_unlocked(missions_completed):
+    """Mission 30 is Dr. Li's second mission and requires Mission 29."""
+    return '29' in (missions_completed or [])
+
+
+def _mission30_number_or_none(value):
+    numeric = _as_float_or_none(value)
+    if numeric is None:
+        return None
+    numeric = float(numeric)
+    if abs(numeric) < DISPLAY_ZERO_TOLERANCE:
+        numeric = 0.0
+    return round(numeric, 6)
+
+
+def _mission30_value_key(value):
+    numeric = _as_float_or_none(value)
+    return round(float(numeric), 6) if numeric is not None else None
+
+
+def _mission30_curve_type(knocked_out_genes):
+    knocked = sorted(set(knocked_out_genes or []))
+    for curve_type, expected in MISSION30_CURVE_GENES.items():
+        if knocked == sorted(expected):
+            return curve_type
+    return None
+
+
+def _mission30_disabled_reactions(knocked_out_genes):
+    knocked = sorted(set(knocked_out_genes or []))
+    try:
+        if model is not None:
+            return sorted(disabled_reaction_ids(model, knocked))
+    except Exception:
+        pass
+    if knocked == sorted([MISSION30_GENE_A, MISSION30_GENE_B]):
+        return [MISSION30_TARGET_REACTION]
+    return []
+
+
+def _mission30_empty_report():
+    return {
+        'mission_id': '30',
+        'check_version': MISSION30_CHECK_VERSION,
+        'mission_title': 'Redundancy Breakdown Threshold',
+        'target_context': MISSION30_TARGET_CONTEXT,
+        'target_method': MISSION30_METHOD,
+        'growth_objective': MISSION30_GROWTH_OBJECTIVE,
+        'sweep_reaction': MISSION30_SWEEP_REACTION,
+        'sweep_bound': MISSION30_SWEEP_BOUND,
+        'sweep_preset': MISSION30_SWEEP_PRESET,
+        'required_bound_values': list(MISSION30_SWEEP_VALUES),
+        'curve_order': list(MISSION30_CURVE_ORDER),
+        'curve_genes': copy.deepcopy(MISSION30_CURVE_GENES),
+        'curves': {},
+        'curve_rows': {},
+        'recorded_curve_count': 0,
+        'required_curve_count': len(MISSION30_CURVE_ORDER),
+        'missing_curves': list(MISSION30_CURVE_ORDER),
+        'curves_complete': False,
+        'single_retention_by_bound': {},
+        'double_retention_by_bound': {},
+        'status_by_curve_and_bound': {},
+        'single_curves_match_wild_type': False,
+        'double_retention_decreases': False,
+        'double_infeasible_only_at_threshold': False,
+        'controls_viable_at_threshold': False,
+        'gpr_pattern_supported': False,
+        'threshold_supported': False,
+        'threshold_bound': None,
+        'evidence_ready': False,
+        'answer_ready': False,
+        'ready_to_deliver': False,
+        'current_curve_type': None,
+        'current_curve_valid': False,
+        'current_curve_recorded': False,
+        'current_issues': [],
+        'latest_attempt': None,
+    }
+
+
+def initialise_mission30_redundancy_threshold():
+    report = _mission30_empty_report()
+    save_mission30_redundancy_threshold_check(report)
+    return report
+
+
+def _mission30_row_groups(rows):
+    grouped = {}
+    for row in rows or []:
+        key = _mission30_value_key(row.get('bound_value'))
+        if key is not None:
+            grouped.setdefault(key, []).append(row)
+    return grouped
+
+
+def _mission30_numeric_mapping(mapping, reaction_ids):
+    return isinstance(mapping, dict) and all(
+        _as_float_or_none(mapping.get(reaction_id)) is not None
+        for reaction_id in reaction_ids
+    )
+
+
+def _mission30_validate_feasible_row(row, bound_value, issues):
+    growth = _mission30_number_or_none(row.get('growth_value'))
+    objective_result = _mission30_number_or_none(row.get('objective_result'))
+    raw_fluxes = row.get('exchange_raw_fluxes') or {}
+    diagnostics = row.get('method_diagnostics') or {}
+
+    if growth is None:
+        issues.append(f'Biomass is missing at oxygen lower bound {bound_value:g}.')
+    if objective_result is None or growth is None or abs(objective_result - growth) > MISSION30_PRIMARY_TOLERANCE:
+        issues.append(f'The visible objective result does not match biomass at oxygen lower bound {bound_value:g}.')
+    if not _mission30_numeric_mapping(raw_fluxes, MISSION30_REQUIRED_MEDIUM_FLUXES):
+        issues.append(f'Numeric glucose and oxygen exchange evidence is incomplete at oxygen lower bound {bound_value:g}.')
+
+    glucose_raw = _mission30_number_or_none(raw_fluxes.get('EX_glc__D_e'))
+    oxygen_raw = _mission30_number_or_none(raw_fluxes.get('EX_o2_e'))
+    glucose_uptake = max(-float(glucose_raw), 0.0) if glucose_raw is not None else None
+    oxygen_uptake = max(-float(oxygen_raw), 0.0) if oxygen_raw is not None else None
+    visible_oxygen = _mission30_number_or_none(row.get('oxygen_uptake'))
+    tested_uptake = _mission30_number_or_none(row.get('tested_reaction_uptake'))
+
+    if (
+        glucose_uptake is None
+        or glucose_uptake <= DISPLAY_ZERO_TOLERANCE
+        or glucose_uptake > 10.0 + MISSION30_CAPACITY_TOLERANCE
+    ):
+        issues.append(f'Glucose uptake must be numerically measured within the unchanged default capacity at oxygen lower bound {bound_value:g}.')
+    if oxygen_uptake is None:
+        issues.append(f'Oxygen uptake is missing at lower bound {bound_value:g}.')
+    else:
+        capacity = abs(float(bound_value))
+        if oxygen_uptake > capacity + MISSION30_CAPACITY_TOLERANCE:
+            issues.append(f'Oxygen uptake exceeds the configured capacity at lower bound {bound_value:g}.')
+        if bound_value == MISSION30_SWEEP_VALUES[0]:
+            if not oxygen_uptake < capacity - MISSION30_CAPACITY_TOLERANCE:
+                issues.append('The first oxygen point must be visibly non-binding for this curve.')
+        elif abs(oxygen_uptake - capacity) > MISSION30_CAPACITY_TOLERANCE:
+            issues.append(f'The oxygen bound should be binding at lower bound {bound_value:g}.')
+
+    if visible_oxygen is None or oxygen_uptake is None or abs(visible_oxygen - oxygen_uptake) > MISSION30_FLUX_TOLERANCE:
+        issues.append(f'The visible oxygen-uptake field is inconsistent at lower bound {bound_value:g}.')
+    if tested_uptake is None or oxygen_uptake is None or abs(tested_uptake - oxygen_uptake) > MISSION30_FLUX_TOLERANCE:
+        issues.append(f'The tested-reaction uptake is inconsistent at lower bound {bound_value:g}.')
+
+    primary = _mission30_number_or_none(diagnostics.get('primary_objective_flux'))
+    method_score = _mission30_number_or_none(diagnostics.get('method_score'))
+    total_abs = _mission30_number_or_none(diagnostics.get('total_absolute_flux'))
+    try:
+        active_count = int(diagnostics.get('active_reaction_count'))
+    except Exception:
+        active_count = None
+
+    if diagnostics.get('method') != MISSION30_METHOD:
+        issues.append(f'The visible method diagnostics do not describe pFBA at oxygen lower bound {bound_value:g}.')
+    if diagnostics.get('objective_reaction') != MISSION30_GROWTH_OBJECTIVE:
+        issues.append(f'The visible diagnostics use the wrong objective at oxygen lower bound {bound_value:g}.')
+    if diagnostics.get('method_score_name') != MISSION30_EXPECTED_SCORE_NAME:
+        issues.append(f'The pFBA score label is missing at oxygen lower bound {bound_value:g}.')
+    if primary is None or growth is None or abs(primary - growth) > MISSION30_PRIMARY_TOLERANCE:
+        issues.append(f'The primary biomass flux does not match growth at oxygen lower bound {bound_value:g}.')
+    if method_score is None or total_abs is None or abs(method_score - total_abs) > MISSION30_FLUX_TOLERANCE:
+        issues.append(f'The pFBA secondary score is incomplete at oxygen lower bound {bound_value:g}.')
+    if active_count is None:
+        issues.append(f'The active-reaction diagnostic is missing at oxygen lower bound {bound_value:g}.')
+
+    return {
+        'bound_value': float(bound_value),
+        'status': 'ok',
+        'growth_value': growth,
+        'objective_result': objective_result,
+        'glucose_uptake': _mission30_number_or_none(glucose_uptake),
+        'oxygen_uptake': _mission30_number_or_none(oxygen_uptake),
+        'method_diagnostics': {
+            'method': diagnostics.get('method'),
+            'objective_reaction': diagnostics.get('objective_reaction'),
+            'primary_objective_flux': primary,
+            'method_score': method_score,
+            'method_score_name': diagnostics.get('method_score_name'),
+            'total_absolute_flux': total_abs,
+            'active_reaction_count': active_count,
+        },
+    }
+
+
+def _mission30_validate_infeasible_row(row, bound_value, issues):
+    if row.get('status') != 'infeasible':
+        issues.append(
+            f'The double-knockout row at oxygen lower bound {bound_value:g} must be recorded explicitly as INFEASIBLE.'
+        )
+        return None
+    numeric_fields = (
+        'growth_value', 'objective_result', 'tested_reaction_uptake',
+        'oxygen_uptake', 'oxygen_raw_flux', 'tested_reaction_raw_flux',
+    )
+    if any(_as_float_or_none(row.get(field)) is not None for field in numeric_fields):
+        issues.append(
+            f'The INFEASIBLE row at oxygen lower bound {bound_value:g} must not contain fabricated numerical zeros.'
+        )
+    if row.get('exchange_raw_fluxes') or row.get('exchange_uptake_fluxes') or row.get('method_diagnostics'):
+        issues.append(
+            f'The INFEASIBLE row at oxygen lower bound {bound_value:g} must not contain measured flux or method diagnostics.'
+        )
+    return {
+        'bound_value': float(bound_value),
+        'status': 'infeasible',
+        'growth_value': None,
+        'objective_result': None,
+        'glucose_uptake': None,
+        'oxygen_uptake': None,
+        'method_diagnostics': {},
+    }
+
+
+def _mission30_validate_sweep(sweep_data):
+    issues = []
+    if not isinstance(sweep_data, dict) or not sweep_data:
+        return None, None, ['Run one visible Mission 30 oxygen Bound Sweep before recording evidence.']
+    if sweep_data.get('error'):
+        issues.append(str(sweep_data.get('error')))
+    if sweep_data.get('method') != MISSION30_METHOD:
+        issues.append('Use pFBA for every Mission 30 curve.')
+    if sweep_data.get('objective') != MISSION30_GROWTH_OBJECTIVE:
+        issues.append('Use the biomass objective for every Mission 30 curve.')
+
+    knocked_out_genes = sorted(set(sweep_data.get('knocked_out_genes') or []))
+    curve_type = _mission30_curve_type(knocked_out_genes)
+    if curve_type is None:
+        issues.append(
+            f'Use wild type, only {MISSION30_GENE_A}, only {MISSION30_GENE_B}, or the exact {MISSION30_GENE_A}+{MISSION30_GENE_B} double knockout.'
+        )
+
+    base_genes = sweep_data.get('base_genes') or {}
+    if not isinstance(base_genes, dict) or any(gene_id not in base_genes for gene_id in GENES):
+        issues.append('The explicit base-gene payload is incomplete.')
+    elif sorted(_knocked_out_genes(base_genes)) != knocked_out_genes:
+        issues.append('The reported knockout list does not match the visible base-gene configuration.')
+
+    environment = _mission23_base_environment_status(sweep_data.get('base_reactions') or {})
+    if not environment.get('bounds_complete'):
+        issues.append('The explicit base environmental-bound payload is incomplete.')
+    elif not environment.get('environment_default'):
+        issues.append('Keep the complete base environment at model default before every curve.')
+
+    if sweep_data.get('reaction_id') != MISSION30_SWEEP_REACTION or sweep_data.get('bound') != MISSION30_SWEEP_BOUND:
+        issues.append('Sweep only the lower bound of EX_o2_e.')
+    if sweep_data.get('preset') != MISSION30_SWEEP_PRESET:
+        issues.append('Use the Mission 30 PFK redundancy-threshold sweep preset.')
+
+    expected_keys = [_mission30_value_key(value) for value in MISSION30_SWEEP_VALUES]
+    got_values = list(sweep_data.get('values') or [])
+    got_keys = [_mission30_value_key(value) for value in got_values]
+    if (
+        len(got_keys) != len(expected_keys)
+        or any(value is None for value in got_keys)
+        or sorted(got_keys) != sorted(expected_keys)
+    ):
+        issues.append('Use exactly the four oxygen lower-bound values: -30, -10, -5 and -2.')
+
+    disabled_reactions = _mission30_disabled_reactions(knocked_out_genes)
+    if curve_type == 'double':
+        if MISSION30_TARGET_REACTION not in disabled_reactions:
+            issues.append('The exact double knockout must disable PFK through the complete GPR.')
+    elif curve_type in ('wild_type', 'single_b1723', 'single_b3916'):
+        if MISSION30_TARGET_REACTION in disabled_reactions:
+            issues.append('PFK must remain enabled in wild type and both single-knockout curves.')
+
+    row_groups = _mission30_row_groups(sweep_data.get('rows') or [])
+    normalised_rows = []
+    for bound_value in MISSION30_SWEEP_VALUES:
+        key = _mission30_value_key(bound_value)
+        candidates = row_groups.get(key) or []
+        if len(candidates) != 1:
+            if not candidates:
+                issues.append(f'Missing the visible row for oxygen lower bound {bound_value:g}.')
+            else:
+                issues.append(f'Duplicate visible rows were returned for oxygen lower bound {bound_value:g}.')
+            continue
+        row = candidates[0]
+        expected_infeasible = curve_type == 'double' and bound_value == MISSION30_EXPECTED_THRESHOLD_BOUND
+        if expected_infeasible:
+            normalised = _mission30_validate_infeasible_row(row, bound_value, issues)
+        else:
+            if row.get('status') != 'ok':
+                issues.append(f'The curve row at oxygen lower bound {bound_value:g} must return an optimal measurable result.')
+                normalised = None
+            else:
+                normalised = _mission30_validate_feasible_row(row, bound_value, issues)
+        if normalised is not None:
+            normalised_rows.append(normalised)
+
+    if len(normalised_rows) != len(MISSION30_SWEEP_VALUES):
+        normalised_curve = None
+    else:
+        normalised_curve = {
+            'curve_type': curve_type,
+            'knocked_out_genes': list(knocked_out_genes),
+            'disabled_reactions': list(disabled_reactions),
+            'method': sweep_data.get('method'),
+            'objective': sweep_data.get('objective'),
+            'reaction_id': sweep_data.get('reaction_id'),
+            'bound': sweep_data.get('bound'),
+            'preset': sweep_data.get('preset'),
+            'values': list(MISSION30_SWEEP_VALUES),
+            'rows': normalised_rows,
+        }
+    return curve_type, normalised_curve, issues
+
+
+def _mission30_row_map(curve):
+    return {
+        _mission30_value_key(row.get('bound_value')): row
+        for row in ((curve or {}).get('rows') or [])
+    }
+
+
+def _mission30_relationship(curves):
+    if not all(isinstance((curves or {}).get(curve_type), dict) for curve_type in MISSION30_CURVE_ORDER):
+        return {
+            'single_retention_by_bound': {},
+            'double_retention_by_bound': {},
+            'status_by_curve_and_bound': {},
+            'single_curves_match_wild_type': False,
+            'double_retention_decreases': False,
+            'double_infeasible_only_at_threshold': False,
+            'controls_viable_at_threshold': False,
+            'gpr_pattern_supported': False,
+            'threshold_supported': False,
+            'threshold_bound': None,
+        }
+
+    maps = {curve_type: _mission30_row_map(curves[curve_type]) for curve_type in MISSION30_CURVE_ORDER}
+    single_retention = {MISSION30_GENE_A: {}, MISSION30_GENE_B: {}}
+    double_retention = {}
+    statuses = {curve_type: {} for curve_type in MISSION30_CURVE_ORDER}
+    single_match = True
+    controls_viable = True
+    double_positive_retentions = []
+
+    for bound_value in MISSION30_SWEEP_VALUES:
+        key = _mission30_value_key(bound_value)
+        key_text = str(float(bound_value))
+        wt_row = maps['wild_type'].get(key) or {}
+        a_row = maps['single_b1723'].get(key) or {}
+        b_row = maps['single_b3916'].get(key) or {}
+        d_row = maps['double'].get(key) or {}
+        for curve_type, row in (
+            ('wild_type', wt_row), ('single_b1723', a_row),
+            ('single_b3916', b_row), ('double', d_row),
+        ):
+            statuses[curve_type][key_text] = row.get('status')
+
+        wt_growth = _mission30_number_or_none(wt_row.get('growth_value'))
+        a_growth = _mission30_number_or_none(a_row.get('growth_value'))
+        b_growth = _mission30_number_or_none(b_row.get('growth_value'))
+        d_growth = _mission30_number_or_none(d_row.get('growth_value'))
+
+        if wt_growth is None or wt_growth < MISSION30_MIN_VIABLE_GROWTH:
+            controls_viable = False
+        for gene_id, growth in ((MISSION30_GENE_A, a_growth), (MISSION30_GENE_B, b_growth)):
+            retention = growth / wt_growth if wt_growth and growth is not None else None
+            single_retention[gene_id][key_text] = retention
+            if retention is None or retention < MISSION30_MIN_SINGLE_RETENTION:
+                single_match = False
+            if growth is None or growth < MISSION30_MIN_VIABLE_GROWTH:
+                controls_viable = False
+
+        if d_row.get('status') == 'ok' and wt_growth and d_growth is not None:
+            retention = d_growth / wt_growth
+            double_retention[key_text] = retention
+            double_positive_retentions.append((bound_value, retention, d_growth))
+        else:
+            double_retention[key_text] = None
+
+    double_status_pattern = all(
+        statuses['double'].get(str(float(bound_value))) == (
+            'infeasible' if bound_value == MISSION30_EXPECTED_THRESHOLD_BOUND else 'ok'
+        )
+        for bound_value in MISSION30_SWEEP_VALUES
+    )
+    double_positive = all(
+        growth >= MISSION30_MIN_DOUBLE_POSITIVE_GROWTH
+        for _bound, _retention, growth in double_positive_retentions
+    ) and len(double_positive_retentions) == len(MISSION30_SWEEP_VALUES) - 1
+    retention_values = [retention for _bound, retention, _growth in double_positive_retentions]
+    double_decreases = bool(
+        len(retention_values) == 3
+        and retention_values[0] > retention_values[1] > retention_values[2] > 0.0
+    )
+    gpr_supported = bool(
+        MISSION30_TARGET_REACTION in ((curves.get('double') or {}).get('disabled_reactions') or [])
+        and all(
+            MISSION30_TARGET_REACTION not in ((curves.get(curve_type) or {}).get('disabled_reactions') or [])
+            for curve_type in ('wild_type', 'single_b1723', 'single_b3916')
+        )
+    )
+    threshold_supported = bool(
+        single_match
+        and controls_viable
+        and double_status_pattern
+        and double_positive
+        and double_decreases
+        and gpr_supported
+    )
+    return {
+        'single_retention_by_bound': single_retention,
+        'double_retention_by_bound': double_retention,
+        'status_by_curve_and_bound': statuses,
+        'single_curves_match_wild_type': single_match,
+        'double_retention_decreases': double_decreases,
+        'double_infeasible_only_at_threshold': double_status_pattern,
+        'controls_viable_at_threshold': controls_viable,
+        'gpr_pattern_supported': gpr_supported,
+        'threshold_supported': threshold_supported,
+        'threshold_bound': MISSION30_EXPECTED_THRESHOLD_BOUND if threshold_supported else None,
+    }
+
+
+def _build_mission30_data(sweep_data=None, existing_report=None):
+    existing_report = existing_report or {}
+    if existing_report.get('mission_id') != '30' or existing_report.get('check_version') != MISSION30_CHECK_VERSION:
+        existing_report = _mission30_empty_report()
+
+    curve_type, normalised_curve, issues = _mission30_validate_sweep(sweep_data)
+    current_valid = normalised_curve is not None and not issues
+    current_recorded = False
+    curves = copy.deepcopy(existing_report.get('curves') or {})
+    if current_valid and curve_type in MISSION30_CURVE_ORDER:
+        curves[curve_type] = normalised_curve
+        current_recorded = True
+
+    missing_curves = [curve_type for curve_type in MISSION30_CURVE_ORDER if not isinstance(curves.get(curve_type), dict)]
+    curves_complete = not missing_curves
+    relation = _mission30_relationship(curves)
+    evidence_ready = bool(curves_complete and relation.get('threshold_supported'))
+
+    report = _mission30_empty_report()
+    report.update({
+        'curves': curves,
+        'curve_rows': {
+            curve_type: copy.deepcopy((curves.get(curve_type) or {}).get('rows') or [])
+            for curve_type in MISSION30_CURVE_ORDER
+        },
+        'recorded_curve_count': len(MISSION30_CURVE_ORDER) - len(missing_curves),
+        'missing_curves': missing_curves,
+        'curves_complete': curves_complete,
+        **relation,
+        'evidence_ready': evidence_ready,
+        'answer_ready': evidence_ready,
+        'ready_to_deliver': evidence_ready,
+        'current_curve_type': curve_type,
+        'current_curve_valid': current_valid,
+        'current_curve_recorded': current_recorded,
+        'current_issues': list(issues),
+        'latest_attempt': {
+            'curve_type': curve_type,
+            'knocked_out_genes': list((sweep_data or {}).get('knocked_out_genes') or []),
+            'preset': (sweep_data or {}).get('preset'),
+            'values': list((sweep_data or {}).get('values') or []),
+            'valid': current_valid,
+            'recorded': current_recorded,
+            'issues': list(issues),
+        },
+    })
+    save_mission30_redundancy_threshold_check(report)
+    return report
+
+
+def run_mission30_redundancy_threshold_check(sweep_data=None):
+    """Validate one visible Mission 30 curve and preserve valid companion curves."""
+    if sweep_data is None:
+        sweep_data = load_bound_sweep()
+    return _build_mission30_data(
+        sweep_data=sweep_data,
+        existing_report=load_mission30_redundancy_threshold_check() or {},
+    )
+
+
+def run_mission30_redundancy_threshold_check_remote(backend_url, sweep_data=None):
+    """Browser parity wrapper using the visible rows already returned by /simulate."""
+    del backend_url
+    return run_mission30_redundancy_threshold_check(sweep_data)
+
+
+def normalise_mission30_answer(answer):
+    text = unicodedata.normalize('NFKD', str(answer or '')).encode('ascii', 'ignore').decode('ascii').lower().strip()
+    if re.search(r'(?<![\d.])-\s*2(?:\.0+)?(?![\d.])', text):
+        return MISSION30_EXPECTED_THRESHOLD_BOUND
+    accepted = (
+        'minus two', 'negative two', 'lb minus two', 'lower bound minus two',
+        'lower bound negative two', 'oxygen lower bound minus two',
+        'menos dois', 'lower bound -2', 'lb -2',
+    )
+    return MISSION30_EXPECTED_THRESHOLD_BOUND if any(item in text for item in accepted) else None
+
+
+def mission30_answer_matches(answer, report_data=None):
+    report = report_data if report_data is not None else (load_mission30_redundancy_threshold_check() or {})
+    return bool(
+        report.get('mission_id') == '30'
+        and report.get('check_version') == MISSION30_CHECK_VERSION
+        and report.get('answer_ready')
+        and report.get('threshold_supported')
+        and normalise_mission30_answer(answer) == report.get('threshold_bound')
+    )
+
+
+def build_mission30_redundancy_threshold_report_text(report_data=None):
+    report = report_data or {}
+    if not report:
+        return (
+            'No Mission 30 threshold evidence has been recorded yet.\n\n'
+            'Construct four matched pFBA oxygen-capacity curves: wild type, each phosphofructokinase single knockout, and the exact double knockout. '
+            'Use the biomass objective, a completely default base environment, and the dedicated values -30, -10, -5 and -2.\n\n'
+            'Preserve solver status explicitly: an INFEASIBLE row is not a numerical growth value of zero.'
+        )
+    if report.get('mission_id') != '30' or report.get('check_version') != MISSION30_CHECK_VERSION:
+        return 'Mission 30 Redundancy Breakdown Threshold\n\nCurrent-format threshold evidence has not been recorded yet.'
+
+    lines = [
+        'Mission 30 Redundancy Breakdown Threshold',
+        '',
+        'Controlled matched protocol:',
+        f'- Method: {MISSION30_METHOD}',
+        f'- Objective: {MISSION30_GROWTH_OBJECTIVE}',
+        '- Base environment: completely model-default before every curve',
+        f'- Genotypes: wild type, {MISSION30_GENE_A}/{MISSION30_GENE_NAMES[MISSION30_GENE_A]}, {MISSION30_GENE_B}/{MISSION30_GENE_NAMES[MISSION30_GENE_B]}, and their exact double knockout',
+        '- Sweep only the EX_o2_e lower bound: -30, -10, -5, -2',
+        '- Feasible rows require numeric glucose, oxygen and pFBA diagnostics; infeasible rows must remain explicitly status-only',
+        '',
+        f"Curves recorded: {report.get('recorded_curve_count', 0)}/{report.get('required_curve_count', len(MISSION30_CURVE_ORDER))}",
+    ]
+
+    curve_rows = report.get('curve_rows') or {}
+    curves = report.get('curves') or {}
+    for curve_type in MISSION30_CURVE_ORDER:
+        lines.extend(['', MISSION30_CURVE_LABELS[curve_type] + ':'])
+        disabled = ', '.join((curves.get(curve_type) or {}).get('disabled_reactions') or []) or 'none'
+        lines.append(f'GPR-disabled reactions: {disabled}')
+        rows = curve_rows.get(curve_type) or []
+        if not rows:
+            lines.append('- pending')
+            continue
+        lines.append('LB | status | growth | glucose uptake | O2 uptake | total abs flux | active reactions')
+        for row in rows:
+            if row.get('status') == 'infeasible':
+                lines.append(f"{float(row.get('bound_value')):.0f} | INFEASIBLE | -- | -- | -- | -- | --")
+                continue
+            diagnostics = row.get('method_diagnostics') or {}
+            lines.append(
+                f"{float(row.get('bound_value')):.0f} | ok | "
+                f"{float(row.get('growth_value')):.3f} | "
+                f"{float(row.get('glucose_uptake')):.3f} | "
+                f"{float(row.get('oxygen_uptake')):.3f} | "
+                f"{float(diagnostics.get('total_absolute_flux')):.3f} | "
+                f"{int(diagnostics.get('active_reaction_count'))}"
+            )
+
+    double_retention = report.get('double_retention_by_bound') or {}
+    if double_retention:
+        lines.extend(['', 'Double-knockout retention relative to matched wild type:'])
+        for bound_value in MISSION30_SWEEP_VALUES:
+            value = double_retention.get(str(float(bound_value)))
+            if value is None:
+                status = (report.get('status_by_curve_and_bound') or {}).get('double', {}).get(str(float(bound_value)))
+                lines.append(f'- LB {bound_value:g}: {str(status or "unavailable").upper()}')
+            else:
+                lines.append(f'- LB {bound_value:g}: {100.0 * float(value):.1f}%')
+
+    if report.get('missing_curves'):
+        lines.append('Missing curves: ' + ', '.join(report.get('missing_curves') or []))
+
+    latest = report.get('latest_attempt') or {}
+    if latest:
+        lines.append('')
+        if latest.get('recorded'):
+            lines.append(f"Latest valid visible curve recorded: {latest.get('curve_type')}.")
+        else:
+            lines.append('Latest sweep was not recorded:')
+            for issue in latest.get('issues') or ['The visible sweep did not match the controlled Mission 30 protocol.']:
+                lines.append(f'- {issue}')
+            if report.get('recorded_curve_count', 0):
+                lines.append('Previously valid Mission 30 threshold evidence remains available.')
+
+    lines.append('')
+    if report.get('evidence_ready'):
+        lines.extend([
+            'Evidence complete.',
+            'Compare the status and growth of the double knockout with wild type and both single knockouts at every matched oxygen capacity.',
+            'Question: At which tested oxygen lower-bound value does the double knockout first become infeasible while all three control genotypes remain viable?',
+        ])
+    else:
+        lines.append('Evidence incomplete.')
+
+    lines.extend([
+        '',
+        'Interpretation note: an INFEASIBLE result means that no flux state satisfies all model constraints; it must not be rewritten as measured growth 0.000.',
+        'The redundancy threshold is conditional on this model, pFBA biomass objective, default base medium, phosphofructokinase pair and tested oxygen capacities.',
+        'All rows come from visible Bound Sweep results and use the existing /simulate web-service contract. No hidden validation simulation is used.',
+    ])
+    return '\n'.join(lines)
+
+
+def _build_mission30_text(report_data=None):
+    return build_mission30_redundancy_threshold_report_text(report_data)

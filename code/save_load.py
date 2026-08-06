@@ -927,3 +927,30 @@ def load_mission29_redundancy_check():
 
 def clear_mission29_redundancy_check():
     _delete_save_artifact('mission29_redundancy_check', 'mission29_redundancy_check.txt')
+
+
+def save_mission30_redundancy_threshold_check(data):
+    if _IS_WEB:
+        _MEMSTORE['mission30_redundancy_threshold_check'] = data
+        return
+    with open(get_save_path('mission30_redundancy_threshold_check.txt'), 'w') as report_file:
+        json.dump(data, report_file)
+
+
+def load_mission30_redundancy_threshold_check():
+    if _IS_WEB:
+        return _MEMSTORE.get('mission30_redundancy_threshold_check')
+    try:
+        with open(get_save_path('mission30_redundancy_threshold_check.txt')) as report_file:
+            return json.load(report_file)
+    except FileNotFoundError:
+        return None
+    except Exception:
+        return None
+
+
+def clear_mission30_redundancy_threshold_check():
+    _delete_save_artifact(
+        'mission30_redundancy_threshold_check',
+        'mission30_redundancy_threshold_check.txt',
+    )

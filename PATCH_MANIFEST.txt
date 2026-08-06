@@ -1,25 +1,10 @@
-Mission 29 — Isoenzyme Redundancy Screen
+Dialogue overflow correction
 
-Added:
+Changed files:
+- code/mission27.py
 - code/mission29.py
-- data/missions/mission29.md
-- tests/test_mission29.py
 
-Updated:
-- code/level.py
-- code/player.py
-- code/window.py
-- code/simulation.py
-- code/save_load.py
-- MISSION_PROGRESS_OVERVIEW.md
-
-Map note:
-- data/map_lb.tmx was not modified. The existing Mission29 object is now wired to Dr. Li.
-
-Web note:
-- Mission 29 reuses the existing visible POST /simulate result and stores JSON-compatible evidence.
-- No mission-specific endpoint, hidden optimisation or browser-side solver was added.
-
-Runtime wiring correction:
-- code/window.py now defines the local Mission 29 report-text adapter used by the New Results screen.
-- tests/test_mission29.py now guards against the underscore-import NameError that caused the first visible Mission 29 run to crash.
+Changes:
+- Shortened the remaining dialogue lines that exceeded the 1280x720 dialogue text area.
+- Preserved all mission logic, progression, scientific validation and save behaviour.
+- The exact long Dr. Li text shown in the screenshot was already absent from the supplied current ZIP.

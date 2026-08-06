@@ -409,6 +409,10 @@ def _build_bound_sweep_report_text(sweep_data):
 def _build_mission26_text(report_data):
     return build_mission26_interaction_report_text(report_data)
 
+
+def _build_mission30_text(report_data):
+    return build_mission30_redundancy_threshold_report_text(report_data)
+
 def _visible_biomass_flux(results):
     """Read predicted biomass from the same visible simulation solution."""
     try:
@@ -830,6 +834,7 @@ class Window:
             ('27', [MISSION27_TARGET_GENE]),
             ('28', [MISSION28_PRIMARY_GENE, *MISSION28_SECONDARY_GENES]),
             ('29', list(MISSION29_SINGLE_GENES)),
+            ('30', [MISSION30_GENE_A, MISSION30_GENE_B]),
         ]
         for mission_id, candidates in gene_mission_candidates:
             if mission_id in self.player.missions_activated and mission_id not in self.player.missions_completed:
@@ -1150,6 +1155,7 @@ class Window:
                 ('O2 genotype interaction: -25, -10, -1, 0', 'oxygen_transition'),
                 ('Glucose limitation: -1000, -500, -100, -50, -10, 0', 'glucose_limitation'),
                 ('Alternative carbon: -20, -10, -5, -1, 0', 'alternative_carbon_limitation'),
+                ('PFK redundancy threshold: -30, -10, -5, -2', 'pfk_redundancy_threshold'),
             ],
             default=0,
             selection_box_height=4,
@@ -1318,12 +1324,14 @@ class Window:
                 else:
                     mission29_data = run_mission29_redundancy_check(self.results)
 
+            mission30_data = None
             bound_sweep_data = None
             mission26_data = None
             bound_sweep_mission_active = (
                 ('23' in self.player.missions_activated and '23' not in self.player.missions_completed)
                 or ('24' in self.player.missions_activated and '24' not in self.player.missions_completed)
                 or ('26' in self.player.missions_activated and '26' not in self.player.missions_completed)
+                or ('30' in self.player.missions_activated and '30' not in self.player.missions_completed)
             )
             if bound_sweep_mission_active:
                 if sys.platform == 'emscripten':
@@ -1354,6 +1362,13 @@ class Window:
                         )
                     else:
                         mission26_data = run_mission26_interaction_curve_check(bound_sweep_data)
+                if '30' in self.player.missions_activated and '30' not in self.player.missions_completed:
+                    if sys.platform == 'emscripten':
+                        mission30_data = run_mission30_redundancy_threshold_check_remote(
+                            BACKEND_URL, bound_sweep_data
+                        )
+                    else:
+                        mission30_data = run_mission30_redundancy_threshold_check(bound_sweep_data)
 
             menu_compare_runs = pygame_menu.Menu(
                 height=720,
@@ -1713,6 +1728,17 @@ class Window:
                     background_color='white',
                     font_size=24,
                     label_id='mission29_redundancy_check'
+                )
+                menu_simul.add.vertical_margin(20)
+
+            if mission30_data is not None:
+                menu_simul.add.label(
+                    _build_mission30_text(mission30_data),
+                    wordwrap=True,
+                    padding=(20, 20, 20, 20),
+                    background_color='white',
+                    font_size=24,
+                    label_id='mission30_redundancy_threshold_check'
                 )
                 menu_simul.add.vertical_margin(20)
 

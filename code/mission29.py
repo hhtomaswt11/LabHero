@@ -8,6 +8,7 @@ from options_values import mytheme
 from functions import animation_text_save
 from button import Button
 from async_menu import run_menu
+from mission30 import Mission30_info
 from utils import *
 from simulation import (
     MISSION29_CHECK_VERSION,
@@ -40,6 +41,7 @@ class Mission29:
         self.font_name = pygame.font.Font(font_path, 24)
         self.timer = Timer(200)
         self.menu29 = Mission29_info(self.toggle_menu, self.player)
+        self.menu30 = Mission30_info(self.toggle_menu, self.player)
         self.pending = None
 
     def input(self):
@@ -61,18 +63,32 @@ class Mission29:
         ]
         active_dialogue = [
             "Mission 29 is active.",
-            "Keep the default aerobic medium fixed and compare matched single and double knockouts.",
-            "A synthetic interaction must be inferred from growth retention and the GPR consequences together.",
+            "Keep the default aerobic medium fixed and compare each matched knockout set.",
+            "Infer redundancy from growth retention and the GPR-disabled reactions.",
         ]
-        completed_dialogue = [
+        mission30_intro_dialogue = [
             f"Excellent work, {self.player.player_name}.",
-            "You distinguished ordinary redundancy from a synthetic-lethal interaction in the tested network.",
-            "My next experiment will test whether such an interaction remains stable when the environment changes.",
+            "You found a redundancy pattern in one aerobic environment.",
+            "Now test whether that conclusion survives progressive oxygen limitation.",
+        ]
+        mission30_active_dialogue = [
+            "Mission 30 is active.",
+            "Build the four matched oxygen curves from the same default base environment.",
+            "Keep INFEASIBLE distinct from a measured growth value of zero.",
+        ]
+        mission30_completed_dialogue = [
+            f"Excellent threshold analysis, {self.player.player_name}.",
+            "You showed that the double-knockout outcome changes as oxygen becomes limiting.",
+            "My final experiment will build on this context-sensitive network behaviour.",
         ]
 
         self.input()
-        if '29' in self.missions_completed:
-            self.menu_message(completed_dialogue, buttons=False)
+        if '30' in self.missions_completed:
+            self.menu_message(mission30_completed_dialogue, buttons=False)
+        elif '30' in self.missions_activated:
+            self.menu_message(mission30_active_dialogue, menu_to_open=self.menu30)
+        elif '29' in self.missions_completed:
+            self.menu_message(mission30_intro_dialogue, menu_to_open=self.menu30)
         elif '29' in self.missions_activated:
             self.menu_message(active_dialogue, menu_to_open=self.menu29)
         elif is_mission29_unlocked(self.missions_completed):
