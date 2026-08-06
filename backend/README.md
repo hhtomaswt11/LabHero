@@ -36,3 +36,25 @@ For successful simulations, the contract separates:
 This distinction is essential for pFBA: its secondary score is not the amount of
 product secreted. The browser and desktop clients consume the same fields rather
 than parsing solver strings differently.
+
+## ROOM reference contract
+
+ROOM runs use an explicit wild-type pFBA reference built before gene knockouts.
+The reference and mutant use independent model copies with the same objective
+and environmental constraints; only the mutant receives the GPR-derived
+reaction closures. Mission 33 uses integer ROOM with `delta=0.03` and
+`epsilon=0.001`. The binary problem is solved with SciPy/HiGHS and a 12-second
+safety limit rather than the default GLPK MILP path, which can stall on the
+aerobic cut-set case.
+
+A successful ROOM response also exposes:
+
+- `reference_method` and `reference_objective_reaction`;
+- `reference_primary_objective_flux` and `reference_cytbd_flux`;
+- `reference_uses_same_environment`;
+- `reference_has_no_gene_knockouts`;
+- `room_delta`, `room_epsilon` and `room_linear`;
+- `room_solver` and `room_time_limit_seconds`.
+
+The ROOM `method_score` is the significant-flux-change criterion and is kept
+separate from the selected objective-reaction flux.

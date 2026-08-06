@@ -1008,3 +1008,30 @@ def clear_mission32_respiratory_cut_set_check():
         'mission32_respiratory_cut_set_check',
         'mission32_respiratory_cut_set_check.txt',
     )
+
+
+def save_mission33_reference_adjustment_check(data):
+    if _IS_WEB:
+        _MEMSTORE['mission33_reference_adjustment_check'] = data
+        return
+    with open(get_save_path('mission33_reference_adjustment_check.txt'), 'w') as report_file:
+        json.dump(data, report_file)
+
+
+def load_mission33_reference_adjustment_check():
+    if _IS_WEB:
+        return _MEMSTORE.get('mission33_reference_adjustment_check')
+    try:
+        with open(get_save_path('mission33_reference_adjustment_check.txt')) as report_file:
+            return json.load(report_file)
+    except FileNotFoundError:
+        return None
+    except Exception:
+        return None
+
+
+def clear_mission33_reference_adjustment_check():
+    _delete_save_artifact(
+        'mission33_reference_adjustment_check',
+        'mission33_reference_adjustment_check.txt',
+    )

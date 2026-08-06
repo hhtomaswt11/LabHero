@@ -8,6 +8,11 @@ import warnings
 from save_load import *
 from options_values import *
 from gpr import disabled_reaction_ids
+from room_milp import (
+    ROOM_HIGHS_SOLVER_NAME,
+    ROOM_HIGHS_TIME_LIMIT_SECONDS,
+    solve_integer_room_highs,
+)
 
 
 # Mission 06 is a controlled multi-knockout strain-design challenge.  The
@@ -113,6 +118,10 @@ MISSION03_GENE_NAMES = {
 }
 
 DISPLAY_ZERO_TOLERANCE = 0.0005
+ROOM_DEFAULT_DELTA = 0.03
+ROOM_DEFAULT_EPSILON = 0.001
+ROOM_DEFAULT_LINEAR = False
+ROOM_REFERENCE_TARGET_REACTION = 'CYTBD'
 
 # The environmental menu currently exposes open/closed toggles rather than
 # numeric inputs.  When a bound already exists in the SBML model, opening it
@@ -1554,16 +1563,94 @@ def _simulate_local_lmoma_with_reference(objective_name, genes, reactions):
     return result, float(method_score), metadata
 
 
+
+def _simulate_local_room_with_reference(objective_name, genes, reactions):
+    """Run integer ROOM against an explicit wild-type pFBA reference.
+
+    The reference uses the selected objective and environment before any gene
+    knockout is applied.  The mutant receives only the GPR-derived reaction
+    closures.  This prevents the fallback reference from being built on the
+    already perturbed model and keeps desktop behaviour aligned with /simulate.
+    """
+    if model is None:
+        raise RuntimeError('A local COBRApy model is required for ROOM simulation.')
+
+    from cobra.flux_analysis import pfba
+
+    environment_constraints = _build_envconditions_from_reactions(reactions, REACTIONS)
+    knocked_out = _knocked_out_genes(genes)
+    disabled_reactions = disabled_reaction_ids(model, knocked_out)
+
+    reference_model = model.copy()
+    reference_model.objective = objective_name
+    _apply_constraints_to_cobra_model(reference_model, environment_constraints)
+    reference_solution = pfba(reference_model)
+    if str(getattr(reference_solution, 'status', '')).lower() != 'optimal':
+        raise RuntimeError(
+            f'Could not construct the wild-type pFBA reference for ROOM: '
+            f'{getattr(reference_solution, "status", "unknown status")}.'
+        )
+
+    mutant_model = model.copy()
+    mutant_model.objective = objective_name
+    _apply_constraints_to_cobra_model(mutant_model, environment_constraints)
+    _apply_constraints_to_cobra_model(
+        mutant_model,
+        {reaction_id: (0.0, 0.0) for reaction_id in disabled_reactions},
+    )
+    result = solve_integer_room_highs(
+        mutant_model,
+        reference_solution,
+        delta=ROOM_DEFAULT_DELTA,
+        epsilon=ROOM_DEFAULT_EPSILON,
+        time_limit_seconds=ROOM_HIGHS_TIME_LIMIT_SECONDS,
+    )
+    if str(getattr(result, 'status', '')).lower() != 'optimal':
+        raise RuntimeError(
+            f'ROOM did not return an optimal solution: '
+            f'{getattr(result, "status", "unknown status")}.'
+        )
+
+    method_score = _as_float_or_none(getattr(result, 'objective_value', None))
+    if method_score is None:
+        raise RuntimeError('ROOM did not expose its significant-change objective value.')
+
+    reference_fluxes = _normalise_flux_mapping(getattr(reference_solution, 'fluxes', None))
+    metadata = {
+        'reference_method': 'pFBA',
+        'reference_objective_reaction': objective_name,
+        'reference_primary_objective_flux': _as_float_or_none(reference_fluxes.get(objective_name)),
+        'reference_uses_same_environment': True,
+        'reference_has_no_gene_knockouts': True,
+        'reference_cytbd_flux': _as_float_or_none(reference_fluxes.get(ROOM_REFERENCE_TARGET_REACTION)),
+        'room_delta': ROOM_DEFAULT_DELTA,
+        'room_epsilon': ROOM_DEFAULT_EPSILON,
+        'room_linear': ROOM_DEFAULT_LINEAR,
+        'room_solver': getattr(result, 'room_solver', ROOM_HIGHS_SOLVER_NAME),
+        'room_time_limit_seconds': getattr(
+            result, 'room_time_limit_seconds', ROOM_HIGHS_TIME_LIMIT_SECONDS
+        ),
+        'gpr_disabled_reactions': sorted(disabled_reactions),
+    }
+    return result, float(method_score), metadata
+
 def _simulate_local_objective(method_name, objective_name, genes, reactions):
     method_name = _normalise_method_name(method_name)
-    if method_name == 'lMOMA':
-        result, _method_score, _metadata = _simulate_local_lmoma_with_reference(
-            objective_name, genes, reactions
-        )
+    if method_name in ('lMOMA', 'ROOM'):
+        if method_name == 'lMOMA':
+            result, _method_score, _metadata = _simulate_local_lmoma_with_reference(
+                objective_name, genes, reactions
+            )
+            display_name = 'Linear MOMA'
+        else:
+            result, _method_score, _metadata = _simulate_local_room_with_reference(
+                objective_name, genes, reactions
+            )
+            display_name = 'ROOM'
         objective_flux = _as_float_or_none(_extract_flux(result, objective_name))
         if objective_flux is None:
             raise RuntimeError(
-                f'Linear MOMA did not expose the objective-reaction flux for {objective_name}.'
+                f'{display_name} did not expose the objective-reaction flux for {objective_name}.'
             )
         return round(float(objective_flux), 3)
 
@@ -1738,6 +1825,8 @@ def _build_method_diagnostics(method_name, objective_name, result, solver_value=
         'method_score_name': _method_score_label(method_name),
         'total_absolute_flux': float(total_absolute_flux) if total_absolute_flux is not None else None,
         'active_reaction_count': int(active_reaction_count) if active_reaction_count is not None else None,
+        'cytbd_flux': float(fluxes.get(ROOM_REFERENCE_TARGET_REACTION))
+        if _as_float_or_none(fluxes.get(ROOM_REFERENCE_TARGET_REACTION)) is not None else None,
     }
 
 
@@ -1853,10 +1942,14 @@ def _build_medium_flux_data(reaction_ids=None, flux_getter=None, error=None):
 
 def _simulate_local_objective_with_production_fluxes(method_name, objective_name, genes, reactions, selected_fluxes):
     method_name = _normalise_method_name(method_name)
-    lmoma_metadata = None
+    reference_metadata = None
     try:
         if method_name == 'lMOMA':
-            result, raw_solver_value, lmoma_metadata = _simulate_local_lmoma_with_reference(
+            result, raw_solver_value, reference_metadata = _simulate_local_lmoma_with_reference(
+                objective_name, genes, reactions
+            )
+        elif method_name == 'ROOM':
+            result, raw_solver_value, reference_metadata = _simulate_local_room_with_reference(
                 objective_name, genes, reactions
             )
         else:
@@ -1891,7 +1984,7 @@ def _simulate_local_objective_with_production_fluxes(method_name, objective_name
             )
         raise
 
-    if method_name == 'lMOMA':
+    if method_name in ('lMOMA', 'ROOM'):
         status = str(getattr(result, 'status', '')).strip().lower()
         solver_value = 'Status: INFEASIBLE' if status == 'infeasible' else raw_solver_value
     else:
@@ -1912,8 +2005,8 @@ def _simulate_local_objective_with_production_fluxes(method_name, objective_name
     diagnostics = _build_method_diagnostics(
         method_name, objective_name, result, solver_value=raw_solver_value
     )
-    if lmoma_metadata:
-        diagnostics.update(lmoma_metadata)
+    if reference_metadata:
+        diagnostics.update(reference_metadata)
     primary_objective_flux = _as_float_or_none(
         diagnostics.get('primary_objective_flux')
     )
@@ -16314,6 +16407,18 @@ def run_simul_remote(backend_url):
             'method_score_name': response.get('method_score_name', _method_score_label(payload['method'])),
             'total_absolute_flux': float(total_absolute_flux) if total_absolute_flux is not None else None,
             'active_reaction_count': int(active_reaction_count) if active_reaction_count is not None else None,
+            'reference_method': response.get('reference_method'),
+            'reference_objective_reaction': response.get('reference_objective_reaction'),
+            'reference_primary_objective_flux': response.get('reference_primary_objective_flux'),
+            'reference_uses_same_environment': response.get('reference_uses_same_environment'),
+            'reference_has_no_gene_knockouts': response.get('reference_has_no_gene_knockouts'),
+            'reference_cytbd_flux': response.get('reference_cytbd_flux'),
+            'room_delta': response.get('room_delta'),
+            'room_epsilon': response.get('room_epsilon'),
+            'room_linear': response.get('room_linear'),
+            'room_solver': response.get('room_solver'),
+            'room_time_limit_seconds': response.get('room_time_limit_seconds'),
+            'cytbd_flux': fluxes.get(ROOM_REFERENCE_TARGET_REACTION),
         }
         visible_result = round(float(objective_raw), 3) if objective_raw is not None else response.get('result')
         return response['objective'], visible_result, production_fluxes, _build_medium_flux_data(
@@ -19091,3 +19196,705 @@ def build_mission32_respiratory_cut_set_report_text(report_data=None):
 
 def _build_mission32_text(report_data=None):
     return build_mission32_respiratory_cut_set_report_text(report_data)
+
+
+# Mission 33 — Reference-State Adjustment Footprint
+# Dr. Chen introduces ROOM with an explicit wild-type pFBA reference.  Two
+# matched oxygen contexts separate a reaction being genetically disabled from
+# that reaction actually carrying flux before the perturbation.
+MISSION33_CHECK_VERSION = 2
+MISSION33_GROWTH_OBJECTIVE = 'BIOMASS_Ecoli_core_w_GAM'
+MISSION33_REFERENCE_METHOD = 'pFBA'
+MISSION33_MUTANT_METHOD = 'ROOM'
+MISSION33_TARGET_REACTION = 'CYTBD'
+MISSION33_TARGET_GENES = ['b0978', 'b0733']
+MISSION33_CONTEXT_ORDER = ['aerobic', 'oxygen_closed']
+MISSION33_CONTEXT_LABELS = {
+    'aerobic': 'Default aerobic reference',
+    'oxygen_closed': 'Oxygen-closed reference',
+}
+MISSION33_RUN_ORDER = [
+    'aerobic_reference',
+    'aerobic_room_mutant',
+    'oxygen_closed_reference',
+    'oxygen_closed_room_mutant',
+]
+MISSION33_RUN_LABELS = {
+    'aerobic_reference': 'Aerobic WT pFBA reference',
+    'aerobic_room_mutant': 'Aerobic ROOM cut-set mutant',
+    'oxygen_closed_reference': 'Oxygen-closed WT pFBA reference',
+    'oxygen_closed_room_mutant': 'Oxygen-closed ROOM cut-set mutant',
+}
+MISSION33_REQUIRED_RUN_COUNT = len(MISSION33_RUN_ORDER)
+MISSION33_ROOM_SCORE_NAME = 'significant_flux_change_score'
+MISSION33_PFBA_SCORE_NAME = 'total_absolute_flux'
+MISSION33_OXYGEN_REACTION = 'EX_o2_e'
+MISSION33_GLUCOSE_REACTION = 'EX_glc__D_e'
+MISSION33_MIN_REFERENCE_GROWTH = 0.05
+MISSION33_MIN_AEROBIC_OXYGEN_UPTAKE = 0.10
+MISSION33_MIN_GLUCOSE_UPTAKE = 0.10
+MISSION33_MAX_ZERO_FLUX = 0.01
+MISSION33_MIN_ACTIVE_REFERENCE_CYTBD = 1.0
+MISSION33_MIN_POSITIVE_ROOM_SCORE = 1.0
+MISSION33_MAX_ZERO_ROOM_SCORE = 0.01
+MISSION33_ROOM_INTEGER_TOLERANCE = 1e-6
+MISSION33_PRIMARY_TOLERANCE = 0.001
+MISSION33_DIAGNOSTIC_TOLERANCE = 0.01
+MISSION33_REFERENCE_MATCH_TOLERANCE = 0.02
+MISSION33_EXPECTED_EXPLANATION = 'reference_target_unused'
+
+
+def is_mission33_unlocked(missions_completed):
+    """Mission 33 follows the completed respiratory cut-set screen."""
+    return '32' in (missions_completed or [])
+
+
+def _mission33_number_or_none(value):
+    numeric = _as_float_or_none(value)
+    return float(numeric) if numeric is not None else None
+
+
+def _mission33_clean_number(value, decimals=6):
+    numeric = float(value)
+    if abs(numeric) < DISPLAY_ZERO_TOLERANCE:
+        numeric = 0.0
+    return round(numeric, decimals)
+
+
+def _mission33_genes_complete(genes):
+    return bool(
+        isinstance(genes, dict)
+        and all(gene_id in genes for gene_id in GENES)
+    )
+
+
+def _mission33_environment_context(reactions):
+    """Classify an exact default or oxygen-closed exchange-bound payload."""
+    bounds_complete = True
+    changes = []
+    for index in range(len(REACTIONS.index)):
+        reaction_id = REACTIONS.index[index]
+        lower_open, upper_open = _reaction_bound_open_states(reactions, index)
+        if lower_open is None or upper_open is None:
+            bounds_complete = False
+            continue
+        default_lower_open = bool(REACTIONS.lb.iloc[index] != 0)
+        default_upper_open = bool(REACTIONS.ub.iloc[index] != 0)
+        if bool(lower_open) != default_lower_open:
+            changes.append((reaction_id, 'lower', bool(lower_open)))
+        if bool(upper_open) != default_upper_open:
+            changes.append((reaction_id, 'upper', bool(upper_open)))
+
+    context = None
+    if bounds_complete and not changes:
+        context = 'aerobic'
+    elif bounds_complete and set(changes) == {(MISSION33_OXYGEN_REACTION, 'lower', False)}:
+        context = 'oxygen_closed'
+
+    return {
+        'bounds_complete': bounds_complete,
+        'changes': [
+            f'{reaction_id} {bound} {"open" if is_open else "closed"}'
+            for reaction_id, bound, is_open in changes
+        ],
+        'context': context,
+        'controlled_environment': context is not None,
+    }
+
+
+def _mission33_run_id(method_name, knocked_out_genes, context):
+    knocked = sorted(knocked_out_genes or [])
+    method_name = _normalise_method_name(method_name)
+    if context not in MISSION33_CONTEXT_ORDER:
+        return None
+    if method_name == MISSION33_REFERENCE_METHOD and not knocked:
+        return f'{context}_reference'
+    if method_name == MISSION33_MUTANT_METHOD and knocked == sorted(MISSION33_TARGET_GENES):
+        return f'{context}_room_mutant'
+    return None
+
+
+def _mission33_disabled_reactions(knocked_out_genes):
+    knocked = sorted(knocked_out_genes or [])
+    if not knocked:
+        return []
+    try:
+        if model is not None:
+            return sorted(disabled_reaction_ids(model, knocked))
+    except Exception:
+        pass
+    return [MISSION33_TARGET_REACTION] if knocked == sorted(MISSION33_TARGET_GENES) else []
+
+
+def _mission33_empty_runs():
+    return {run_id: None for run_id in MISSION33_RUN_ORDER}
+
+
+def _mission33_missing_runs(runs):
+    runs = runs or {}
+    return [run_id for run_id in MISSION33_RUN_ORDER if not isinstance(runs.get(run_id), dict)]
+
+
+def _mission33_empty_report():
+    runs = _mission33_empty_runs()
+    return {
+        'mission_id': '33',
+        'check_version': MISSION33_CHECK_VERSION,
+        'mission_title': 'Reference-State Adjustment Footprint',
+        'growth_objective': MISSION33_GROWTH_OBJECTIVE,
+        'reference_method': MISSION33_REFERENCE_METHOD,
+        'mutant_method': MISSION33_MUTANT_METHOD,
+        'target_reaction': MISSION33_TARGET_REACTION,
+        'target_genes': list(MISSION33_TARGET_GENES),
+        'context_order': list(MISSION33_CONTEXT_ORDER),
+        'context_labels': copy.deepcopy(MISSION33_CONTEXT_LABELS),
+        'run_order': list(MISSION33_RUN_ORDER),
+        'run_labels': copy.deepcopy(MISSION33_RUN_LABELS),
+        'runs': runs,
+        'recorded_run_count': 0,
+        'required_run_count': MISSION33_REQUIRED_RUN_COUNT,
+        'missing_runs': _mission33_missing_runs(runs),
+        'reference_growth_by_context': {},
+        'reference_cytbd_flux_by_context': {},
+        'reference_oxygen_uptake_by_context': {},
+        'room_score_by_context': {},
+        'mutant_growth_by_context': {},
+        'mutant_oxygen_uptake_by_context': {},
+        'cytbd_disabled_by_context': {},
+        'reference_match_by_context': {},
+        'zero_adjustment_contexts': [],
+        'positive_adjustment_contexts': [],
+        'reference_target_inactive_contexts': [],
+        'zero_footprint_explained': False,
+        'expected_explanation': MISSION33_EXPECTED_EXPLANATION,
+        'evidence_ready': False,
+        'answer_ready': False,
+        'ready_to_deliver': False,
+        'current_run_id': None,
+        'current_run_valid': False,
+        'current_run_recorded': False,
+        'current_issues': [],
+        'current_run': None,
+        'latest_attempt': None,
+    }
+
+
+def initialise_mission33_reference_adjustment_screen():
+    report = _mission33_empty_report()
+    save_mission33_reference_adjustment_check(report)
+    return report
+
+
+def _mission33_normalise_runs(existing_report):
+    runs = _mission33_empty_runs()
+    existing = (existing_report or {}).get('runs') or {}
+    for run_id in MISSION33_RUN_ORDER:
+        run = existing.get(run_id)
+        if isinstance(run, dict):
+            runs[run_id] = copy.deepcopy(run)
+    return runs
+
+
+def _mission33_run_fields(objective_result, production_fluxes, medium_fluxes):
+    diagnostics = _method_diagnostics_from_production_data(production_fluxes)
+    raw_fluxes, uptake_fluxes, _secretion_fluxes = _medium_flux_maps(medium_fluxes)
+    objective_value = _mission33_number_or_none(objective_result)
+    objective_raw = _mission33_number_or_none((production_fluxes or {}).get('objective_raw'))
+    biomass_raw = _mission33_number_or_none((production_fluxes or {}).get('biomass_raw'))
+    primary_flux = _mission33_number_or_none(diagnostics.get('primary_objective_flux'))
+    growth_candidates = [value for value in (objective_value, objective_raw, biomass_raw, primary_flux) if value is not None]
+    growth = growth_candidates[0] if growth_candidates else None
+    oxygen_uptake = _mission33_number_or_none(uptake_fluxes.get(MISSION33_OXYGEN_REACTION))
+    glucose_uptake = _mission33_number_or_none(uptake_fluxes.get(MISSION33_GLUCOSE_REACTION))
+    oxygen_raw = _mission33_number_or_none(raw_fluxes.get(MISSION33_OXYGEN_REACTION))
+    return diagnostics, growth_candidates, growth, oxygen_uptake, glucose_uptake, oxygen_raw
+
+
+def _build_mission33_data(
+    method_name,
+    selected_objective,
+    objective_result,
+    genes,
+    reactions,
+    production_fluxes=None,
+    medium_fluxes=None,
+    existing_report=None,
+    objective_error=None,
+):
+    """Validate and accumulate one visible Mission 33 reference or ROOM run."""
+    existing_report = existing_report or {}
+    if (
+        existing_report.get('mission_id') != '33'
+        or existing_report.get('check_version') != MISSION33_CHECK_VERSION
+    ):
+        existing_report = _mission33_empty_report()
+
+    runs = _mission33_normalise_runs(existing_report)
+    method_name = _normalise_method_name(method_name)
+    environment = _mission33_environment_context(reactions)
+    genes_complete = _mission33_genes_complete(genes)
+    knocked_out_genes = sorted(_knocked_out_genes(genes)) if isinstance(genes, dict) else []
+    run_id = _mission33_run_id(method_name, knocked_out_genes, environment.get('context')) if genes_complete else None
+    disabled_reactions = _mission33_disabled_reactions(knocked_out_genes)
+    cytbd_disabled = MISSION33_TARGET_REACTION in disabled_reactions
+    diagnostics, growth_candidates, growth, oxygen_uptake, glucose_uptake, oxygen_raw = _mission33_run_fields(
+        objective_result, production_fluxes, medium_fluxes
+    )
+
+    issues = []
+    if objective_error:
+        issues.append(objective_error)
+    if selected_objective != MISSION33_GROWTH_OBJECTIVE:
+        issues.append(f'Use objective {MISSION33_GROWTH_OBJECTIVE}.')
+    if method_name not in (MISSION33_REFERENCE_METHOD, MISSION33_MUTANT_METHOD):
+        issues.append('Use pFBA for wild-type references and ROOM for the matched cut-set mutants.')
+    if not environment.get('bounds_complete'):
+        issues.append('The complete environmental-bound payload is required.')
+    elif not environment.get('controlled_environment'):
+        issues.append('Use either the completely default medium or close only the EX_o2_e lower bound.')
+    if not genes_complete:
+        issues.append('The complete gene-state payload is required.')
+    elif run_id is None:
+        issues.append('Record wild type with pFBA or exactly b0978+b0733 with ROOM; no other knockout set is allowed.')
+    if isinstance(objective_result, str):
+        if 'infeasible' in objective_result.lower():
+            issues.append('Mission 33 requires a feasible visible solution, not an INFEASIBLE status.')
+        elif objective_result.lower().startswith('error'):
+            issues.append('The visible simulation returned an error.')
+    if not isinstance(production_fluxes, dict) or production_fluxes.get('error'):
+        issues.append('The visible method diagnostics are unavailable.')
+    if not isinstance(medium_fluxes, dict) or medium_fluxes.get('error'):
+        issues.append('The visible exchange-flux evidence is unavailable.')
+    if growth is None:
+        issues.append('The visible biomass flux is missing.')
+    elif growth < 0:
+        issues.append('The biomass flux is not valid.')
+    if len(growth_candidates) >= 2 and max(growth_candidates) - min(growth_candidates) > MISSION33_PRIMARY_TOLERANCE:
+        issues.append('The displayed objective, biomass and primary objective fluxes are inconsistent.')
+    if oxygen_uptake is None or oxygen_raw is None:
+        issues.append('Measured oxygen exchange is required.')
+    if glucose_uptake is None:
+        issues.append('Measured glucose uptake is required.')
+    elif glucose_uptake < MISSION33_MIN_GLUCOSE_UPTAKE:
+        issues.append('The visible solution must retain measurable glucose uptake.')
+
+    method_score = _mission33_number_or_none(diagnostics.get('method_score'))
+    method_score_name = diagnostics.get('method_score_name')
+    total_absolute_flux = _mission33_number_or_none(diagnostics.get('total_absolute_flux'))
+    active_reaction_count = diagnostics.get('active_reaction_count')
+    diagnostic_method = _normalise_method_name(diagnostics.get('method'))
+    diagnostic_objective = diagnostics.get('objective_reaction')
+    current_cytbd_flux = _mission33_number_or_none(diagnostics.get('cytbd_flux'))
+
+    if diagnostic_method != method_name:
+        issues.append('The visible method diagnostics do not match the selected method.')
+    if diagnostic_objective != MISSION33_GROWTH_OBJECTIVE:
+        issues.append('The visible diagnostics do not identify the biomass objective.')
+    if total_absolute_flux is None or active_reaction_count is None:
+        issues.append('Total absolute flux and active-reaction diagnostics are required.')
+
+    context = environment.get('context')
+    if (
+        context == 'aerobic'
+        and method_name == MISSION33_REFERENCE_METHOD
+        and oxygen_uptake is not None
+        and oxygen_uptake < MISSION33_MIN_AEROBIC_OXYGEN_UPTAKE
+    ):
+        issues.append('The default wild-type reference must retain measurable oxygen uptake.')
+    if context == 'oxygen_closed' and oxygen_uptake is not None and oxygen_uptake > MISSION33_MAX_ZERO_FLUX:
+        issues.append('The oxygen-closed context must have zero measured oxygen uptake.')
+
+    reference_metadata = {}
+    if method_name == MISSION33_REFERENCE_METHOD:
+        if knocked_out_genes:
+            issues.append('A pFBA reference must be wild type.')
+        if method_score is None or method_score_name != MISSION33_PFBA_SCORE_NAME:
+            issues.append('The pFBA reference must expose its total-absolute-flux criterion.')
+        elif total_absolute_flux is not None and abs(method_score - total_absolute_flux) > MISSION33_DIAGNOSTIC_TOLERANCE:
+            issues.append('The pFBA score is inconsistent with total absolute flux.')
+        if growth is not None and growth < MISSION33_MIN_REFERENCE_GROWTH:
+            issues.append('The wild-type reference must retain viable predicted growth.')
+        if current_cytbd_flux is None:
+            issues.append('The reference result must expose the visible CYTBD flux.')
+        if cytbd_disabled:
+            issues.append('CYTBD must remain genetically available in the wild-type reference.')
+    elif method_name == MISSION33_MUTANT_METHOD:
+        if knocked_out_genes != sorted(MISSION33_TARGET_GENES):
+            issues.append('ROOM must use exactly the b0978+b0733 cut set.')
+        if not cytbd_disabled:
+            issues.append('The cut-set mutant must disable CYTBD through the complete GPR.')
+        if method_score is None or method_score_name != MISSION33_ROOM_SCORE_NAME:
+            issues.append('ROOM must expose a numeric significant-flux-change score.')
+        elif method_score < -MISSION33_MAX_ZERO_ROOM_SCORE:
+            issues.append('The ROOM score cannot be negative.')
+        elif abs(method_score - round(method_score)) > MISSION33_ROOM_INTEGER_TOLERANCE:
+            issues.append('Integer ROOM must expose an integer significant-change count.')
+        if current_cytbd_flux is None:
+            issues.append('The ROOM result must expose the visible CYTBD flux.')
+        elif abs(current_cytbd_flux) > MISSION33_MAX_ZERO_FLUX:
+            issues.append('CYTBD flux must be zero after the cut-set knockout.')
+        reference_metadata = {
+            'reference_method': diagnostics.get('reference_method'),
+            'reference_objective_reaction': diagnostics.get('reference_objective_reaction'),
+            'reference_primary_objective_flux': _mission33_number_or_none(diagnostics.get('reference_primary_objective_flux')),
+            'reference_uses_same_environment': diagnostics.get('reference_uses_same_environment'),
+            'reference_has_no_gene_knockouts': diagnostics.get('reference_has_no_gene_knockouts'),
+            'reference_cytbd_flux': _mission33_number_or_none(diagnostics.get('reference_cytbd_flux')),
+            'room_delta': _mission33_number_or_none(diagnostics.get('room_delta')),
+            'room_epsilon': _mission33_number_or_none(diagnostics.get('room_epsilon')),
+            'room_linear': diagnostics.get('room_linear'),
+            'room_solver': diagnostics.get('room_solver'),
+            'room_time_limit_seconds': _mission33_number_or_none(
+                diagnostics.get('room_time_limit_seconds')
+            ),
+        }
+        if _normalise_method_name(reference_metadata['reference_method']) != MISSION33_REFERENCE_METHOD:
+            issues.append('ROOM must identify a wild-type pFBA reference.')
+        if reference_metadata['reference_objective_reaction'] != MISSION33_GROWTH_OBJECTIVE:
+            issues.append('The ROOM reference must use the biomass objective.')
+        if reference_metadata['reference_primary_objective_flux'] is None:
+            issues.append('The ROOM reference biomass flux is missing.')
+        if reference_metadata['reference_cytbd_flux'] is None:
+            issues.append('The ROOM reference CYTBD flux is missing.')
+        if reference_metadata['reference_uses_same_environment'] is not True:
+            issues.append('The ROOM reference must use the same environment as the mutant.')
+        if reference_metadata['reference_has_no_gene_knockouts'] is not True:
+            issues.append('The ROOM reference must be computed before gene knockouts.')
+        if reference_metadata['room_linear'] is not ROOM_DEFAULT_LINEAR:
+            issues.append('Use integer ROOM, not the linear relaxation.')
+        if reference_metadata['room_delta'] is None or abs(reference_metadata['room_delta'] - ROOM_DEFAULT_DELTA) > 1e-9:
+            issues.append('The ROOM delta parameter is missing or incorrect.')
+        if reference_metadata['room_epsilon'] is None or abs(reference_metadata['room_epsilon'] - ROOM_DEFAULT_EPSILON) > 1e-9:
+            issues.append('The ROOM epsilon parameter is missing or incorrect.')
+        if oxygen_uptake is not None and oxygen_uptake > MISSION33_MAX_ZERO_FLUX:
+            issues.append('The CYTBD cut-set mutant must have zero measured oxygen uptake in both tested contexts.')
+
+    current_run_valid = bool(run_id and not issues)
+    current_run = None
+    current_run_recorded = False
+    if current_run_valid:
+        current_run = {
+            'run_id': run_id,
+            'context': context,
+            'run_type': 'reference' if run_id.endswith('_reference') else 'room_mutant',
+            'method': method_name,
+            'objective': selected_objective,
+            'knocked_out_genes': list(knocked_out_genes),
+            'disabled_reactions': list(disabled_reactions),
+            'cytbd_disabled': bool(cytbd_disabled),
+            'growth': _mission33_clean_number(growth),
+            'oxygen_uptake': _mission33_clean_number(oxygen_uptake),
+            'glucose_uptake': _mission33_clean_number(glucose_uptake),
+            'cytbd_flux': _mission33_clean_number(current_cytbd_flux) if current_cytbd_flux is not None else None,
+            'method_score': _mission33_clean_number(method_score) if method_score is not None else None,
+            'method_score_name': method_score_name,
+            'total_absolute_flux': _mission33_clean_number(total_absolute_flux),
+            'active_reaction_count': int(active_reaction_count),
+            'environment_changes': list(environment.get('changes') or []),
+            'reference_metadata': copy.deepcopy(reference_metadata),
+        }
+        runs[run_id] = current_run
+        current_run_recorded = True
+
+    reference_growth_by_context = {}
+    reference_cytbd_flux_by_context = {}
+    reference_oxygen_uptake_by_context = {}
+    room_score_by_context = {}
+    mutant_growth_by_context = {}
+    mutant_oxygen_uptake_by_context = {}
+    cytbd_disabled_by_context = {}
+    reference_match_by_context = {}
+    zero_adjustment_contexts = []
+    positive_adjustment_contexts = []
+    reference_target_inactive_contexts = []
+
+    for context_id in MISSION33_CONTEXT_ORDER:
+        reference_run = runs.get(f'{context_id}_reference')
+        mutant_run = runs.get(f'{context_id}_room_mutant')
+        if isinstance(reference_run, dict):
+            reference_growth_by_context[context_id] = reference_run.get('growth')
+            reference_cytbd_flux_by_context[context_id] = reference_run.get('cytbd_flux')
+            reference_oxygen_uptake_by_context[context_id] = reference_run.get('oxygen_uptake')
+            ref_cytbd = _mission33_number_or_none(reference_run.get('cytbd_flux'))
+            if ref_cytbd is not None and abs(ref_cytbd) <= MISSION33_MAX_ZERO_FLUX:
+                reference_target_inactive_contexts.append(context_id)
+        if isinstance(mutant_run, dict):
+            room_score_by_context[context_id] = mutant_run.get('method_score')
+            mutant_growth_by_context[context_id] = mutant_run.get('growth')
+            mutant_oxygen_uptake_by_context[context_id] = mutant_run.get('oxygen_uptake')
+            cytbd_disabled_by_context[context_id] = bool(mutant_run.get('cytbd_disabled'))
+            score = _mission33_number_or_none(mutant_run.get('method_score'))
+            if score is not None and score <= MISSION33_MAX_ZERO_ROOM_SCORE:
+                zero_adjustment_contexts.append(context_id)
+            elif score is not None and score >= MISSION33_MIN_POSITIVE_ROOM_SCORE:
+                positive_adjustment_contexts.append(context_id)
+        if isinstance(reference_run, dict) and isinstance(mutant_run, dict):
+            metadata = mutant_run.get('reference_metadata') or {}
+            metadata_growth = _mission33_number_or_none(metadata.get('reference_primary_objective_flux'))
+            metadata_cytbd = _mission33_number_or_none(metadata.get('reference_cytbd_flux'))
+            visible_growth = _mission33_number_or_none(reference_run.get('growth'))
+            visible_cytbd = _mission33_number_or_none(reference_run.get('cytbd_flux'))
+            growth_match = (
+                metadata_growth is not None and visible_growth is not None
+                and abs(metadata_growth - visible_growth) <= MISSION33_REFERENCE_MATCH_TOLERANCE
+            )
+            cytbd_match = (
+                metadata_cytbd is not None and visible_cytbd is not None
+                and abs(metadata_cytbd - visible_cytbd) <= MISSION33_REFERENCE_MATCH_TOLERANCE
+            )
+            reference_match_by_context[context_id] = bool(growth_match and cytbd_match)
+
+    missing_runs = _mission33_missing_runs(runs)
+    recorded_run_count = MISSION33_REQUIRED_RUN_COUNT - len(missing_runs)
+    all_runs_present = not missing_runs
+    aerobic_pattern = bool(
+        _mission33_number_or_none(reference_cytbd_flux_by_context.get('aerobic')) is not None
+        and abs(float(reference_cytbd_flux_by_context['aerobic'])) >= MISSION33_MIN_ACTIVE_REFERENCE_CYTBD
+        and _mission33_number_or_none(room_score_by_context.get('aerobic')) is not None
+        and float(room_score_by_context['aerobic']) >= MISSION33_MIN_POSITIVE_ROOM_SCORE
+        and _mission33_number_or_none(reference_oxygen_uptake_by_context.get('aerobic')) is not None
+        and float(reference_oxygen_uptake_by_context['aerobic']) >= MISSION33_MIN_AEROBIC_OXYGEN_UPTAKE
+    )
+    oxygen_closed_pattern = bool(
+        _mission33_number_or_none(reference_cytbd_flux_by_context.get('oxygen_closed')) is not None
+        and abs(float(reference_cytbd_flux_by_context['oxygen_closed'])) <= MISSION33_MAX_ZERO_FLUX
+        and _mission33_number_or_none(room_score_by_context.get('oxygen_closed')) is not None
+        and float(room_score_by_context['oxygen_closed']) <= MISSION33_MAX_ZERO_ROOM_SCORE
+        and _mission33_number_or_none(reference_oxygen_uptake_by_context.get('oxygen_closed')) is not None
+        and float(reference_oxygen_uptake_by_context['oxygen_closed']) <= MISSION33_MAX_ZERO_FLUX
+    )
+    mutants_supported = bool(
+        all(cytbd_disabled_by_context.get(context_id) for context_id in MISSION33_CONTEXT_ORDER)
+        and all(
+            _mission33_number_or_none(mutant_oxygen_uptake_by_context.get(context_id)) is not None
+            and float(mutant_oxygen_uptake_by_context[context_id]) <= MISSION33_MAX_ZERO_FLUX
+            for context_id in MISSION33_CONTEXT_ORDER
+        )
+    )
+    references_matched = bool(
+        all(reference_match_by_context.get(context_id) for context_id in MISSION33_CONTEXT_ORDER)
+    )
+    zero_footprint_explained = bool(
+        zero_adjustment_contexts == ['oxygen_closed']
+        and reference_target_inactive_contexts == ['oxygen_closed']
+        and positive_adjustment_contexts == ['aerobic']
+    )
+    evidence_ready = bool(
+        all_runs_present
+        and aerobic_pattern
+        and oxygen_closed_pattern
+        and mutants_supported
+        and references_matched
+        and zero_footprint_explained
+    )
+
+    latest_attempt = {
+        'run_id': run_id,
+        'context': context,
+        'method': method_name,
+        'knocked_out_genes': list(knocked_out_genes),
+        'valid': current_run_valid,
+        'recorded': current_run_recorded,
+        'issues': list(issues),
+    }
+
+    report = _mission33_empty_report()
+    report.update({
+        'runs': runs,
+        'recorded_run_count': recorded_run_count,
+        'missing_runs': missing_runs,
+        'reference_growth_by_context': reference_growth_by_context,
+        'reference_cytbd_flux_by_context': reference_cytbd_flux_by_context,
+        'reference_oxygen_uptake_by_context': reference_oxygen_uptake_by_context,
+        'room_score_by_context': room_score_by_context,
+        'mutant_growth_by_context': mutant_growth_by_context,
+        'mutant_oxygen_uptake_by_context': mutant_oxygen_uptake_by_context,
+        'cytbd_disabled_by_context': cytbd_disabled_by_context,
+        'reference_match_by_context': reference_match_by_context,
+        'zero_adjustment_contexts': zero_adjustment_contexts,
+        'positive_adjustment_contexts': positive_adjustment_contexts,
+        'reference_target_inactive_contexts': reference_target_inactive_contexts,
+        'zero_footprint_explained': zero_footprint_explained,
+        'evidence_ready': evidence_ready,
+        'answer_ready': evidence_ready,
+        'ready_to_deliver': evidence_ready,
+        'current_run_id': run_id,
+        'current_run_valid': current_run_valid,
+        'current_run_recorded': current_run_recorded,
+        'current_issues': list(issues),
+        'current_run': current_run,
+        'latest_attempt': latest_attempt,
+    })
+    save_mission33_reference_adjustment_check(report)
+    return report
+
+
+def run_mission33_reference_adjustment_check(simulation_results=None):
+    """Validate the already visible Mission 33 result without re-simulating."""
+    method_name, selected_objective, genes, reactions = _read_simulation_file()
+    objective_result = None
+    production_fluxes = None
+    medium_fluxes = None
+    objective_error = None
+    try:
+        if simulation_results is not None:
+            result_objective = simulation_results[0]
+            objective_result = simulation_results[1]
+            production_fluxes = simulation_results[2] if len(simulation_results) > 2 else None
+            medium_fluxes = simulation_results[3] if len(simulation_results) > 3 else None
+            if result_objective != selected_objective:
+                objective_error = 'The displayed simulation result does not match the currently selected objective.'
+        else:
+            objective_error = 'Run a visible Mission 33 simulation before recording evidence.'
+    except Exception:
+        objective_error = 'Could not read the current visible Mission 33 simulation result.'
+
+    return _build_mission33_data(
+        method_name,
+        selected_objective,
+        objective_result,
+        genes,
+        reactions,
+        production_fluxes=production_fluxes,
+        medium_fluxes=medium_fluxes,
+        existing_report=load_mission33_reference_adjustment_check() or {},
+        objective_error=objective_error,
+    )
+
+
+def run_mission33_reference_adjustment_check_remote(backend_url, simulation_results=None):
+    """Browser-parity wrapper that reuses the same visible /simulate response."""
+    del backend_url
+    return run_mission33_reference_adjustment_check(simulation_results)
+
+
+def _normalise_mission33_text(value):
+    text = unicodedata.normalize('NFKD', str(value or ''))
+    return ''.join(char for char in text if not unicodedata.combining(char)).lower().strip()
+
+
+def normalise_mission33_answer(answer):
+    """Accept a short functional-state description for the matched reference."""
+    text = _normalise_mission33_text(answer)
+    if not text:
+        return None
+
+    compact = re.sub(r'[^a-z0-9]+', ' ', text).strip()
+    accepted_words = {
+        'unused',
+        'idle',
+        'not used',
+        'functionally unused',
+        'unutilised',
+        'unutilized',
+        'nao usada',
+        'nao usado',
+        'nao utilizada',
+        'nao utilizado',
+        'sem uso',
+    }
+    if compact in accepted_words:
+        return MISSION33_EXPECTED_EXPLANATION
+    return None
+
+
+def mission33_answer_matches(answer, report_data=None):
+    report = report_data if report_data is not None else (load_mission33_reference_adjustment_check() or {})
+    return bool(
+        report.get('mission_id') == '33'
+        and report.get('check_version') == MISSION33_CHECK_VERSION
+        and report.get('answer_ready')
+        and report.get('zero_footprint_explained')
+        and normalise_mission33_answer(answer) == MISSION33_EXPECTED_EXPLANATION
+    )
+
+
+def _mission33_value_text(run, key):
+    if not isinstance(run, dict):
+        return 'pending'
+    value = _mission33_number_or_none(run.get(key))
+    return 'pending' if value is None else f'{value:.3f}'
+
+
+def build_mission33_reference_adjustment_report_text(report_data=None):
+    report = report_data or {}
+    if not report:
+        return (
+            'No Mission 33 reference-state evidence has been recorded yet.\n\n'
+            'Create one wild-type pFBA reference and one b0978+b0733 ROOM mutant in each matched oxygen context. '
+            'ROOM must use an explicit wild-type pFBA reference from the same environment.\n\n'
+            'Compare reference CYTBD flux with the significant-change score; the ROOM score is not biomass.'
+        )
+    if report.get('mission_id') != '33' or report.get('check_version') != MISSION33_CHECK_VERSION:
+        return 'Mission 33 Reference-State Adjustment Footprint\n\nCurrent-format ROOM evidence has not been recorded yet.'
+
+    lines = [
+        'Mission 33 Reference-State Adjustment Footprint',
+        '',
+        'Controlled matched protocol:',
+        f'- Objective: {MISSION33_GROWTH_OBJECTIVE}',
+        '- Contexts: completely default aerobic and oxygen lower bound closed',
+        '- Reference in each context: wild-type pFBA',
+        '- Perturbation in each context: integer ROOM with exact b0978+b0733',
+        f'- ROOM parameters: delta {ROOM_DEFAULT_DELTA:g}, epsilon {ROOM_DEFAULT_EPSILON:g}, linear {ROOM_DEFAULT_LINEAR}',
+        '- ROOM reference: same environment, biomass objective, no gene knockouts',
+        '',
+        f"Runs recorded: {report.get('recorded_run_count', 0)}/{report.get('required_run_count', MISSION33_REQUIRED_RUN_COUNT)}",
+        '',
+        'Reference-state comparison:',
+        'Context | ref growth | ref CYTBD | ROOM score | mutant growth | mutant O2 uptake | CYTBD disabled',
+    ]
+    runs = report.get('runs') or {}
+    for context in MISSION33_CONTEXT_ORDER:
+        reference_run = runs.get(f'{context}_reference')
+        mutant_run = runs.get(f'{context}_room_mutant')
+        disabled_text = (
+            'yes' if isinstance(mutant_run, dict) and mutant_run.get('cytbd_disabled')
+            else 'no' if isinstance(mutant_run, dict) else 'pending'
+        )
+        lines.append(
+            f"{MISSION33_CONTEXT_LABELS[context]} | "
+            f"{_mission33_value_text(reference_run, 'growth')} | "
+            f"{_mission33_value_text(reference_run, 'cytbd_flux')} | "
+            f"{_mission33_value_text(mutant_run, 'method_score')} | "
+            f"{_mission33_value_text(mutant_run, 'growth')} | "
+            f"{_mission33_value_text(mutant_run, 'oxygen_uptake')} | {disabled_text}"
+        )
+
+    latest = report.get('latest_attempt') or {}
+    if latest:
+        lines.append('')
+        if latest.get('recorded'):
+            lines.append(f"Latest valid visible run recorded: {latest.get('run_id')}.")
+        else:
+            lines.append('Latest run was not recorded:')
+            for issue in latest.get('issues') or ['The visible run did not match the controlled Mission 33 protocol.']:
+                lines.append(f'- {issue}')
+            if report.get('recorded_run_count', 0):
+                lines.append('Previously valid Mission 33 reference-state evidence remains available.')
+
+    lines.append('')
+    if report.get('evidence_ready'):
+        lines.extend([
+            'Evidence complete.',
+            'Match each visible pFBA reference to the reference metadata carried by its ROOM result.',
+            'Compare reference CYTBD flux with the corresponding significant-change score.',
+            'Question: Complete with one word: in the zero-score reference, CYTBD was already ______.',
+        ])
+    else:
+        lines.append('Evidence incomplete.')
+        if report.get('missing_runs'):
+            lines.append('Missing runs: ' + ', '.join(report.get('missing_runs') or []))
+
+    lines.extend([
+        '',
+        'Interpretation note: ROOM minimises significant flux changes relative to an explicit pre-knockout reference. Its score is not biomass, total absolute flux or the number of active reactions.',
+        'A zero ROOM score does not mean that no genes were deleted. It means that the mutant can remain within the configured change tolerances relative to the matched reference.',
+        'Genetic availability, reference-state use and post-perturbation adjustment are distinct concepts. The conclusion is conditional on this model, objective, environments and ROOM parameters.',
+        'Every mission row comes from a visible /simulate result. The internal pFBA reference is part of ROOM itself and is exposed through result metadata; no hidden validation run is used.',
+    ])
+    return '\n'.join(lines)
+
+
+def _build_mission33_text(report_data=None):
+    return build_mission33_reference_adjustment_report_text(report_data)

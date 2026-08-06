@@ -62,7 +62,13 @@ The lMOMA adjustment score measures distance from the reference solution; it is 
 
 ### ROOM: Regulatory On/Off Minimization
 
-ROOM predicts a post-perturbation state while minimizing the number of significant flux changes relative to a reference. It operates on flux changes and should not be interpreted as directly turning genes on or off.
+ROOM predicts a post-perturbation flux state while minimizing the number of significant changes relative to an explicit pre-knockout reference. In LabHero, the reference is a wild-type pFBA solution computed before gene knockouts, with the same objective and the same environment as the mutant.
+
+The integer ROOM formulation uses binary change indicators. LabHero records `delta = 0.03` and `epsilon = 0.001`, and does not use the linear relaxation for Mission 33. The significant-change score is not biomass, total absolute flux or the number of active reactions. Inspect the biomass flux separately.
+
+For responsive desktop and web execution, LabHero solves this exact binary formulation with SciPy/HiGHS instead of the slower default GLPK MILP path. A 12-second safety limit prevents a difficult run from freezing the game indefinitely; the E. coli core Mission 33 aerobic run normally completes in a few seconds. The result screen exposes the solver name and safety limit.
+
+A zero score does not mean that no perturbation occurred. It means that the mutant can stay within ROOM's change tolerances relative to the matched reference. A reaction may be genetically disabled yet require no flux adjustment when it already carried zero flux in the reference. ROOM operates on flux changes and should not be interpreted as directly turning genes on or off.
 
 
 

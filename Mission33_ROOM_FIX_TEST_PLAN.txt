@@ -1,0 +1,75 @@
+MISSION 33 — ROOM PERFORMANCE FIX: MANUAL VALIDATION
+
+Purpose
+-------
+Validate the corrected aerobic integer ROOM run without repeating evidence that
+was already accepted. The uploaded save currently showed 3/4 runs, with only
+`aerobic_room_mutant` missing.
+
+1. Start from the preserved 3/4 evidence
+----------------------------------------
+Open Mission 33 and confirm:
+- Runs recorded: 3/4
+- Missing runs: aerobic_room_mutant
+- The oxygen-closed ROOM row remains recorded with score 0.000, mutant growth
+  about 0.205, O2 uptake 0.000 and CYTBD disabled yes.
+
+2. Configure the one missing run
+--------------------------------
+Simulation method: ROOM
+Objective: BIOMASS_Ecoli_core_w_GAM
+Environment: completely default; EX_o2_e lower bound OPEN/default
+Genes OFF: exactly b0978 and b0733
+All other genes: ON
+Production Flux: no selection required
+
+Open Simulation Summary before running. It must show exactly:
+- cbdA (b0978)
+- cydA (b0733)
+No other knockout and no environmental change.
+
+3. Run and performance check
+----------------------------
+Click Run Simulation once.
+Expected behavior:
+- The game should remain usable and the solve should normally finish in a few
+  seconds rather than producing the operating-system “not responding” dialog.
+- A hard 12-second safety limit prevents an indefinite MILP solve. If the limit
+  is reached, New Results should show a controlled Simulation error instead of
+  terminating the game.
+
+4. Expected aerobic ROOM evidence
+---------------------------------
+Open New Results. Expect approximately:
+- Significant flux changes: 45.000
+- Reference method: pFBA
+- Reference biomass flux: 0.874
+- Reference CYTBD flux: 43.599
+- Mutant CYTBD flux: 0.000
+- Same environment: yes
+- Reference genotype: wild type
+- ROOM parameters: delta 0.03, epsilon 0.001, integer yes
+- MILP solver: scipy-highs-milp (safety limit 12 s)
+
+The mutant biomass is not a rigid mission threshold. With the corrected HiGHS
+solution it is expected near 0.064, but another ROOM-optimal flux distribution
+may differ slightly while retaining score 45, CYTBD 0 and O2 uptake 0.
+
+5. Final Mission 33 report
+--------------------------
+After the run, confirm:
+- Runs recorded: 4/4
+- Evidence complete
+- Aerobic row: ref CYTBD 43.599, ROOM score 45, mutant O2 uptake 0, CYTBD disabled yes
+- Oxygen-closed row: ref CYTBD 0.000, ROOM score 0, mutant O2 uptake 0, CYTBD disabled yes
+
+6. Answer
+---------
+Submit: unused
+Expected: Congratulations! Mission 33 completed!
+
+7. Optional preservation test
+-----------------------------
+After 4/4, make one invalid attempt (for example ROOM with only b0978 OFF).
+The report must keep 4/4 and state that the latest run was not recorded while
+previously valid Mission 33 evidence remains available.

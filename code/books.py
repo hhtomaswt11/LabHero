@@ -454,7 +454,7 @@ class Books:
 
             Linear MOMA (lMOMA): predicts a post-perturbation flux distribution by minimizing the total absolute deviation from an explicit pre-perturbation reference state. Its adjustment score is not biomass; inspect the biomass reaction separately.
 
-            ROOM: predicts a post-perturbation state while minimizing the number of significant flux changes relative to a reference. It does not directly switch genes on or off.
+            ROOM: predicts a post-perturbation state while minimizing significant flux changes relative to an explicit pre-knockout wild-type pFBA reference from the same environment. LabHero uses integer ROOM with delta 0.03 and epsilon 0.001, solved by a bounded-time SciPy/HiGHS MILP so the game does not wait indefinitely. Its score is not biomass, total absolute flux or active-reaction count; inspect biomass separately. A zero score can occur when the disabled reaction already carried zero reference flux.
 
             """,
             max_char=-1,

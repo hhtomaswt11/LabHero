@@ -1,17 +1,26 @@
 from pathlib import Path
 
-from cobra.flux_analysis import moma
+from cobra.flux_analysis import moma, pfba
 from cobra.io import read_sbml_model
 from mewpy.simulation import get_simulator
 
 from app.schemas import SimulateRequest, SimulateResponse
 from app.gpr import disabled_reaction_ids
+from app.room_milp import (
+    ROOM_HIGHS_SOLVER_NAME,
+    ROOM_HIGHS_TIME_LIMIT_SECONDS,
+    solve_integer_room_highs,
+)
 
 _MODEL_PATH = Path(__file__).resolve().parent.parent / "models" / "e_coli_core.xml.gz"
 _model = read_sbml_model(str(_MODEL_PATH))
 _simul = get_simulator(_model)
 _genes = _simul.find_genes()
 _DISPLAY_ZERO_TOLERANCE = 0.0005
+_ROOM_DELTA = 0.03
+_ROOM_EPSILON = 0.001
+_ROOM_LINEAR = False
+_ROOM_REFERENCE_REACTION = "CYTBD"
 
 
 def _clean_numeric(value: float, decimals: int) -> float:
@@ -116,6 +125,65 @@ def _simulate_lmoma_with_explicit_reference(
     return result
 
 
+def _simulate_room_with_explicit_reference(
+    objective: str,
+    environmental_constraints: dict[str, tuple[float, float]],
+    disabled_reactions: list[str],
+):
+    """Run integer ROOM against a wild-type pFBA reference in the same medium.
+
+    ROOM is a reference-state method.  Calling it after knockout constraints
+    have already been applied and without an explicit solution lets the solver
+    build a mutant reference, which can collapse the adjustment score to zero.
+    The reference and mutant therefore use separate model copies: the same
+    objective and environmental bounds, but GPR-derived reaction closures only
+    on the mutant.
+    """
+    reference_model = _model.copy()
+    reference_model.objective = objective
+    _apply_constraints(reference_model, environmental_constraints)
+    reference_solution = pfba(reference_model)
+    if str(reference_solution.status).lower() != "optimal":
+        raise RuntimeError(
+            f"Could not construct the wild-type pFBA reference for ROOM: {reference_solution.status}."
+        )
+
+    mutant_model = _model.copy()
+    mutant_model.objective = objective
+    _apply_constraints(mutant_model, environmental_constraints)
+    _apply_constraints(
+        mutant_model,
+        {reaction_id: (0.0, 0.0) for reaction_id in disabled_reactions},
+    )
+    result = solve_integer_room_highs(
+        mutant_model,
+        reference_solution,
+        delta=_ROOM_DELTA,
+        epsilon=_ROOM_EPSILON,
+        time_limit_seconds=ROOM_HIGHS_TIME_LIMIT_SECONDS,
+    )
+    if str(result.status).lower() != "optimal":
+        raise RuntimeError(f"ROOM did not return an optimal solution: {result.status}.")
+
+    reference_fluxes = _extract_fluxes(reference_solution) or {}
+    metadata = {
+        "reference_method": "pFBA",
+        "reference_objective_reaction": objective,
+        "reference_primary_objective_flux": reference_fluxes.get(objective),
+        "reference_uses_same_environment": True,
+        "reference_has_no_gene_knockouts": True,
+        "reference_cytbd_flux": reference_fluxes.get(_ROOM_REFERENCE_REACTION),
+        "room_delta": _ROOM_DELTA,
+        "room_epsilon": _ROOM_EPSILON,
+        "room_linear": _ROOM_LINEAR,
+        "room_solver": getattr(result, "room_solver", ROOM_HIGHS_SOLVER_NAME),
+        "room_time_limit_seconds": getattr(
+            result, "room_time_limit_seconds", ROOM_HIGHS_TIME_LIMIT_SECONDS
+        ),
+    }
+    return result, metadata
+
+
 def simulate(req: SimulateRequest) -> SimulateResponse:
     try:
         environmental_constraints = {k: tuple(v) for k, v in req.env_conditions.items()}
@@ -126,8 +194,16 @@ def simulate(req: SimulateRequest) -> SimulateResponse:
         ]
         disabled_reactions = disabled_reaction_ids(_model, known_knockouts)
 
+        method_metadata: dict[str, object] = {}
         if req.method == "lMOMA":
             result = _simulate_lmoma_with_explicit_reference(
+                req.objective,
+                environmental_constraints,
+                disabled_reactions,
+            )
+            solver_value = getattr(result, "objective_value", None)
+        elif req.method == "ROOM":
+            result, method_metadata = _simulate_room_with_explicit_reference(
                 req.objective,
                 environmental_constraints,
                 disabled_reactions,
@@ -178,6 +254,7 @@ def simulate(req: SimulateRequest) -> SimulateResponse:
             active_reaction_count=active_reaction_count,
             status="ok",
             fluxes=fluxes,
+            **method_metadata,
         )
 
     except Exception as e:

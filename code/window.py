@@ -421,6 +421,10 @@ def _build_mission31_text(report_data):
 def _build_mission32_text(report_data):
     return build_mission32_respiratory_cut_set_report_text(report_data)
 
+
+def _build_mission33_text(report_data):
+    return build_mission33_reference_adjustment_report_text(report_data)
+
 def _visible_biomass_flux(results):
     """Read predicted biomass from the same visible simulation solution."""
     try:
@@ -478,7 +482,42 @@ def _build_simulation_results_text(results):
         else:
             text += '\nTotal absolute flux adjustment: not available'
         text += '\nThe adjustment score is not biomass; biomass is the selected reaction flux above.'
-
+    elif method_name == 'ROOM':
+        score = diagnostics.get('method_score')
+        text += '\n\nROOM significant-change criterion:'
+        if score is not None:
+            text += f'\nSignificant flux changes: {_clean_report_number(score):.3f}'
+        else:
+            text += '\nSignificant flux changes: not available'
+        text += '\n\nExplicit reference:'
+        text += f"\nMethod: {diagnostics.get('reference_method') or 'not available'}"
+        reference_growth = diagnostics.get('reference_primary_objective_flux')
+        reference_cytbd = diagnostics.get('reference_cytbd_flux')
+        if reference_growth is not None:
+            text += f'\nReference biomass flux: {_clean_report_number(reference_growth):.3f}'
+        else:
+            text += '\nReference biomass flux: not available'
+        if reference_cytbd is not None:
+            text += f'\nReference CYTBD flux: {_clean_report_number(reference_cytbd):.3f}'
+        else:
+            text += '\nReference CYTBD flux: not available'
+        mutant_cytbd = diagnostics.get('cytbd_flux')
+        if mutant_cytbd is not None:
+            text += f'\nMutant CYTBD flux: {_clean_report_number(mutant_cytbd):.3f}'
+        else:
+            text += '\nMutant CYTBD flux: not available'
+        same_environment = diagnostics.get('reference_uses_same_environment')
+        no_knockouts = diagnostics.get('reference_has_no_gene_knockouts')
+        text += f"\nSame environment: {'yes' if same_environment is True else 'no'}"
+        text += f"\nReference genotype: {'wild type' if no_knockouts is True else 'not confirmed'}"
+        text += f"\nROOM parameters: delta {diagnostics.get('room_delta')}, epsilon {diagnostics.get('room_epsilon')}, integer {'yes' if diagnostics.get('room_linear') is False else 'no'}"
+        solver_name = diagnostics.get('room_solver')
+        if solver_name:
+            text += f'\nMILP solver: {solver_name}'
+        time_limit = diagnostics.get('room_time_limit_seconds')
+        if time_limit is not None:
+            text += f' (safety limit {float(time_limit):g} s)'
+        text += '\nThe ROOM score is not biomass, total absolute flux or the active-reaction count.'
     biomass_flux = _visible_biomass_flux(results)
     if objective_name != MISSION07_BIOMASS_OBJECTIVE and biomass_flux is not None:
         biomass_flux = _clean_report_number(biomass_flux)
@@ -845,6 +884,7 @@ class Window:
             ('30', [MISSION30_GENE_A, MISSION30_GENE_B]),
             ('31', [MISSION31_GENE_A, MISSION31_GENE_B]),
             ('32', list(MISSION32_GENE_NAMES)),
+            ('33', list(MISSION33_TARGET_GENES)),
         ]
         for mission_id, candidates in gene_mission_candidates:
             if mission_id in self.player.missions_activated and mission_id not in self.player.missions_completed:
@@ -1259,10 +1299,23 @@ class Window:
 
             save_simulation_file([data_simul, data_objective, data_genes, data_reac, data_fluxes])
             animation_text_save('Running')
-            if sys.platform == 'emscripten':
-                self.results = run_simul_remote(BACKEND_URL)
-            else:
-                self.results = run_simul()
+            try:
+                if sys.platform == 'emscripten':
+                    self.results = run_simul_remote(BACKEND_URL)
+                else:
+                    self.results = run_simul()
+            except Exception as error:
+                error_message = f'Simulation error: {error}'
+                self.results = (
+                    objective_name,
+                    error_message,
+                    {'selected_ids': [], 'items': [], 'error': error_message},
+                    {'reaction_ids': [], 'items': [], 'error': error_message},
+                )
+                animation_text_save(
+                    'Simulation failed safely. Open New Results for details.',
+                    time=2500,
+                )
 
             exchange_flux_data = None
             try:
@@ -1352,6 +1405,15 @@ class Window:
                     )
                 else:
                     mission32_data = run_mission32_respiratory_cut_set_check(self.results)
+
+            mission33_data = None
+            if '33' in self.player.missions_activated and '33' not in self.player.missions_completed:
+                if sys.platform == 'emscripten':
+                    mission33_data = run_mission33_reference_adjustment_check_remote(
+                        BACKEND_URL, self.results
+                    )
+                else:
+                    mission33_data = run_mission33_reference_adjustment_check(self.results)
 
             mission30_data = None
             bound_sweep_data = None
@@ -1791,6 +1853,17 @@ class Window:
                     background_color='white',
                     font_size=24,
                     label_id='mission32_respiratory_cut_set_check'
+                )
+                menu_simul.add.vertical_margin(20)
+
+            if mission33_data is not None:
+                menu_simul.add.label(
+                    _build_mission33_text(mission33_data),
+                    wordwrap=True,
+                    padding=(20, 20, 20, 20),
+                    background_color='white',
+                    font_size=24,
+                    label_id='mission33_reference_adjustment_check'
                 )
                 menu_simul.add.vertical_margin(20)
 

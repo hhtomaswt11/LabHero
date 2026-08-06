@@ -8,6 +8,7 @@ from options_values import mytheme
 from functions import animation_text_save
 from button import Button
 from async_menu import run_menu
+from mission33 import Mission33_info
 from utils import *
 from simulation import (
     MISSION32_BRANCH_GENES,
@@ -40,6 +41,7 @@ class Mission32:
         self.font_name = pygame.font.Font(font_path, 24)
         self.timer = Timer(200)
         self.menu32 = Mission32_info(self.toggle_menu, self.player)
+        self.menu33 = Mission33_info(self.toggle_menu, self.player)
         self.pending = None
 
     def input(self):
@@ -64,15 +66,29 @@ class Mission32:
             'Keep the aerobic default medium fixed.',
             'Compare branch status, oxygen uptake and the full CYTBD GPR.',
         ]
-        completed_dialogue = [
+        mission33_intro_dialogue = [
             f'Excellent work, {self.player.player_name}.',
             'You separated a broken branch from a disabled reaction.',
-            'My next experiment will test whether this cut set is robust.',
+            'Now measure its adjustment footprint from two references.',
+        ]
+        mission33_active_dialogue = [
+            'Mission 33 is active.',
+            'Build matched wild-type pFBA references for both contexts.',
+            'Then compare each reference with its ROOM cut-set mutant.',
+        ]
+        mission33_completed_dialogue = [
+            f'Excellent reference analysis, {self.player.player_name}.',
+            'You separated genetic loss from reference-state use.',
+            'My final experiment will test how broadly that result holds.',
         ]
 
         self.input()
-        if '32' in self.missions_completed:
-            self.menu_message(completed_dialogue, buttons=False)
+        if '33' in self.missions_completed:
+            self.menu_message(mission33_completed_dialogue, buttons=False)
+        elif '33' in self.missions_activated:
+            self.menu_message(mission33_active_dialogue, menu_to_open=self.menu33)
+        elif '32' in self.missions_completed:
+            self.menu_message(mission33_intro_dialogue, menu_to_open=self.menu33)
         elif '32' in self.missions_activated:
             self.menu_message(active_dialogue, menu_to_open=self.menu32)
         elif is_mission32_unlocked(self.missions_completed):

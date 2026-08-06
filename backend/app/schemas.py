@@ -31,3 +31,14 @@ class SimulateResponse(BaseModel):
     method_score_name: str | None = None
     total_absolute_flux: float | None = None
     active_reaction_count: int | None = None
+    reference_method: str | None = None
+    reference_objective_reaction: str | None = None
+    reference_primary_objective_flux: float | None = None
+    reference_uses_same_environment: bool | None = None
+    reference_has_no_gene_knockouts: bool | None = None
+    reference_cytbd_flux: float | None = None
+    room_delta: float | None = None
+    room_epsilon: float | None = None
+    room_linear: bool | None = None
+    room_solver: str | None = None
+    room_time_limit_seconds: float | None = None

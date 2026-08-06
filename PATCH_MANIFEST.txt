@@ -44,3 +44,61 @@ Implementation:
 - Requires a feasible reduced-growth cross-branch phenotype with CYTBD disabled and fermentative byproducts, never converting missing or INFEASIBLE evidence into zero.
 - Derives the unique tested cut set from accumulated visible evidence, preserves valid runs after invalid attempts and updates repeated conditions without duplication.
 - Uses JSON-serialisable state and the existing `/simulate` response with no hidden simulation or new backend endpoint.
+
+Mission 33 — Reference-State Adjustment Footprint
+
+Changed files:
+- code/mission33.py
+- code/mission32.py
+- code/simulation.py
+- code/save_load.py
+- code/window.py
+- code/books.py
+- backend/app/simulator.py
+- backend/app/schemas.py
+- backend/README.md
+- data/missions/mission33.md
+- data/books/How to Simulate.md
+- MISSION_PROGRESS_OVERVIEW.md
+- PATCH_MANIFEST.txt
+- tests/test_mission33.py
+
+Implementation:
+- Added Dr. Chen's second mission and the internal Mission 32 -> 33 interaction progression without a new Tiled object.
+- Added four matched visible runs: wild-type pFBA references and exact b0978+b0733 ROOM mutants in default-aerobic and oxygen-lower-bound-closed contexts.
+- Replaced the unsafe generic ROOM path with independent reference/mutant model copies and an explicit pre-knockout wild-type pFBA reference from the same environment.
+- Uses integer ROOM with delta 0.03 and epsilon 0.001 and exposes reference method, objective, growth, CYTBD flux, environment matching and knockout-free metadata.
+- Displays the ROOM significant-change score separately from biomass, shows both reference and mutant CYTBD fluxes, and explains the reference contract in the simulator and in-game book.
+- Validates complete genes/bounds, exact context matching, objective/diagnostic consistency, CYTBD GPR disablement, measured exchange evidence and visible-reference/ROOM-metadata agreement.
+- Derives the zero-score interpretation from accumulated evidence and asks for a one-word functional-state conclusion rather than a repeated numeric zero, context name or long free-form sentence.
+- Accepts concise equivalents of `unused` (`idle`, `not used`, Portuguese variants) while rejecting numeric values, context-only, method-only, gene-only and genetically ambiguous `inactive` answers; preserves valid evidence after invalid attempts and updates repeated runs without duplication.
+- Uses JSON-serialisable state and the existing `/simulate` endpoint, keeping the solver and explicit reference construction on the backend for future browser deployment.
+
+
+Mission 33 ROOM performance correction
+
+Changed files:
+- code/room_milp.py
+- code/simulation.py
+- code/window.py
+- code/books.py
+- backend/app/room_milp.py
+- backend/app/simulator.py
+- backend/app/schemas.py
+- backend/requirements.txt
+- backend/README.md
+- data/missions/mission33.md
+- data/books/How to Simulate.md
+- MISSION_PROGRESS_OVERVIEW.md
+- PATCH_MANIFEST.txt
+- tests/test_mission33.py
+- Mission33_ROOM_FIX_TEST_PLAN.txt
+
+Implementation:
+- Diagnosed the oxygen-closed ROOM run as correct and the aerobic ROOM freeze as a GLPK integer-MILP performance problem, not a mission-design problem.
+- Replaced the unbounded COBRApy/GLPK ROOM solve with the same standard binary ROOM formulation implemented through SciPy/HiGHS.
+- Preserves the explicit wild-type pFBA reference, delta 0.03, epsilon 0.001, integer change indicators and complete mutant flux vector.
+- Adds a 12-second solver safety limit and converts solver failures into visible simulation errors instead of freezing or terminating the menu callback.
+- Exposes `room_solver` and `room_time_limit_seconds` in desktop and backend result metadata and displays them in New Results.
+- Keeps the existing `/simulate` endpoint and uses the same solver contract in desktop and backend for future browser deployment.
+- Adds direct tests for the HiGHS integer helper, reference-before-knockout ordering, metadata parity, safety configuration and independent SBML scores.
