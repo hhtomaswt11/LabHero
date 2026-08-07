@@ -33,7 +33,7 @@ class SkinSelectionMenu:
     def open(self):
         self.opened = True
         self.original_skin_id = self.player.current_skin_id
-        ids = self.skin_manager.skin_ids()
+        ids = [skin.id for skin in self._visible_skins()]
         self.selected_index = ids.index(self.original_skin_id) if self.original_skin_id in ids else 0
         self.feedback_text = ''
 
@@ -49,11 +49,18 @@ class SkinSelectionMenu:
         self.key_locks[key] = pressed
         return once
 
+    def _visible_skins(self):
+        return self.skin_manager.unlocked_skins(self.player.missions_completed)
+
     def _selected_skin(self):
-        return self.skin_manager.skins[self.selected_index]
+        skins = self._visible_skins()
+        if not skins:
+            return self.skin_manager.get_skin(self.skin_manager.default_skin_id)
+        self.selected_index %= len(skins)
+        return skins[self.selected_index]
 
     def _move_selection(self, step):
-        count = len(self.skin_manager.skins)
+        count = len(self._visible_skins())
         if count:
             self.selected_index = (self.selected_index + step) % count
             self.feedback_text = ''
@@ -87,11 +94,11 @@ class SkinSelectionMenu:
         )
         if confirm_pressed:
             skin = self._selected_skin()
-            if skin.unlocked:
+            if self.skin_manager.is_unlocked(skin.id, self.player.missions_completed):
                 self.player.set_skin(skin.id)
                 self.opened = False
                 return 'confirm'
-            self.feedback_text = 'Locked skin. Unlocking can be connected later.'
+            self.feedback_text = 'Locked skin.'
 
         return None
 
@@ -115,7 +122,7 @@ class SkinSelectionMenu:
             pygame.draw.rect(self.display_surface, (255, 255, 255), preview_rect.inflate(18, 18), border_radius=5)
             self.display_surface.blit(preview, preview_rect)
 
-        status = 'Unlocked' if skin.unlocked else 'Locked'
+        status = 'Unlocked' if self.skin_manager.is_unlocked(skin.id, self.player.missions_completed) else 'Locked'
         # price_text = 'Free' if skin.price == 0 else f'{skin.price} coins'
         lines = [
             f'{skin.name}',

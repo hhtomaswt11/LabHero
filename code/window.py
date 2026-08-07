@@ -425,6 +425,14 @@ def _build_mission32_text(report_data):
 def _build_mission33_text(report_data):
     return build_mission33_reference_adjustment_report_text(report_data)
 
+
+def _build_mission34_text(report_data):
+    return build_mission34_shared_subunit_report_text(report_data)
+
+
+def _build_mission35_text(report_data):
+    return build_mission35_final_certification_report_text(report_data)
+
 def _visible_biomass_flux(results):
     """Read predicted biomass from the same visible simulation solution."""
     try:
@@ -885,6 +893,8 @@ class Window:
             ('31', [MISSION31_GENE_A, MISSION31_GENE_B]),
             ('32', list(MISSION32_GENE_NAMES)),
             ('33', list(MISSION33_TARGET_GENES)),
+            ('34', list(MISSION34_GENE_NAMES)),
+            ('35', ['b0114', 'b0726', 'b0116']),
         ]
         for mission_id, candidates in gene_mission_candidates:
             if mission_id in self.player.missions_activated and mission_id not in self.player.missions_completed:
@@ -1206,6 +1216,7 @@ class Window:
                 ('Glucose limitation: -1000, -500, -100, -50, -10, 0', 'glucose_limitation'),
                 ('Alternative carbon: -20, -10, -5, -1, 0', 'alternative_carbon_limitation'),
                 ('PFK redundancy threshold: -30, -10, -5, -2', 'pfk_redundancy_threshold'),
+                ('Final oxygen convergence: -30, -10, -5, -2', 'final_oxygen_convergence'),
             ],
             default=0,
             selection_box_height=4,
@@ -1415,14 +1426,44 @@ class Window:
                 else:
                     mission33_data = run_mission33_reference_adjustment_check(self.results)
 
+
+            mission34_data = None
+            if '34' in self.player.missions_activated and '34' not in self.player.missions_completed:
+                if sys.platform == 'emscripten':
+                    mission34_data = run_mission34_shared_subunit_check_remote(
+                        BACKEND_URL, self.results
+                    )
+                else:
+                    mission34_data = run_mission34_shared_subunit_check(self.results)
+
+            mission35_data = None
+            if '35' in self.player.missions_activated and '35' not in self.player.missions_completed:
+                if sys.platform == 'emscripten':
+                    mission35_data = run_mission35_final_certification_check_remote(
+                        BACKEND_URL, self.results
+                    )
+                else:
+                    mission35_data = run_mission35_final_certification_check(self.results)
+
             mission30_data = None
             bound_sweep_data = None
             mission26_data = None
+            mission35_sweep_requested = bool(
+                '35' in self.player.missions_activated
+                and '35' not in self.player.missions_completed
+                and mission35_should_run_bound_sweep(
+                    menu_bound_sweep.get_input_data(),
+                    simulation_method,
+                    objective_name,
+                    data_genes,
+                )
+            )
             bound_sweep_mission_active = (
                 ('23' in self.player.missions_activated and '23' not in self.player.missions_completed)
                 or ('24' in self.player.missions_activated and '24' not in self.player.missions_completed)
                 or ('26' in self.player.missions_activated and '26' not in self.player.missions_completed)
                 or ('30' in self.player.missions_activated and '30' not in self.player.missions_completed)
+                or mission35_sweep_requested
             )
             if bound_sweep_mission_active:
                 if sys.platform == 'emscripten':
@@ -1460,6 +1501,13 @@ class Window:
                         )
                     else:
                         mission30_data = run_mission30_redundancy_threshold_check(bound_sweep_data)
+                if mission35_sweep_requested:
+                    if sys.platform == 'emscripten':
+                        mission35_data = run_mission35_oxygen_curve_check_remote(
+                            BACKEND_URL, bound_sweep_data
+                        )
+                    else:
+                        mission35_data = run_mission35_oxygen_curve_check(bound_sweep_data)
 
             menu_compare_runs = pygame_menu.Menu(
                 height=720,
@@ -1864,6 +1912,29 @@ class Window:
                     background_color='white',
                     font_size=24,
                     label_id='mission33_reference_adjustment_check'
+                )
+                menu_simul.add.vertical_margin(20)
+
+
+            if mission34_data is not None:
+                menu_simul.add.label(
+                    _build_mission34_text(mission34_data),
+                    wordwrap=True,
+                    padding=(20, 20, 20, 20),
+                    background_color='white',
+                    font_size=24,
+                    label_id='mission34_shared_subunit_check'
+                )
+                menu_simul.add.vertical_margin(20)
+
+            if mission35_data is not None:
+                menu_simul.add.label(
+                    _build_mission35_text(mission35_data),
+                    wordwrap=True,
+                    padding=(20, 20, 20, 20),
+                    background_color='white',
+                    font_size=24,
+                    label_id='mission35_final_certification'
                 )
                 menu_simul.add.vertical_margin(20)
 

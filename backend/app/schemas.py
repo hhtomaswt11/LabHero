@@ -31,6 +31,7 @@ class SimulateResponse(BaseModel):
     method_score_name: str | None = None
     total_absolute_flux: float | None = None
     active_reaction_count: int | None = None
+    gpr_disabled_reactions: list[str] | None = None
     reference_method: str | None = None
     reference_objective_reaction: str | None = None
     reference_primary_objective_flux: float | None = None

@@ -1,0 +1,95 @@
+MISSION 34 — MANUAL VALIDATION PLAN
+===================================
+
+Prerequisite
+------------
+Mission 33 must be completed.
+
+1. Dr. Chen progression
+-----------------------
+- Approach the existing Dr. Chen NPC (the Tiled object remains Mission32).
+- Press ENTER.
+- Confirm the Mission 34 introduction appears and all three dialogue lines fit.
+- Open Mission 34 and activate it.
+- Confirm these genes are highlighted:
+  b0114 / aceE
+  b0116 / lpd
+  b0726 / sucA
+  b0727 / sucB
+
+2. Fixed protocol for all six runs
+----------------------------------
+Method: pFBA
+Objective: BIOMASS_Ecoli_core_w_GAM
+Environment: completely model-default and aerobic
+Production Flux: no selection is required
+No unrelated gene or environmental changes.
+
+3. Six required genotypes
+-------------------------
+Run in any order:
+1) Wild type
+2) b0114 OFF
+3) b0726 OFF
+4) b0726 + b0727 OFF
+5) b0116 OFF
+6) b0114 + b0726 OFF
+
+4. Expected visible matrix
+--------------------------
+Condition          Disabled reactions   Growth   O2 uptake   Formate   pFBA total   Active
+Wild type          none                 0.874      21.799      0.000     518.422       48
+b0114              PDH                  0.797      21.304      7.743     532.797       50
+b0726              AKGDH                0.858      22.482      0.000     531.461       48
+b0726+b0727        AKGDH                0.858      22.482      0.000     531.461       48
+b0116              AKGDH,PDH            0.782      21.910      7.784     556.281       50
+b0114+b0726        AKGDH,PDH            0.782      21.910      7.784     556.281       50
+
+All six results must be status OK, never INFEASIBLE.
+
+5. Accumulation
+---------------
+- Runs recorded must advance from 1/6 to 6/6.
+- Repeating a condition must keep 6/6 rather than creating 7/6.
+- The report must end with Evidence complete.
+- It must state that the b0726 pair matches and that the b0116/split-double pair matches.
+
+6. Invalid-attempt preservation
+-------------------------------
+After reaching 6/6, run one invalid setup, for example:
+- FBA instead of pFBA; or
+- close oxygen uptake; or
+- add a third knockout.
+
+Expected:
+- Runs recorded remains 6/6.
+- Evidence complete remains available.
+- The report says the latest run was not recorded.
+- Previously valid Mission 34 evidence remains available.
+
+7. Delivery
+-----------
+Wrong answer example: identical genotypes
+Expected: rejected and mission remains active.
+
+Correct answer: equivalent
+Also accepted: equivalente, equivalentes, functionally equivalent, matching
+Expected: Congratulations! Mission 34 completed!
+
+8. Persistence
+--------------
+Before or after delivery, close and reopen the game.
+Confirm:
+- the six rows remain saved;
+- completed/active state remains correct;
+- Dr. Chen shows the appropriate final dialogue after completion.
+
+9. Optional web-service contract check
+--------------------------------------
+A successful POST /simulate response for gene_knockouts ["b0116"] must include:
+  "gpr_disabled_reactions": ["AKGDH", "PDH"]
+
+For gene_knockouts ["b0726", "b0727"] it must include:
+  "gpr_disabled_reactions": ["AKGDH"]
+
+The endpoint remains POST /simulate; no new endpoint is required.

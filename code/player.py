@@ -6,7 +6,7 @@ import time
 from utils import *
 
 class Player(pygame.sprite.Sprite):
-    def __init__(self, pos, group, collision_sprites, tree_sprites, interaction, soil_layer, toggle_shop, desk_menu, books, ecoli, inventory2, talk_1, talk_2, talk_3, talk_7, talk_11, talk_16, talk_21, talk_23, talk_25, talk_27, talk_29, talk_32, dialogues, skin_manager=None):
+    def __init__(self, pos, group, collision_sprites, tree_sprites, interaction, soil_layer, toggle_shop, desk_menu, books, ecoli, inventory2, talk_1, talk_2, talk_3, talk_7, talk_11, talk_16, talk_21, talk_23, talk_25, talk_27, talk_29, talk_32, talk_35, dialogues, skin_manager=None):
         super().__init__(group)
 
         self.skin_manager = skin_manager
@@ -65,6 +65,7 @@ class Player(pygame.sprite.Sprite):
         self.talk_27 = talk_27
         self.talk_29 = talk_29
         self.talk_32 = talk_32
+        self.talk_35 = talk_35
         self.desk_menu = desk_menu
         self.books = books
         self.ecoli = ecoli
@@ -211,7 +212,7 @@ class Player(pygame.sprite.Sprite):
     def set_skin(self, skin_id):
         if self.skin_manager is None or not self.skin_manager.is_valid_skin(skin_id):
             return False
-        if not self.skin_manager.is_unlocked(skin_id):
+        if not self.skin_manager.is_unlocked(skin_id, self.missions_completed):
             return False
 
         center = self.rect.center if hasattr(self, 'rect') else None
@@ -324,6 +325,8 @@ class Player(pygame.sprite.Sprite):
                         self.talk_29()
                     elif collided_interaction_sprite[0].name == 'Mission32':
                         self.talk_32()
+                    elif collided_interaction_sprite[0].name == 'Final':
+                        self.talk_35()
                     elif collided_interaction_sprite[0].name == 'Desk':
                         animation_text_save('... please wait ...', time=100)
                         self.desk_menu()

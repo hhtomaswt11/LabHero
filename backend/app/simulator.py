@@ -252,6 +252,7 @@ def simulate(req: SimulateRequest) -> SimulateResponse:
             method_score_name=_method_score_name(req.method),
             total_absolute_flux=_clean_numeric(total_absolute_flux, 6) if total_absolute_flux is not None else None,
             active_reaction_count=active_reaction_count,
+            gpr_disabled_reactions=sorted(disabled_reactions),
             status="ok",
             fluxes=fluxes,
             **method_metadata,

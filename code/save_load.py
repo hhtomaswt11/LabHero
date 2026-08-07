@@ -1035,3 +1035,58 @@ def clear_mission33_reference_adjustment_check():
         'mission33_reference_adjustment_check',
         'mission33_reference_adjustment_check.txt',
     )
+
+
+def save_mission34_shared_subunit_check(data):
+    if _IS_WEB:
+        _MEMSTORE['mission34_shared_subunit_check'] = data
+        return
+    with open(get_save_path('mission34_shared_subunit_check.txt'), 'w') as report_file:
+        json.dump(data, report_file)
+
+
+def load_mission34_shared_subunit_check():
+    if _IS_WEB:
+        return _MEMSTORE.get('mission34_shared_subunit_check')
+    try:
+        with open(get_save_path('mission34_shared_subunit_check.txt')) as report_file:
+            return json.load(report_file)
+    except FileNotFoundError:
+        return None
+    except Exception:
+        return None
+
+
+def clear_mission34_shared_subunit_check():
+    _delete_save_artifact(
+        'mission34_shared_subunit_check',
+        'mission34_shared_subunit_check.txt',
+    )
+
+
+def save_mission35_final_certification(data):
+    """Persist the complete Mission 35 dossier as JSON-serialisable evidence."""
+    if _IS_WEB:
+        _MEMSTORE['mission35_final_certification'] = data
+        return
+    with open(get_save_path('mission35_final_certification.txt'), 'w') as report_file:
+        json.dump(data, report_file)
+
+
+def load_mission35_final_certification():
+    if _IS_WEB:
+        return _MEMSTORE.get('mission35_final_certification')
+    try:
+        with open(get_save_path('mission35_final_certification.txt')) as report_file:
+            return json.load(report_file)
+    except FileNotFoundError:
+        return None
+    except Exception:
+        return None
+
+
+def clear_mission35_final_certification():
+    _delete_save_artifact(
+        'mission35_final_certification',
+        'mission35_final_certification.txt',
+    )

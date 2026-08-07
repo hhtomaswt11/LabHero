@@ -1,0 +1,174 @@
+MISSION 35 — MANUAL VALIDATION PLAN
+===================================
+
+Use the project environment with pygame/mewpy installed.
+
+0. Regression commands
+----------------------
+From the project root:
+
+python3 -m compileall code backend/app tests main.py LabHero.py
+python3 tests/test_mission35.py
+python3 -m unittest discover -s tests -p "test_*.py"
+
+1. Final NPC / activation
+-------------------------
+A. Before Mission 34 is complete, approach the Tiled NPC named Final and press ENTER.
+   Expected: Dr. Richter (richter.jpg) says the final qualification is locked; no mission button opens.
+
+B. Complete Mission 34, approach Final, press ENTER.
+   Expected: the Mission 35 introduction appears and Yes opens the Mission 35 menu.
+
+C. Activate Mission 35.
+   Expected:
+   - Mission 35 is added to activated missions.
+   - Its report starts empty.
+   - Genes b0114, b0726 and b0116 are highlighted in the simulator gene menu.
+   - Golden LabHero is NOT yet visible/selectable in the C skin menu.
+
+2. Section A — Design Approval Screen (4 visible runs)
+------------------------------------------------------
+For ALL four runs use exactly:
+- Method: pFBA
+- Objective: BIOMASS_Ecoli_core_w_GAM
+- Environment: completely default/aerobic
+- Production Flux: EX_for_e + EX_ac_e + EX_etoh_e, exactly those three
+
+Run in any order:
+1) WT (all genes active)
+2) b0114 / aceE
+3) b0726 / sucA
+4) b0116 / lpd
+
+Expected approximate report:
+WT      | disabled none      | growth 0.874 | retention 100.0% | formate 0.000 | O2 21.799 | total 518.422 | active 48
+b0114   | disabled PDH       | growth 0.797 | retention 91.2%  | formate 7.743 | O2 21.304 | total 532.797 | active 50
+b0726   | disabled AKGDH     | growth 0.858 | retention 98.2%  | formate 0.000 | O2 22.482 | total 531.461 | active 48
+b0116   | disabled AKGDH,PDH | growth 0.782 | retention 89.5%  | formate 7.784 | O2 21.910 | total 556.281 | active 50
+
+Expected progress after this section: design 4/4.
+The report must NOT directly say which answer to type.
+
+3. Section B — Oxygen Robustness Curves (2 visible Bound Sweeps)
+----------------------------------------------------------------
+For each of the two genotypes below:
+- Method: pFBA
+- Objective: BIOMASS_Ecoli_core_w_GAM
+- Start from completely default environment
+- Open Bound Sweep Setup
+- Sweep variable: Oxygen lower bound (EX_o2_e)
+- Sweep values: Final oxygen convergence: -30, -10, -5, -2
+
+Curve 1 genotype: b0114 only
+Expected:
+O2 LB -30 | growth ~0.797 | formate ~7.743  | O2 uptake ~21.304
+O2 LB -10 | growth ~0.554 | formate ~12.723 | O2 uptake 10.000
+O2 LB  -5 | growth ~0.392 | formate ~15.938 | O2 uptake 5.000
+O2 LB  -2 | growth ~0.284 | formate ~17.058 | O2 uptake 2.000
+Disabled reactions remain: PDH
+
+Curve 2 genotype: b0116 only
+Expected:
+O2 LB -30 | growth ~0.782 | formate ~7.784  | O2 uptake ~21.910
+O2 LB -10 | growth ~0.552 | formate ~13.057 | O2 uptake 10.000
+O2 LB  -5 | growth ~0.392 | formate ~15.938 | O2 uptake 5.000
+O2 LB  -2 | growth ~0.284 | formate ~17.058 | O2 uptake 2.000
+Disabled reactions remain: AKGDH, PDH
+
+Expected report logic:
+- The -30 and -10 rows do not match.
+- The -5 and -2 rows match within tolerance.
+- The first sustained tested convergence point is therefore the -5 row.
+- Mechanisms remain distinct even when phenotype rows match.
+- Oxygen curves progress to 2/2.
+
+IMPORTANT UI check:
+The ordinary design-screen run must not trigger a Mission 35 sweep unless the dedicated Final oxygen convergence preset is selected with b0114 or b0116.
+
+4. Section C — Objective Viability Audit
+----------------------------------------
+Return to normal simulation:
+- Method: pFBA
+- Objective: EX_for_e
+- Environment: completely default/aerobic
+- Knockout: exactly b0114
+
+Expected approximate visible result:
+- EX_for_e primary objective / formate secretion: 40.000
+- Biomass: 0.000
+- Glucose uptake: 10.000
+- O2 uptake: 40.000
+- GPR disabled reactions: PDH only
+- pFBA total absolute flux: ~950.000
+- Active reactions: ~34
+
+Expected report progress: objective audit 1/1.
+After all sections: Final dossier evidence complete / ready to deliver.
+
+5. Invalid-attempt preservation
+-------------------------------
+After the dossier is complete, run one invalid setup, for example:
+- FBA instead of pFBA, OR
+- close the O2 lower bound in a normal design run, OR
+- add an unrelated knockout, OR
+- use an incomplete/wrong Production Flux panel in a design run.
+
+Expected:
+- Latest attempt was not recorded.
+- Previously valid Mission 35 dossier evidence remains available.
+- Design remains 4/4, curves remain 2/2, objective audit remains 1/1.
+
+6. Repetition / no duplication
+------------------------------
+Repeat a previously valid design condition and one complete oxygen curve.
+Expected counts remain 4/4 and 2/2. Existing slots are replaced, not appended.
+
+7. Final answers
+----------------
+First try deliberately wrong values, e.g.:
+- target: b0114
+- bound: -10
+- viability: yes
+Expected: mission does not complete and feedback identifies the first incorrect conclusion.
+
+Then submit the three conclusions supported by the completed dossier.
+Expected:
+- Congratulations / E. coli certification complete message.
+- Mission 35 enters missions_completed once.
+- No duplicate reward if delivery is attempted again.
+
+8. Golden skin reward
+---------------------
+Before Mission 35 completion:
+- press C and verify Golden LabHero is not shown/selectable.
+
+After Mission 35 completion:
+- close the mission menu;
+- press C;
+- verify Golden LabHero appears;
+- select it with Enter;
+- move in all directions and verify idle/walk animations.
+
+Expected: skin is unlocked but not auto-equipped.
+
+9. Persistence
+--------------
+After completion and (optionally) equipping Golden LabHero:
+- close the game fully;
+- restart and load the same save.
+Expected:
+- Mission 35 is still complete;
+- Dr. Richter gives the completed dialogue;
+- Golden LabHero remains unlocked;
+- if it was equipped, the selected skin remains equipped;
+- logical progression helpers derive Golden Lab / yeast programme access from Mission 35 completion.
+
+10. Browser-readiness checks (hard to test manually; automated/static review is enough)
+---------------------------------------------------------------------------------------
+- Mission 35 uses the existing /simulate contract only.
+- Bound Sweep remote path reuses /simulate for each visible row.
+- GPR-disabled reactions are carried in visible backend diagnostics.
+- Mission 35 state is JSON serialisable.
+- No Mission 35-specific solver is placed in the browser.
+- No hidden validation simulation is launched.
+- Unlock rules live in code/progression.py and do not depend on pygame.

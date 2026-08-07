@@ -102,3 +102,60 @@ Implementation:
 - Exposes `room_solver` and `room_time_limit_seconds` in desktop and backend result metadata and displays them in New Results.
 - Keeps the existing `/simulate` endpoint and uses the same solver contract in desktop and backend for future browser deployment.
 - Adds direct tests for the HiGHS integer helper, reference-before-knockout ordering, metadata parity, safety configuration and independent SBML scores.
+
+Mission 34 — Shared-Subunit Equivalence Audit
+
+Changed files:
+- code/mission34.py
+- code/mission32.py
+- code/simulation.py
+- code/save_load.py
+- code/window.py
+- backend/app/schemas.py
+- backend/app/simulator.py
+- backend/README.md
+- data/missions/mission34.md
+- MISSION_PROGRESS_OVERVIEW.md
+- PATCH_MANIFEST.txt
+- tests/test_mission34.py
+- tests/test_dialogue_layout.py
+- Mission34_TEST_PLAN.txt
+
+Implementation:
+- Added Dr. Chen's final mission and the internal Mission 32 -> 33 -> 34 progression without a new Tiled object.
+- Added six visible pFBA conditions for the PDH and AKGDH GPRs, including a shared-subunit single knockout, a same-complex double and a split double.
+- Validates complete gene and bound payloads, a completely default aerobic environment, biomass/primary-objective consistency, model-default glucose uptake, positive oxygen uptake, formate, pFBA diagnostics and the complete visible GPR-disabled reaction set.
+- Demonstrates that b0726 and b0726+b0727 impose the same AKGDH lesion, while b0116 and b0114+b0726 impose the same AKGDH+PDH lesion and matching measured output.
+- Derives reaction-level equivalence from accumulated visible evidence rather than from genotype names alone; preserves valid rows after invalid attempts and updates repeated conditions without duplication.
+- Adds the additive `gpr_disabled_reactions` field to desktop method diagnostics and the existing `/simulate` response, allowing future browser clients to consume server-evaluated GPR evidence without duplicating the logic.
+- Uses JSON-serialisable state, no new endpoint, no solver in the browser and no hidden validation simulation.
+
+Mission 35 — E. coli Final Systems Certification
+
+Changed / new files:
+- code/mission35.py
+- code/progression.py
+- code/player.py
+- code/level.py
+- code/simulation.py
+- code/save_load.py
+- code/window.py
+- code/skins.py
+- code/skin_menu.py
+- data/missions/mission35.md
+- MISSION_PROGRESS_OVERVIEW.md
+- PATCH_MANIFEST.txt
+- tests/test_mission35.py
+- tests/test_dialogue_layout.py
+- Mission35_TEST_PLAN.txt
+
+Implementation:
+- Connected the existing Tiled `Final` NPC to a dedicated Dr. Richter Mission 35 interaction using `graphics/dialogues/richter.jpg`; no map edit or extra Tiled object is required.
+- Added a three-part final E. coli certification dossier: four-run pFBA design screen, two matched four-point oxygen Bound Sweeps, and one direct-formate objective viability audit.
+- Requires visible numeric exchange evidence, exact GPR-disabled reaction lists, pFBA primary/secondary diagnostics, complete gene/bound payloads and the exact mission protocols; missing values and INFEASIBLE states are never converted to zero.
+- Derives the unique qualifying reaction target from formate/growth-retention/GPR criteria, derives the first sustained phenotype-convergence bound from the matched curves, and derives product-optimum growth compatibility from the visible objective audit.
+- Adds the dedicated `Final oxygen convergence` Bound Sweep preset and only launches Mission 35 sweeps when that exact preset, oxygen lower bound and one of the two allowed curve genotypes are selected.
+- Preserves valid evidence after invalid attempts, replaces repeated cells/curves instead of duplicating them, supports execution in any order, and keeps the full dossier JSON serialisable.
+- Adds a central pygame-free progression rule module. Mission 35 completion dynamically unlocks Golden LabHero, the logical Golden Lab capability and the future yeast iMM904 capability without duplicating reward flags in saves.
+- Registers `graphics/character_golden` as a progression-locked skin; it remains hidden before Mission 35 and becomes selectable after completion without being auto-equipped.
+- Uses only existing visible normal simulation and `/simulate`/Bound Sweep contracts, requiring no Mission 35 endpoint and keeping the design compatible with the future browser interface.

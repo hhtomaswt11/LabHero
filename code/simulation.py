@@ -2005,6 +2005,16 @@ def _simulate_local_objective_with_production_fluxes(method_name, objective_name
     diagnostics = _build_method_diagnostics(
         method_name, objective_name, result, solver_value=raw_solver_value
     )
+    # Expose the complete GPR result for every method, not only ROOM/lMOMA.
+    # This is part of the visible simulation result and keeps desktop and the
+    # future /simulate web client on the same reaction-level evidence contract.
+    try:
+        knocked_out_genes = _knocked_out_genes(genes)
+        diagnostics['gpr_disabled_reactions'] = sorted(
+            disabled_reaction_ids(model, knocked_out_genes)
+        ) if model is not None and knocked_out_genes else []
+    except Exception:
+        diagnostics['gpr_disabled_reactions'] = []
     if reference_metadata:
         diagnostics.update(reference_metadata)
     primary_objective_flux = _as_float_or_none(
@@ -14206,6 +14216,7 @@ def _selected_sweep_value(menu_data, key, default_value):
             'glucose_limitation',
             'alternative_carbon_limitation',
             'pfk_redundancy_threshold',
+            'final_oxygen_convergence',
         },
     }
     candidates = list(strings(value))
@@ -14274,6 +14285,7 @@ def _normalise_sweep_config(sweep_menu_data=None):
         'glucose_limitation': [-1000.0, -500.0, -100.0, -50.0, -10.0, 0.0],
         'alternative_carbon_limitation': list(MISSION28_SWEEP_VALUES),
         'pfk_redundancy_threshold': list(MISSION30_SWEEP_VALUES),
+        'final_oxygen_convergence': [-30.0, -10.0, -5.0, -2.0],
     }
     resolved_variable = (
         variable if variable in sweep_options
@@ -14462,6 +14474,17 @@ def run_bound_sweep(sweep_menu_data=None):
             diagnostics = _build_method_diagnostics(
                 method_name, objective_name, result, solver_value=solver_value
             )
+            # Keep GPR evidence inside each visible sweep row as well.  This is
+            # additive to the generic sweep contract and lets mixed final
+            # missions compare mechanism and phenotype without re-running or
+            # duplicating GPR logic in a browser client.
+            try:
+                knocked_out_genes = _knocked_out_genes(genes)
+                diagnostics['gpr_disabled_reactions'] = sorted(
+                    disabled_reaction_ids(model, knocked_out_genes)
+                ) if model is not None and knocked_out_genes else []
+            except Exception:
+                diagnostics['gpr_disabled_reactions'] = []
             flux_getter = lambda reaction_id: _extract_flux(result, reaction_id)
             data['rows'].append(_build_bound_sweep_row(
                 bound_value, config, method_name, objective_name,
@@ -14530,6 +14553,7 @@ def run_bound_sweep_remote(backend_url, sweep_menu_data=None):
             'method_score_name': response.get('method_score_name', _method_score_label(method_name)),
             'total_absolute_flux': float(total_abs) if total_abs is not None else None,
             'active_reaction_count': int(active_count) if active_count is not None else None,
+            'gpr_disabled_reactions': sorted(response.get('gpr_disabled_reactions') or []),
         }
         data['rows'].append(_build_bound_sweep_row(
             bound_value, config, method_name, objective_name,
@@ -16418,6 +16442,7 @@ def run_simul_remote(backend_url):
             'room_linear': response.get('room_linear'),
             'room_solver': response.get('room_solver'),
             'room_time_limit_seconds': response.get('room_time_limit_seconds'),
+            'gpr_disabled_reactions': sorted(response.get('gpr_disabled_reactions') or []),
             'cytbd_flux': fluxes.get(ROOM_REFERENCE_TARGET_REACTION),
         }
         visible_result = round(float(objective_raw), 3) if objective_raw is not None else response.get('result')
@@ -19898,3 +19923,1662 @@ def build_mission33_reference_adjustment_report_text(report_data=None):
 
 def _build_mission33_text(report_data=None):
     return build_mission33_reference_adjustment_report_text(report_data)
+
+# Mission 34 — Shared-Subunit Equivalence Audit
+# Dr. Chen closes the GPR arc by separating gene count from reaction impact.
+# All evidence is accumulated from visible pFBA results using the ordinary
+# desktop or /simulate response contract; no hidden optimisation is launched.
+MISSION34_CHECK_VERSION = 2
+MISSION34_METHOD = 'pFBA'
+MISSION34_GROWTH_OBJECTIVE = 'BIOMASS_Ecoli_core_w_GAM'
+MISSION34_TARGET_REACTIONS = ['AKGDH', 'PDH']
+MISSION34_REACTION_GPRS = {
+    'PDH': 'b0114 AND b0115 AND b0116',
+    'AKGDH': 'b0726 AND b0116 AND b0727',
+}
+MISSION34_GENE_NAMES = {
+    'b0114': 'aceE',
+    'b0116': 'lpd',
+    'b0726': 'sucA',
+    'b0727': 'sucB',
+}
+MISSION34_CONDITION_ORDER = [
+    'wild_type',
+    'pdh_specific_single',
+    'akgdh_specific_single',
+    'akgdh_same_complex_double',
+    'shared_subunit_single',
+    'split_reaction_double',
+]
+MISSION34_CONDITION_GENES = {
+    'wild_type': [],
+    'pdh_specific_single': ['b0114'],
+    'akgdh_specific_single': ['b0726'],
+    'akgdh_same_complex_double': ['b0726', 'b0727'],
+    'shared_subunit_single': ['b0116'],
+    'split_reaction_double': ['b0114', 'b0726'],
+}
+MISSION34_CONDITION_LABELS = {
+    'wild_type': 'Wild type',
+    'pdh_specific_single': 'b0114 / aceE',
+    'akgdh_specific_single': 'b0726 / sucA',
+    'akgdh_same_complex_double': 'b0726+b0727 / sucA+sucB',
+    'shared_subunit_single': 'b0116 / lpd shared subunit',
+    'split_reaction_double': 'b0114+b0726 / split double',
+}
+MISSION34_EXPECTED_DISABLED = {
+    'wild_type': [],
+    'pdh_specific_single': ['PDH'],
+    'akgdh_specific_single': ['AKGDH'],
+    'akgdh_same_complex_double': ['AKGDH'],
+    'shared_subunit_single': ['AKGDH', 'PDH'],
+    'split_reaction_double': ['AKGDH', 'PDH'],
+}
+MISSION34_REQUIRED_RUN_COUNT = len(MISSION34_CONDITION_ORDER)
+MISSION34_EXPECTED_SCORE_NAME = 'total_absolute_flux'
+MISSION34_GLUCOSE_REACTION = 'EX_glc__D_e'
+MISSION34_OXYGEN_REACTION = 'EX_o2_e'
+MISSION34_FORMATE_REACTION = 'EX_for_e'
+MISSION34_EXPECTED_GLUCOSE_UPTAKE = 10.0
+MISSION34_MIN_VIABLE_GROWTH = 0.50
+MISSION34_MIN_OXYGEN_UPTAKE = 0.10
+MISSION34_MIN_FORMATE_POSITIVE = 1.0
+MISSION34_MAX_FORMATE_ZERO = 0.05
+MISSION34_PRIMARY_TOLERANCE = 0.001
+MISSION34_FLUX_TOLERANCE = 0.01
+MISSION34_CAPACITY_TOLERANCE = 0.05
+MISSION34_PAIR_FLUX_TOLERANCE = 0.002
+MISSION34_PAIR_TOTAL_TOLERANCE = 0.02
+MISSION34_EXPECTED_RELATIONSHIP = 'reaction_level_equivalent'
+
+
+def is_mission34_unlocked(missions_completed):
+    """Mission 34 is Dr. Chen's final experiment and follows Mission 33."""
+    return '33' in (missions_completed or [])
+
+
+def _mission34_number_or_none(value):
+    numeric = _as_float_or_none(value)
+    return float(numeric) if numeric is not None else None
+
+
+def _mission34_clean_number(value, decimals=6):
+    numeric = float(value)
+    if abs(numeric) < DISPLAY_ZERO_TOLERANCE:
+        numeric = 0.0
+    return round(numeric, decimals)
+
+
+def _mission34_genes_complete(genes):
+    return bool(isinstance(genes, dict) and all(gene_id in genes for gene_id in GENES))
+
+
+def _mission34_condition_for_knockouts(knocked_out_genes):
+    knocked = tuple(sorted(knocked_out_genes or []))
+    matches = [
+        condition_id
+        for condition_id in MISSION34_CONDITION_ORDER
+        if knocked == tuple(sorted(MISSION34_CONDITION_GENES[condition_id]))
+    ]
+    return matches[0] if len(matches) == 1 else None
+
+
+def _mission34_expected_disabled(condition):
+    return sorted(MISSION34_EXPECTED_DISABLED.get(condition, []))
+
+
+def _mission34_environment_status(reactions):
+    status = _mission27_environment_status(reactions)
+    return {
+        'bounds_complete': bool(status.get('bounds_complete')),
+        'changes': list(status.get('changes') or []),
+        'setup_type': status.get('setup_type'),
+        'default_environment_ready': bool(
+            status.get('bounds_complete') and status.get('setup_type') == 'default'
+        ),
+    }
+
+
+def _mission34_empty_runs():
+    return {condition_id: None for condition_id in MISSION34_CONDITION_ORDER}
+
+
+def _mission34_missing_conditions(runs):
+    runs = runs or {}
+    return [
+        condition_id
+        for condition_id in MISSION34_CONDITION_ORDER
+        if not isinstance(runs.get(condition_id), dict)
+    ]
+
+
+def _mission34_empty_report():
+    runs = _mission34_empty_runs()
+    return {
+        'mission_id': '34',
+        'check_version': MISSION34_CHECK_VERSION,
+        'mission_title': 'Shared-Subunit Equivalence Audit',
+        'target_method': MISSION34_METHOD,
+        'growth_objective': MISSION34_GROWTH_OBJECTIVE,
+        'target_reactions': list(MISSION34_TARGET_REACTIONS),
+        'reaction_gprs': copy.deepcopy(MISSION34_REACTION_GPRS),
+        'gene_names': copy.deepcopy(MISSION34_GENE_NAMES),
+        'condition_order': list(MISSION34_CONDITION_ORDER),
+        'condition_genes': copy.deepcopy(MISSION34_CONDITION_GENES),
+        'condition_labels': copy.deepcopy(MISSION34_CONDITION_LABELS),
+        'expected_disabled_reactions': copy.deepcopy(MISSION34_EXPECTED_DISABLED),
+        'runs': runs,
+        'recorded_run_count': 0,
+        'required_run_count': MISSION34_REQUIRED_RUN_COUNT,
+        'missing_conditions': _mission34_missing_conditions(runs),
+        'disabled_reactions_by_condition': {},
+        'growth_by_condition': {},
+        'oxygen_uptake_by_condition': {},
+        'formate_secretion_by_condition': {},
+        'pfba_total_by_condition': {},
+        'active_reactions_by_condition': {},
+        'reaction_level_match_groups': [],
+        'same_complex_match_supported': False,
+        'shared_vs_split_match_supported': False,
+        'evidence_ready': False,
+        'answer_ready': False,
+        'ready_to_deliver': False,
+        'current_condition': None,
+        'current_run_valid': False,
+        'current_run_recorded': False,
+        'current_issues': [],
+        'current_run': None,
+        'latest_attempt': None,
+    }
+
+
+def initialise_mission34_shared_subunit_screen():
+    report = _mission34_empty_report()
+    save_mission34_shared_subunit_check(report)
+    return report
+
+
+def _mission34_normalise_runs(existing_report):
+    runs = _mission34_empty_runs()
+    existing = (existing_report or {}).get('runs') or {}
+    for condition_id in MISSION34_CONDITION_ORDER:
+        run = existing.get(condition_id)
+        if isinstance(run, dict):
+            runs[condition_id] = copy.deepcopy(run)
+    return runs
+
+
+def _mission34_pair_matches(first, second):
+    if not isinstance(first, dict) or not isinstance(second, dict):
+        return False
+    if sorted(first.get('disabled_reactions') or []) != sorted(second.get('disabled_reactions') or []):
+        return False
+    numeric_fields = (
+        ('growth', MISSION34_PAIR_FLUX_TOLERANCE),
+        ('oxygen_uptake', MISSION34_PAIR_FLUX_TOLERANCE),
+        ('formate_secretion', MISSION34_PAIR_FLUX_TOLERANCE),
+        ('total_absolute_flux', MISSION34_PAIR_TOTAL_TOLERANCE),
+    )
+    for field, tolerance in numeric_fields:
+        first_value = _mission34_number_or_none(first.get(field))
+        second_value = _mission34_number_or_none(second.get(field))
+        if first_value is None or second_value is None or abs(first_value - second_value) > tolerance:
+            return False
+    return first.get('active_reaction_count') == second.get('active_reaction_count')
+
+
+def _build_mission34_data(
+    method_name,
+    selected_objective,
+    objective_result,
+    genes,
+    reactions,
+    production_fluxes=None,
+    medium_fluxes=None,
+    existing_report=None,
+    objective_error=None,
+):
+    """Validate and accumulate one visible Mission 34 pFBA condition."""
+    existing_report = existing_report or {}
+    if (
+        existing_report.get('mission_id') != '34'
+        or existing_report.get('check_version') != MISSION34_CHECK_VERSION
+    ):
+        existing_report = _mission34_empty_report()
+
+    runs = _mission34_normalise_runs(existing_report)
+    environment = _mission34_environment_status(reactions)
+    genes_complete = _mission34_genes_complete(genes)
+    knocked_out_genes = sorted(_knocked_out_genes(genes)) if isinstance(genes, dict) else []
+    condition = _mission34_condition_for_knockouts(knocked_out_genes) if genes_complete else None
+    expected_disabled = _mission34_expected_disabled(condition)
+
+    objective_numeric = _mission34_number_or_none(objective_result)
+    result_infeasible = 'INFEASIBLE' in str(objective_result or '').upper()
+    raw_fluxes, uptake_fluxes, secretion_fluxes = _mission21_measured_medium_values(medium_fluxes)
+    diagnostics = _method_diagnostics_from_production_data(production_fluxes)
+    biomass_raw = _mission34_number_or_none(_mission13_biomass_value(production_fluxes))
+    primary_flux = _mission34_number_or_none(diagnostics.get('primary_objective_flux'))
+    method_score = _mission34_number_or_none(diagnostics.get('method_score'))
+    total_absolute_flux = _mission34_number_or_none(diagnostics.get('total_absolute_flux'))
+    method_score_name = diagnostics.get('method_score_name')
+    try:
+        active_reaction_count = int(diagnostics.get('active_reaction_count'))
+    except Exception:
+        active_reaction_count = None
+
+    disabled_payload_present = isinstance(diagnostics.get('gpr_disabled_reactions'), list)
+    visible_disabled = sorted(str(value) for value in (diagnostics.get('gpr_disabled_reactions') or []))
+    glucose_raw = _mission34_number_or_none(raw_fluxes.get(MISSION34_GLUCOSE_REACTION))
+    glucose_uptake = _mission34_number_or_none(uptake_fluxes.get(MISSION34_GLUCOSE_REACTION))
+    oxygen_raw = _mission34_number_or_none(raw_fluxes.get(MISSION34_OXYGEN_REACTION))
+    oxygen_uptake = _mission34_number_or_none(uptake_fluxes.get(MISSION34_OXYGEN_REACTION))
+    formate = _mission34_number_or_none(secretion_fluxes.get(MISSION34_FORMATE_REACTION))
+
+    issues = []
+    if objective_error:
+        issues.append(objective_error)
+    if method_name != MISSION34_METHOD:
+        issues.append('Use pFBA for every Mission 34 condition.')
+    if selected_objective != MISSION34_GROWTH_OBJECTIVE:
+        issues.append(f'Use {MISSION34_GROWTH_OBJECTIVE} as the primary objective.')
+    if not genes_complete:
+        issues.append('The visible gene-state payload is incomplete.')
+    if condition is None:
+        issues.append('Use exactly one of the six highlighted Mission 34 genotypes.')
+    if not environment.get('bounds_complete'):
+        issues.append('The visible environmental-bounds payload is incomplete.')
+    elif not environment.get('default_environment_ready'):
+        issues.append('Keep the complete aerobic environment at model default for every Mission 34 run.')
+    if result_infeasible:
+        issues.append('Mission 34 requires a feasible visible solution; INFEASIBLE is not a valid row.')
+    if objective_numeric is None:
+        issues.append('The visible growth value is missing or non-numeric.')
+    elif objective_numeric < MISSION34_MIN_VIABLE_GROWTH:
+        issues.append('Every tested Mission 34 genotype must retain viable predicted growth.')
+
+    if glucose_raw is None or glucose_uptake is None:
+        issues.append('Numeric glucose exchange evidence is required.')
+    else:
+        if glucose_raw > MISSION34_FLUX_TOLERANCE:
+            issues.append('Glucose must not be secreted in this controlled default medium.')
+        if abs(glucose_uptake - MISSION34_EXPECTED_GLUCOSE_UPTAKE) > MISSION34_CAPACITY_TOLERANCE:
+            issues.append('Keep model-default glucose uptake in every Mission 34 run.')
+    if oxygen_raw is None or oxygen_uptake is None:
+        issues.append('Numeric oxygen exchange evidence is required.')
+    else:
+        if oxygen_raw > MISSION34_FLUX_TOLERANCE:
+            issues.append('Oxygen must not be secreted in this controlled experiment.')
+        if oxygen_uptake < MISSION34_MIN_OXYGEN_UPTAKE:
+            issues.append('Every Mission 34 row must remain respiratory in the default aerobic medium.')
+    if formate is None:
+        issues.append('Numeric formate exchange evidence is required.')
+
+    if not isinstance(production_fluxes, dict) or production_fluxes.get('error'):
+        issues.append('The structured visible pFBA result is unavailable.')
+    if biomass_raw is None:
+        issues.append('The visible biomass flux is missing from the structured result.')
+    if primary_flux is None:
+        issues.append('The visible primary-objective diagnostic is missing.')
+    if objective_numeric is not None and biomass_raw is not None:
+        if abs(objective_numeric - biomass_raw) > MISSION34_PRIMARY_TOLERANCE:
+            issues.append('The visible growth value does not match the biomass reaction flux.')
+    if biomass_raw is not None and primary_flux is not None:
+        if abs(biomass_raw - primary_flux) > MISSION34_PRIMARY_TOLERANCE:
+            issues.append('The primary-objective diagnostic does not match the biomass flux.')
+    if diagnostics.get('method') != MISSION34_METHOD:
+        issues.append('The visible method diagnostics do not describe pFBA.')
+    if diagnostics.get('objective_reaction') != MISSION34_GROWTH_OBJECTIVE:
+        issues.append('The visible method diagnostics do not describe the biomass objective.')
+    if method_score_name != MISSION34_EXPECTED_SCORE_NAME:
+        issues.append('The pFBA score label is missing or incorrect.')
+    if method_score is None or total_absolute_flux is None:
+        issues.append('The pFBA secondary score is missing or non-numeric.')
+    elif abs(method_score - total_absolute_flux) > MISSION34_PRIMARY_TOLERANCE:
+        issues.append('The pFBA method score does not match total absolute flux.')
+    if active_reaction_count is None:
+        issues.append('The visible active-reaction count is missing.')
+
+    if not disabled_payload_present:
+        issues.append('The visible result does not expose the complete GPR-disabled reaction set.')
+    elif condition is not None and visible_disabled != expected_disabled:
+        issues.append(
+            'The visible GPR-disabled reaction set does not match the selected genotype: '
+            f'expected {expected_disabled or ["none"]}, received {visible_disabled or ["none"]}.'
+        )
+
+    if condition in ('wild_type', 'akgdh_specific_single', 'akgdh_same_complex_double'):
+        if formate is not None and formate > MISSION34_MAX_FORMATE_ZERO:
+            issues.append('This control condition should not secrete formate above tolerance.')
+    elif condition in ('pdh_specific_single', 'shared_subunit_single', 'split_reaction_double'):
+        if formate is not None and formate < MISSION34_MIN_FORMATE_POSITIVE:
+            issues.append('This PDH-disabled condition must show positive measured formate secretion.')
+
+    current_run_valid = not issues
+    current_run_recorded = False
+    current_run = None
+    if current_run_valid:
+        current_run = {
+            'condition': condition,
+            'condition_label': MISSION34_CONDITION_LABELS.get(condition),
+            'status': 'ok',
+            'method': method_name,
+            'objective': selected_objective,
+            'growth': _mission34_clean_number(objective_numeric),
+            'knocked_out_genes': list(knocked_out_genes),
+            'disabled_reactions': list(visible_disabled),
+            'environment_changes': list(environment.get('changes') or []),
+            'glucose_raw_flux': _mission34_clean_number(glucose_raw),
+            'glucose_uptake': _mission34_clean_number(glucose_uptake),
+            'oxygen_raw_flux': _mission34_clean_number(oxygen_raw),
+            'oxygen_uptake': _mission34_clean_number(oxygen_uptake),
+            'formate_secretion': _mission34_clean_number(formate),
+            'total_absolute_flux': _mission34_clean_number(total_absolute_flux),
+            'active_reaction_count': active_reaction_count,
+            'method_diagnostics': {
+                'method': diagnostics.get('method'),
+                'objective_reaction': diagnostics.get('objective_reaction'),
+                'primary_objective_flux': _mission34_clean_number(primary_flux),
+                'method_score': _mission34_clean_number(method_score),
+                'method_score_name': method_score_name,
+                'total_absolute_flux': _mission34_clean_number(total_absolute_flux),
+                'active_reaction_count': active_reaction_count,
+                'gpr_disabled_reactions': list(visible_disabled),
+            },
+        }
+        runs[condition] = current_run
+        current_run_recorded = True
+
+    missing_conditions = _mission34_missing_conditions(runs)
+    recorded_run_count = MISSION34_REQUIRED_RUN_COUNT - len(missing_conditions)
+    evidence_ready = not missing_conditions and recorded_run_count == MISSION34_REQUIRED_RUN_COUNT
+
+    same_complex_match_supported = _mission34_pair_matches(
+        runs.get('akgdh_specific_single'),
+        runs.get('akgdh_same_complex_double'),
+    )
+    shared_vs_split_match_supported = _mission34_pair_matches(
+        runs.get('shared_subunit_single'),
+        runs.get('split_reaction_double'),
+    )
+    reaction_level_match_groups = []
+    if same_complex_match_supported:
+        reaction_level_match_groups.append([
+            'akgdh_specific_single', 'akgdh_same_complex_double'
+        ])
+    if shared_vs_split_match_supported:
+        reaction_level_match_groups.append([
+            'shared_subunit_single', 'split_reaction_double'
+        ])
+
+    disabled_reactions_by_condition = {}
+    growth_by_condition = {}
+    oxygen_uptake_by_condition = {}
+    formate_secretion_by_condition = {}
+    pfba_total_by_condition = {}
+    active_reactions_by_condition = {}
+    for condition_id in MISSION34_CONDITION_ORDER:
+        run = runs.get(condition_id)
+        if not isinstance(run, dict):
+            continue
+        disabled_reactions_by_condition[condition_id] = list(run.get('disabled_reactions') or [])
+        growth_by_condition[condition_id] = run.get('growth')
+        oxygen_uptake_by_condition[condition_id] = run.get('oxygen_uptake')
+        formate_secretion_by_condition[condition_id] = run.get('formate_secretion')
+        pfba_total_by_condition[condition_id] = run.get('total_absolute_flux')
+        active_reactions_by_condition[condition_id] = run.get('active_reaction_count')
+
+    answer_ready = bool(
+        evidence_ready
+        and same_complex_match_supported
+        and shared_vs_split_match_supported
+    )
+    latest_attempt = {
+        'method': method_name,
+        'objective': selected_objective,
+        'condition': condition,
+        'knocked_out_genes': list(knocked_out_genes),
+        'visible_disabled_reactions': list(visible_disabled),
+        'valid': current_run_valid,
+        'recorded': current_run_recorded,
+        'issues': list(issues),
+    }
+
+    report = _mission34_empty_report()
+    report.update({
+        'runs': runs,
+        'recorded_run_count': recorded_run_count,
+        'missing_conditions': missing_conditions,
+        'disabled_reactions_by_condition': disabled_reactions_by_condition,
+        'growth_by_condition': growth_by_condition,
+        'oxygen_uptake_by_condition': oxygen_uptake_by_condition,
+        'formate_secretion_by_condition': formate_secretion_by_condition,
+        'pfba_total_by_condition': pfba_total_by_condition,
+        'active_reactions_by_condition': active_reactions_by_condition,
+        'reaction_level_match_groups': reaction_level_match_groups,
+        'same_complex_match_supported': same_complex_match_supported,
+        'shared_vs_split_match_supported': shared_vs_split_match_supported,
+        'evidence_ready': evidence_ready,
+        'answer_ready': answer_ready,
+        'ready_to_deliver': answer_ready,
+        'current_condition': condition,
+        'current_run_valid': current_run_valid,
+        'current_run_recorded': current_run_recorded,
+        'current_issues': list(issues),
+        'current_run': current_run,
+        'latest_attempt': latest_attempt,
+    })
+    save_mission34_shared_subunit_check(report)
+    return report
+
+
+def run_mission34_shared_subunit_check(simulation_results=None):
+    """Validate the already displayed Mission 34 result without re-simulating."""
+    method_name, selected_objective, genes, reactions = _read_simulation_file()
+    objective_result = None
+    production_fluxes = None
+    medium_fluxes = None
+    objective_error = None
+    try:
+        if simulation_results is not None:
+            result_objective = simulation_results[0]
+            objective_result = simulation_results[1]
+            production_fluxes = simulation_results[2] if len(simulation_results) > 2 else None
+            medium_fluxes = simulation_results[3] if len(simulation_results) > 3 else None
+            if result_objective != selected_objective:
+                objective_error = 'The displayed simulation result does not match the currently selected objective.'
+        else:
+            objective_error = 'Run a visible Mission 34 simulation before recording evidence.'
+    except Exception:
+        objective_error = 'Could not read the current visible Mission 34 simulation result.'
+
+    return _build_mission34_data(
+        method_name,
+        selected_objective,
+        objective_result,
+        genes,
+        reactions,
+        production_fluxes=production_fluxes,
+        medium_fluxes=medium_fluxes,
+        existing_report=load_mission34_shared_subunit_check() or {},
+        objective_error=objective_error,
+    )
+
+
+def run_mission34_shared_subunit_check_remote(backend_url, simulation_results=None):
+    """Browser-parity wrapper reusing the same visible /simulate response."""
+    del backend_url
+    return run_mission34_shared_subunit_check(simulation_results)
+
+
+def _normalise_mission34_text(value):
+    text = unicodedata.normalize('NFKD', str(value or ''))
+    return ''.join(char for char in text if not unicodedata.combining(char)).lower().strip()
+
+
+def normalise_mission34_answer(answer):
+    text = _normalise_mission34_text(answer)
+    compact = re.sub(r'[^a-z0-9]+', ' ', text).strip()
+    accepted = {
+        'equivalent',
+        'equivalente',
+        'equivalentes',
+        'functionally equivalent',
+        'reaction level equivalent',
+        'matching',
+    }
+    return MISSION34_EXPECTED_RELATIONSHIP if compact in accepted else None
+
+
+def mission34_answer_matches(answer, report_data=None):
+    report = report_data if report_data is not None else (load_mission34_shared_subunit_check() or {})
+    return bool(
+        report.get('mission_id') == '34'
+        and report.get('check_version') == MISSION34_CHECK_VERSION
+        and report.get('answer_ready')
+        and report.get('shared_vs_split_match_supported')
+        and normalise_mission34_answer(answer) == MISSION34_EXPECTED_RELATIONSHIP
+    )
+
+
+def _mission34_value_text(run, key):
+    if not isinstance(run, dict):
+        return 'pending'
+    value = _mission34_number_or_none(run.get(key))
+    return 'pending' if value is None else f'{value:.3f}'
+
+
+def _mission34_disabled_text(run):
+    if not isinstance(run, dict):
+        return 'pending'
+    values = list(run.get('disabled_reactions') or [])
+    return ','.join(values) if values else 'none'
+
+
+def build_mission34_shared_subunit_report_text(report_data=None):
+    report = report_data or {}
+    if not report:
+        return (
+            'No Mission 34 shared-subunit evidence has been recorded yet.\n\n'
+            'Keep pFBA, the biomass objective and the complete aerobic default environment fixed. '
+            'Record the six highlighted genotypes and compare their visible GPR-disabled reaction sets.\n\n'
+            'Begin with reaction impact rather than knockout count.'
+        )
+    if report.get('mission_id') != '34' or report.get('check_version') != MISSION34_CHECK_VERSION:
+        return 'Mission 34 Shared-Subunit Equivalence Audit\n\nCurrent-format evidence has not been recorded yet.'
+
+    lines = [
+        'Mission 34 Shared-Subunit Equivalence Audit',
+        '',
+        'Controlled protocol:',
+        f'- Method: {MISSION34_METHOD}',
+        f'- Objective: {MISSION34_GROWTH_OBJECTIVE}',
+        '- Environment: completely model-default and aerobic',
+        '- Exact highlighted genotypes; no unrelated gene or bound changes',
+        '',
+        'GPR map:',
+        f"- PDH: {MISSION34_REACTION_GPRS['PDH']}",
+        f"- AKGDH: {MISSION34_REACTION_GPRS['AKGDH']}",
+        '',
+        f"Runs recorded: {report.get('recorded_run_count', 0)}/{report.get('required_run_count', MISSION34_REQUIRED_RUN_COUNT)}",
+        '',
+        'Shared-subunit audit:',
+        'Condition | disabled reactions | growth | O2 uptake | formate | pFBA total | active',
+    ]
+    runs = report.get('runs') or {}
+    for condition_id in MISSION34_CONDITION_ORDER:
+        run = runs.get(condition_id)
+        if not isinstance(run, dict):
+            lines.append(f'{MISSION34_CONDITION_LABELS[condition_id]} | pending | pending | pending | pending | pending | pending')
+            continue
+        lines.append(
+            f"{MISSION34_CONDITION_LABELS[condition_id]} | {_mission34_disabled_text(run)} | "
+            f"{_mission34_value_text(run, 'growth')} | {_mission34_value_text(run, 'oxygen_uptake')} | "
+            f"{_mission34_value_text(run, 'formate_secretion')} | {_mission34_value_text(run, 'total_absolute_flux')} | "
+            f"{run.get('active_reaction_count', 'pending')}"
+        )
+
+    latest = report.get('latest_attempt') or {}
+    if latest:
+        lines.append('')
+        if latest.get('recorded'):
+            lines.append(f"Latest valid visible run recorded: {latest.get('condition')}.")
+        else:
+            lines.append('Latest run was not recorded:')
+            for issue in latest.get('issues') or ['The visible run did not match the controlled Mission 34 protocol.']:
+                lines.append(f'- {issue}')
+            if report.get('recorded_run_count', 0):
+                lines.append('Previously valid Mission 34 shared-subunit evidence remains available.')
+
+    lines.append('')
+    if report.get('evidence_ready'):
+        lines.append('Evidence complete.')
+        if report.get('same_complex_match_supported'):
+            lines.append('- b0726 and b0726+b0727 have the same disabled-reaction set and matching measured output.')
+        else:
+            lines.append('- The AKGDH single/double control pair does not currently match; verify the visible runs.')
+        if report.get('shared_vs_split_match_supported'):
+            lines.append('- b0116 and b0114+b0726 have the same disabled-reaction set and matching measured output.')
+            lines.append('Question: What is their reaction-level relationship?')
+        else:
+            lines.append('- The shared-subunit/split-double pair does not currently match; verify the visible runs.')
+    else:
+        lines.append('Evidence incomplete.')
+        if report.get('missing_conditions'):
+            lines.append('Missing conditions: ' + ', '.join(report.get('missing_conditions') or []))
+
+    lines.extend([
+        '',
+        'Interpretation note: gene count does not determine reaction impact. A shared gene can disable multiple reactions, while multiple knockouts inside one already-broken complex may add no new reaction closure.',
+        'Different genotypes are not identical. They are reaction-level equivalent here only when the complete GPR evaluation imposes the same reaction bounds and the visible pFBA outputs match.',
+        'The conclusion is conditional on this E. coli core model, biomass objective, default aerobic environment and tested genotype set. The pFBA total is a secondary parsimony score, not a biological quality ranking.',
+        'All growth, exchange, GPR and method evidence comes from visible /simulate results. No hidden validation simulation is used.',
+    ])
+    return '\n'.join(lines)
+
+
+def _build_mission34_text(report_data=None):
+    return build_mission34_shared_subunit_report_text(report_data)
+
+
+# Mission 35 — E. coli Final Systems Certification
+# Final E. coli capstone: a controlled design screen, two visible oxygen
+# response curves and an objective-viability audit.  Every conclusion is
+# derived from visible /simulate or Bound Sweep evidence; no hidden solver run
+# is performed by the mission validator.
+MISSION35_CHECK_VERSION = 2
+MISSION35_MODEL_ID = 'e_coli_core'
+MISSION35_METHOD = 'pFBA'
+MISSION35_GROWTH_OBJECTIVE = 'BIOMASS_Ecoli_core_w_GAM'
+MISSION35_FORMATE_OBJECTIVE = 'EX_for_e'
+MISSION35_GLUCOSE_REACTION = 'EX_glc__D_e'
+MISSION35_OXYGEN_REACTION = 'EX_o2_e'
+MISSION35_FORMATE_REACTION = 'EX_for_e'
+MISSION35_ACETATE_REACTION = 'EX_ac_e'
+MISSION35_ETHANOL_REACTION = 'EX_etoh_e'
+MISSION35_REQUIRED_PRODUCTION_FLUXES = [
+    MISSION35_FORMATE_REACTION,
+    MISSION35_ACETATE_REACTION,
+    MISSION35_ETHANOL_REACTION,
+]
+MISSION35_DESIGN_ORDER = [
+    'wild_type',
+    'pdh_specific',
+    'akgdh_specific',
+    'shared_subunit',
+]
+MISSION35_DESIGN_GENES = {
+    'wild_type': [],
+    'pdh_specific': ['b0114'],
+    'akgdh_specific': ['b0726'],
+    'shared_subunit': ['b0116'],
+}
+MISSION35_DESIGN_LABELS = {
+    'wild_type': 'Wild type',
+    'pdh_specific': 'b0114 / aceE',
+    'akgdh_specific': 'b0726 / sucA',
+    'shared_subunit': 'b0116 / lpd',
+}
+MISSION35_EXPECTED_DISABLED = {
+    'wild_type': [],
+    'pdh_specific': ['PDH'],
+    'akgdh_specific': ['AKGDH'],
+    'shared_subunit': ['AKGDH', 'PDH'],
+}
+MISSION35_CURVE_ORDER = ['pdh_specific', 'shared_subunit']
+MISSION35_SWEEP_PRESET = 'final_oxygen_convergence'
+MISSION35_SWEEP_VALUES = [-30.0, -10.0, -5.0, -2.0]
+MISSION35_SWEEP_REACTION = MISSION35_OXYGEN_REACTION
+MISSION35_SWEEP_BOUND = 'lower'
+MISSION35_APPROVAL_MIN_FORMATE = 7.5
+MISSION35_APPROVAL_MIN_GROWTH_RETENTION = 0.90
+MISSION35_APPROVAL_MAX_DISABLED_REACTIONS = 1
+MISSION35_MIN_VIABLE_GROWTH = 0.05
+MISSION35_PRODUCT_GROWTH_ZERO_TOLERANCE = 0.001
+MISSION35_EXPECTED_GLUCOSE_UPTAKE = 10.0
+MISSION35_FLUX_TOLERANCE = 0.01
+MISSION35_PRIMARY_TOLERANCE = 0.002
+MISSION35_SCORE_TOLERANCE = 0.05
+MISSION35_SWEEP_MATCH_FLUX_TOLERANCE = 0.01
+MISSION35_SWEEP_MATCH_GROWTH_TOLERANCE = 0.001
+MISSION35_SWEEP_MATCH_TOTAL_TOLERANCE = 0.05
+MISSION35_BOUND_TOLERANCE = 0.01
+MISSION35_PRODUCT_ADVANTAGE_TOLERANCE = 1.0
+
+
+def is_mission35_unlocked(missions_completed):
+    """The E. coli finale unlocks only after Dr. Chen's Mission 34."""
+    return '34' in (missions_completed or [])
+
+
+def _mission35_number(value):
+    numeric = _as_float_or_none(value)
+    return float(numeric) if numeric is not None else None
+
+
+def _mission35_clean(value, decimals=6):
+    numeric = _mission35_number(value)
+    if numeric is None:
+        return None
+    if abs(numeric) < DISPLAY_ZERO_TOLERANCE:
+        numeric = 0.0
+    return round(float(numeric), decimals)
+
+
+def _mission35_complete_genes(genes):
+    return bool(isinstance(genes, dict) and all(gene_id in genes for gene_id in GENES))
+
+
+def _mission35_design_condition(knockouts):
+    knocked = tuple(sorted(knockouts or []))
+    for condition_id in MISSION35_DESIGN_ORDER:
+        if knocked == tuple(sorted(MISSION35_DESIGN_GENES[condition_id])):
+            return condition_id
+    return None
+
+
+def _mission35_exact_default_environment(reactions):
+    return _mission34_environment_status(reactions)
+
+
+def _mission35_empty_design_screen():
+    return {condition_id: None for condition_id in MISSION35_DESIGN_ORDER}
+
+
+def _mission35_empty_curves():
+    return {condition_id: None for condition_id in MISSION35_CURVE_ORDER}
+
+
+def _mission35_empty_report():
+    design_screen = _mission35_empty_design_screen()
+    oxygen_curves = _mission35_empty_curves()
+    return {
+        'mission_id': '35',
+        'check_version': MISSION35_CHECK_VERSION,
+        'mission_title': 'E. coli Final Systems Certification',
+        'model_id': MISSION35_MODEL_ID,
+        'target_method': MISSION35_METHOD,
+        'growth_objective': MISSION35_GROWTH_OBJECTIVE,
+        'formate_objective': MISSION35_FORMATE_OBJECTIVE,
+        'required_production_fluxes': list(MISSION35_REQUIRED_PRODUCTION_FLUXES),
+        'design_order': list(MISSION35_DESIGN_ORDER),
+        'design_labels': copy.deepcopy(MISSION35_DESIGN_LABELS),
+        'design_genes': copy.deepcopy(MISSION35_DESIGN_GENES),
+        'expected_disabled_reactions': copy.deepcopy(MISSION35_EXPECTED_DISABLED),
+        'design_screen': design_screen,
+        'design_recorded_count': 0,
+        'design_required_count': len(MISSION35_DESIGN_ORDER),
+        'missing_design_conditions': list(MISSION35_DESIGN_ORDER),
+        'approval_criteria': {
+            'minimum_formate_secretion': MISSION35_APPROVAL_MIN_FORMATE,
+            'minimum_growth_retention': MISSION35_APPROVAL_MIN_GROWTH_RETENTION,
+            'maximum_gpr_disabled_reactions': MISSION35_APPROVAL_MAX_DISABLED_REACTIONS,
+        },
+        'eligible_design_conditions': [],
+        'eligible_reaction_targets': [],
+        'unique_approved_target': None,
+        'unique_target_supported': False,
+        'design_screen_ready': False,
+        'curve_order': list(MISSION35_CURVE_ORDER),
+        'oxygen_curves': oxygen_curves,
+        'curve_recorded_count': 0,
+        'curve_required_count': len(MISSION35_CURVE_ORDER),
+        'missing_curves': list(MISSION35_CURVE_ORDER),
+        'sweep_reaction': MISSION35_SWEEP_REACTION,
+        'sweep_bound': MISSION35_SWEEP_BOUND,
+        'sweep_preset': MISSION35_SWEEP_PRESET,
+        'sweep_values': list(MISSION35_SWEEP_VALUES),
+        'matching_bounds': [],
+        'first_convergence_bound': None,
+        'phenotype_convergence_supported': False,
+        'oxygen_curves_ready': False,
+        'objective_audit': {
+            'biomass_optimum': None,
+            'formate_optimum': None,
+        },
+        'product_optimum_growth_compatible': None,
+        'objective_tradeoff_supported': False,
+        'objective_audit_ready': False,
+        'dossier_complete': False,
+        'evidence_ready': False,
+        'answer_target_ready': False,
+        'answer_bound_ready': False,
+        'answer_viability_ready': False,
+        'ready_to_deliver': False,
+        'current_attempt_type': None,
+        'current_attempt_recorded': False,
+        'current_issues': [],
+        'latest_attempt': None,
+    }
+
+
+def initialise_mission35_final_certification():
+    report = _mission35_empty_report()
+    save_mission35_final_certification(report)
+    return report
+
+
+def _mission35_current_report(existing_report=None):
+    report = existing_report if isinstance(existing_report, dict) else {}
+    if report.get('mission_id') != '35' or report.get('check_version') != MISSION35_CHECK_VERSION:
+        return _mission35_empty_report()
+    normalised = _mission35_empty_report()
+    normalised.update(copy.deepcopy(report))
+    design = _mission35_empty_design_screen()
+    for key, value in (report.get('design_screen') or {}).items():
+        if key in design and isinstance(value, dict):
+            design[key] = copy.deepcopy(value)
+    curves = _mission35_empty_curves()
+    for key, value in (report.get('oxygen_curves') or {}).items():
+        if key in curves and isinstance(value, dict):
+            curves[key] = copy.deepcopy(value)
+    audit = {'biomass_optimum': None, 'formate_optimum': None}
+    for key, value in (report.get('objective_audit') or {}).items():
+        if key in audit and isinstance(value, dict):
+            audit[key] = copy.deepcopy(value)
+    normalised['design_screen'] = design
+    normalised['oxygen_curves'] = curves
+    normalised['objective_audit'] = audit
+    return normalised
+
+
+def _mission35_production_selected_ids(production_fluxes):
+    if not isinstance(production_fluxes, dict):
+        return []
+    values = production_fluxes.get('selected_ids')
+    if isinstance(values, list):
+        return [str(value) for value in values]
+    return []
+
+
+def _mission35_update_derived(report):
+    report = _mission35_current_report(report)
+    design = report['design_screen']
+    curves = report['oxygen_curves']
+    audit = report['objective_audit']
+
+    missing_design = [key for key in MISSION35_DESIGN_ORDER if not isinstance(design.get(key), dict)]
+    report['missing_design_conditions'] = missing_design
+    report['design_recorded_count'] = len(MISSION35_DESIGN_ORDER) - len(missing_design)
+    report['design_screen_ready'] = not missing_design
+
+    eligible = []
+    targets = []
+    wt = design.get('wild_type')
+    wt_growth = _mission35_number(wt.get('growth')) if isinstance(wt, dict) else None
+    if wt_growth is not None and wt_growth > MISSION35_MIN_VIABLE_GROWTH:
+        for condition_id in MISSION35_DESIGN_ORDER:
+            if condition_id == 'wild_type':
+                continue
+            run = design.get(condition_id)
+            if not isinstance(run, dict):
+                continue
+            growth = _mission35_number(run.get('growth'))
+            formate = _mission35_number(run.get('formate_secretion'))
+            disabled = sorted(run.get('disabled_reactions') or [])
+            if growth is None or formate is None:
+                continue
+            retention = growth / wt_growth
+            run['growth_retention'] = round(retention, 6)
+            if (
+                formate >= MISSION35_APPROVAL_MIN_FORMATE
+                and retention >= MISSION35_APPROVAL_MIN_GROWTH_RETENTION
+                and len(disabled) <= MISSION35_APPROVAL_MAX_DISABLED_REACTIONS
+            ):
+                eligible.append(condition_id)
+                if len(disabled) == 1:
+                    targets.append(disabled[0])
+    report['eligible_design_conditions'] = eligible
+    report['eligible_reaction_targets'] = sorted(set(targets))
+    report['unique_target_supported'] = bool(
+        report['design_screen_ready']
+        and len(eligible) == 1
+        and len(report['eligible_reaction_targets']) == 1
+    )
+    report['unique_approved_target'] = (
+        report['eligible_reaction_targets'][0] if report['unique_target_supported'] else None
+    )
+
+    missing_curves = [key for key in MISSION35_CURVE_ORDER if not isinstance(curves.get(key), dict)]
+    report['missing_curves'] = missing_curves
+    report['curve_recorded_count'] = len(MISSION35_CURVE_ORDER) - len(missing_curves)
+    curves_complete = not missing_curves
+    matching_bounds = []
+    first_convergence = None
+    convergence_supported = False
+    if curves_complete:
+        first_curve = curves.get('pdh_specific') or {}
+        second_curve = curves.get('shared_subunit') or {}
+        rows_a = {float(row['bound_value']): row for row in first_curve.get('rows') or [] if isinstance(row, dict) and row.get('bound_value') is not None}
+        rows_b = {float(row['bound_value']): row for row in second_curve.get('rows') or [] if isinstance(row, dict) and row.get('bound_value') is not None}
+        match_flags = []
+        for bound in MISSION35_SWEEP_VALUES:
+            row_a = rows_a.get(float(bound))
+            row_b = rows_b.get(float(bound))
+            match = _mission35_curve_rows_match(row_a, row_b)
+            match_flags.append(match)
+            if match:
+                matching_bounds.append(float(bound))
+                if first_convergence is None:
+                    first_convergence = float(bound)
+        # A genuine convergence must have at least one earlier mismatch and all
+        # later tested rows must remain matched.  The mechanisms must also stay
+        # distinct (PDH vs AKGDH+PDH), preventing phenotype from replacing GPR evidence.
+        if first_convergence is not None:
+            first_index = MISSION35_SWEEP_VALUES.index(first_convergence)
+            earlier_mismatch = any(not flag for flag in match_flags[:first_index])
+            sustained_match = all(match_flags[first_index:])
+            distinct_mechanism = (
+                sorted(first_curve.get('disabled_reactions') or [])
+                != sorted(second_curve.get('disabled_reactions') or [])
+            )
+            convergence_supported = bool(earlier_mismatch and sustained_match and distinct_mechanism)
+    report['matching_bounds'] = matching_bounds
+    report['first_convergence_bound'] = first_convergence if convergence_supported else None
+    report['phenotype_convergence_supported'] = convergence_supported
+    report['oxygen_curves_ready'] = bool(curves_complete and convergence_supported)
+
+    biomass_optimum = design.get('pdh_specific')
+    if isinstance(biomass_optimum, dict):
+        audit['biomass_optimum'] = copy.deepcopy(biomass_optimum)
+    formate_optimum = audit.get('formate_optimum')
+    product_compatible = None
+    tradeoff_supported = False
+    if isinstance(formate_optimum, dict) and isinstance(audit.get('biomass_optimum'), dict):
+        direct_growth = _mission35_number(formate_optimum.get('biomass_flux'))
+        direct_formate = _mission35_number(formate_optimum.get('formate_objective_flux'))
+        baseline_growth = _mission35_number(audit['biomass_optimum'].get('growth'))
+        baseline_formate = _mission35_number(audit['biomass_optimum'].get('formate_secretion'))
+        if direct_growth is not None:
+            product_compatible = direct_growth >= MISSION35_MIN_VIABLE_GROWTH
+        if None not in (direct_growth, direct_formate, baseline_growth, baseline_formate):
+            tradeoff_supported = bool(
+                baseline_growth >= MISSION35_MIN_VIABLE_GROWTH
+                and direct_formate >= baseline_formate + MISSION35_PRODUCT_ADVANTAGE_TOLERANCE
+                and direct_growth <= MISSION35_PRODUCT_GROWTH_ZERO_TOLERANCE
+            )
+    report['objective_audit'] = audit
+    report['product_optimum_growth_compatible'] = product_compatible
+    report['objective_tradeoff_supported'] = tradeoff_supported
+    report['objective_audit_ready'] = bool(
+        isinstance(audit.get('biomass_optimum'), dict)
+        and isinstance(audit.get('formate_optimum'), dict)
+        and tradeoff_supported
+    )
+
+    report['dossier_complete'] = bool(
+        report['design_screen_ready']
+        and report['oxygen_curves_ready']
+        and report['objective_audit_ready']
+    )
+    report['evidence_ready'] = bool(
+        report['dossier_complete']
+        and report['unique_target_supported']
+        and report['phenotype_convergence_supported']
+        and report['objective_tradeoff_supported']
+        and report['product_optimum_growth_compatible'] is False
+    )
+    report['answer_target_ready'] = bool(report['evidence_ready'] and report['unique_approved_target'])
+    report['answer_bound_ready'] = bool(report['evidence_ready'] and report['first_convergence_bound'] is not None)
+    report['answer_viability_ready'] = bool(report['evidence_ready'] and report['product_optimum_growth_compatible'] is False)
+    report['ready_to_deliver'] = bool(
+        report['answer_target_ready']
+        and report['answer_bound_ready']
+        and report['answer_viability_ready']
+    )
+    return report
+
+
+def _mission35_validate_pfba_diagnostics(diagnostics, selected_objective, displayed_objective, biomass_raw, issues):
+    if diagnostics.get('method') != MISSION35_METHOD:
+        issues.append('The visible method diagnostics do not describe pFBA.')
+    if diagnostics.get('objective_reaction') != selected_objective:
+        issues.append('The visible method diagnostics do not match the selected objective.')
+    primary = _mission35_number(diagnostics.get('primary_objective_flux'))
+    score = _mission35_number(diagnostics.get('method_score'))
+    total = _mission35_number(diagnostics.get('total_absolute_flux'))
+    if diagnostics.get('method_score_name') != 'total_absolute_flux':
+        issues.append('The pFBA method score must be identified as total_absolute_flux.')
+    if primary is None or score is None or total is None:
+        issues.append('The visible result is missing pFBA objective/secondary diagnostics.')
+    else:
+        if displayed_objective is None or abs(primary - displayed_objective) > MISSION35_PRIMARY_TOLERANCE:
+            issues.append('The displayed objective value does not match the pFBA primary objective flux.')
+        if abs(score - total) > MISSION35_SCORE_TOLERANCE:
+            issues.append('The pFBA method score and total absolute flux describe different results.')
+    if selected_objective == MISSION35_GROWTH_OBJECTIVE and biomass_raw is not None and primary is not None:
+        if abs(biomass_raw - primary) > MISSION35_PRIMARY_TOLERANCE:
+            issues.append('The biomass value and pFBA primary objective flux describe different results.')
+    try:
+        active = int(diagnostics.get('active_reaction_count'))
+        if active <= 0:
+            raise ValueError
+    except Exception:
+        issues.append('The visible pFBA active-reaction count is missing or invalid.')
+
+
+def _build_mission35_visible_run(
+    method_name,
+    selected_objective,
+    objective_result,
+    genes,
+    reactions,
+    production_fluxes,
+    medium_fluxes,
+    existing_report=None,
+    objective_error=None,
+):
+    report = _mission35_current_report(existing_report)
+    design = report['design_screen']
+    audit = report['objective_audit']
+    genes_complete = _mission35_complete_genes(genes)
+    knockouts = sorted(_knocked_out_genes(genes)) if isinstance(genes, dict) else []
+    condition = _mission35_design_condition(knockouts) if genes_complete else None
+    environment = _mission35_exact_default_environment(reactions)
+    objective_numeric = _mission35_number(objective_result)
+    result_infeasible = 'INFEASIBLE' in str(objective_result or '').upper()
+    raw_fluxes, uptake_fluxes, secretion_fluxes = _mission21_measured_medium_values(medium_fluxes)
+    diagnostics = _method_diagnostics_from_production_data(production_fluxes)
+    biomass_raw = _mission35_number(_mission13_biomass_value(production_fluxes))
+    glucose_uptake = _mission35_number(uptake_fluxes.get(MISSION35_GLUCOSE_REACTION))
+    oxygen_uptake = _mission35_number(uptake_fluxes.get(MISSION35_OXYGEN_REACTION))
+    formate = _mission35_number(secretion_fluxes.get(MISSION35_FORMATE_REACTION))
+    acetate = _mission35_number(secretion_fluxes.get(MISSION35_ACETATE_REACTION))
+    ethanol = _mission35_number(secretion_fluxes.get(MISSION35_ETHANOL_REACTION))
+    selected_fluxes = _mission35_production_selected_ids(production_fluxes)
+    production_values = _mission21_measured_production_values(production_fluxes)
+    disabled_present = isinstance(diagnostics.get('gpr_disabled_reactions'), list)
+    visible_disabled = sorted(str(value) for value in (diagnostics.get('gpr_disabled_reactions') or []))
+    expected_disabled = sorted(MISSION35_EXPECTED_DISABLED.get(condition, [])) if condition else []
+
+    issues = []
+    attempt_type = 'design_screen' if selected_objective == MISSION35_GROWTH_OBJECTIVE else 'objective_audit'
+    if objective_error:
+        issues.append(objective_error)
+    if method_name != MISSION35_METHOD:
+        issues.append('Mission 35 uses pFBA for every visible run and sweep.')
+    if selected_objective not in (MISSION35_GROWTH_OBJECTIVE, MISSION35_FORMATE_OBJECTIVE):
+        issues.append('Use either the biomass objective for the design screen or EX_for_e for the objective audit.')
+    if not genes_complete:
+        issues.append('The complete gene panel must be present in the Mission 35 simulation payload.')
+    if not environment.get('bounds_complete'):
+        issues.append('The environmental-bound payload is incomplete.')
+    elif not environment.get('default_environment_ready'):
+        issues.append('Normal Mission 35 runs require the completely model-default aerobic environment.')
+    if result_infeasible or objective_numeric is None:
+        issues.append('Mission 35 requires a feasible numeric visible solver result; INFEASIBLE is not zero.')
+    if medium_fluxes and medium_fluxes.get('error'):
+        issues.append('The Exchange Flux Report is unavailable for this Mission 35 run.')
+    if glucose_uptake is None or oxygen_uptake is None or formate is None or acetate is None or ethanol is None:
+        issues.append('Numeric glucose, oxygen, formate, acetate and ethanol exchange evidence is required.')
+    else:
+        if abs(glucose_uptake - MISSION35_EXPECTED_GLUCOSE_UPTAKE) > MISSION35_FLUX_TOLERANCE:
+            issues.append('Keep model-default glucose uptake for Mission 35 normal runs.')
+        if oxygen_uptake <= MISSION35_FLUX_TOLERANCE:
+            issues.append('Normal Mission 35 runs must remain in the default aerobic context.')
+    if not disabled_present:
+        issues.append('The visible result must expose its GPR-disabled reaction list.')
+
+    _mission35_validate_pfba_diagnostics(
+        diagnostics, selected_objective, objective_numeric, biomass_raw, issues
+    )
+
+    if selected_objective == MISSION35_GROWTH_OBJECTIVE:
+        attempt_type = 'design_screen'
+        if condition is None:
+            issues.append('Record exactly one of the four Mission 35 design-screen genotypes.')
+        elif visible_disabled != expected_disabled:
+            issues.append(
+                'The GPR-disabled reaction set does not match this design-screen genotype.'
+            )
+        required_set = set(MISSION35_REQUIRED_PRODUCTION_FLUXES)
+        if set(selected_fluxes) != required_set:
+            issues.append('Select exactly EX_for_e, EX_ac_e and EX_etoh_e in Production Flux for the design screen.')
+        if set(production_values) != required_set:
+            issues.append('The Production Flux report is missing the complete Mission 35 product panel.')
+        elif None not in (formate, acetate, ethanol):
+            for reaction_id, exchange_value in (
+                (MISSION35_FORMATE_REACTION, formate),
+                (MISSION35_ACETATE_REACTION, acetate),
+                (MISSION35_ETHANOL_REACTION, ethanol),
+            ):
+                production_value = _mission35_number(production_values.get(reaction_id))
+                if production_value is None or abs(production_value - exchange_value) > MISSION35_FLUX_TOLERANCE:
+                    issues.append('Production Flux and Exchange Flux evidence do not describe the same visible solution.')
+                    break
+        if objective_numeric is not None and objective_numeric < MISSION35_MIN_VIABLE_GROWTH:
+            issues.append('Every design-screen condition must retain viable predicted growth.')
+    elif selected_objective == MISSION35_FORMATE_OBJECTIVE:
+        attempt_type = 'objective_audit'
+        if knockouts != ['b0114']:
+            issues.append('The direct-formate objective audit must use exactly the approved-design genotype b0114.')
+        if visible_disabled != ['PDH']:
+            issues.append('The objective-audit genotype must disable PDH and no additional GPR reaction.')
+        if formate is not None and objective_numeric is not None and abs(formate - objective_numeric) > MISSION35_PRIMARY_TOLERANCE:
+            issues.append('The direct formate objective must match measured formate secretion.')
+        if biomass_raw is None:
+            issues.append('The objective audit requires a measured biomass flux; missing biomass is not zero.')
+
+    recorded = False
+    if not issues:
+        total_abs = _mission35_number(diagnostics.get('total_absolute_flux'))
+        try:
+            active_count = int(diagnostics.get('active_reaction_count'))
+        except Exception:
+            active_count = None
+        if attempt_type == 'design_screen':
+            snapshot = {
+                'model_id': MISSION35_MODEL_ID,
+                'condition': condition,
+                'condition_label': MISSION35_DESIGN_LABELS.get(condition),
+                'status': 'ok',
+                'method': method_name,
+                'objective': selected_objective,
+                'knocked_out_genes': list(knockouts),
+                'disabled_reactions': list(visible_disabled),
+                'environment_changes': list(environment.get('changes') or []),
+                'growth': _mission35_clean(objective_numeric),
+                'growth_retention': None,
+                'glucose_uptake': _mission35_clean(glucose_uptake),
+                'oxygen_uptake': _mission35_clean(oxygen_uptake),
+                'formate_secretion': _mission35_clean(formate),
+                'acetate_secretion': _mission35_clean(acetate),
+                'ethanol_secretion': _mission35_clean(ethanol),
+                'total_absolute_flux': _mission35_clean(total_abs),
+                'active_reaction_count': active_count,
+                'production_flux_panel': list(selected_fluxes),
+            }
+            design[condition] = snapshot
+            recorded = True
+        else:
+            snapshot = {
+                'model_id': MISSION35_MODEL_ID,
+                'condition': 'formate_optimum',
+                'status': 'ok',
+                'method': method_name,
+                'objective': selected_objective,
+                'knocked_out_genes': list(knockouts),
+                'disabled_reactions': list(visible_disabled),
+                'environment_changes': list(environment.get('changes') or []),
+                'formate_objective_flux': _mission35_clean(objective_numeric),
+                'biomass_flux': _mission35_clean(biomass_raw),
+                'glucose_uptake': _mission35_clean(glucose_uptake),
+                'oxygen_uptake': _mission35_clean(oxygen_uptake),
+                'formate_secretion': _mission35_clean(formate),
+                'acetate_secretion': _mission35_clean(acetate),
+                'ethanol_secretion': _mission35_clean(ethanol),
+                'total_absolute_flux': _mission35_clean(total_abs),
+                'active_reaction_count': active_count,
+            }
+            audit['formate_optimum'] = snapshot
+            recorded = True
+
+    report['design_screen'] = design
+    report['objective_audit'] = audit
+    report = _mission35_update_derived(report)
+    report['current_attempt_type'] = attempt_type
+    report['current_attempt_recorded'] = recorded
+    report['current_issues'] = list(issues)
+    report['latest_attempt'] = {
+        'type': attempt_type,
+        'objective': selected_objective,
+        'method': method_name,
+        'condition': condition,
+        'knocked_out_genes': list(knockouts),
+        'recorded': recorded,
+        'valid': not issues,
+        'issues': list(issues),
+    }
+    save_mission35_final_certification(report)
+    return report
+
+
+def run_mission35_final_certification_check(simulation_results=None):
+    """Accumulate one already-visible normal Mission 35 simulation."""
+    method_name, selected_objective, genes, reactions = _read_simulation_file()
+    objective_result = None
+    production_fluxes = None
+    medium_fluxes = None
+    objective_error = None
+    try:
+        if simulation_results is not None:
+            result_objective = simulation_results[0]
+            objective_result = simulation_results[1]
+            production_fluxes = simulation_results[2] if len(simulation_results) > 2 else None
+            medium_fluxes = simulation_results[3] if len(simulation_results) > 3 else None
+            if result_objective != selected_objective:
+                objective_error = 'The displayed result does not match the currently selected Mission 35 objective.'
+        else:
+            objective_error = 'Run a visible Mission 35 simulation before recording evidence.'
+    except Exception:
+        objective_error = 'Could not read the current visible Mission 35 simulation result.'
+    return _build_mission35_visible_run(
+        method_name,
+        selected_objective,
+        objective_result,
+        genes,
+        reactions,
+        production_fluxes,
+        medium_fluxes,
+        existing_report=load_mission35_final_certification() or {},
+        objective_error=objective_error,
+    )
+
+
+def run_mission35_final_certification_check_remote(backend_url, simulation_results=None):
+    """Browser-parity wrapper: reuse the visible /simulate response only."""
+    del backend_url
+    return run_mission35_final_certification_check(simulation_results)
+
+
+def mission35_should_run_bound_sweep(sweep_menu_data, method_name, objective_name, genes):
+    """Avoid an automatic sweep on every Mission 35 normal run.
+
+    Mission 35 launches its two four-point sweeps only when the player has
+    explicitly selected the dedicated final preset and an allowed curve
+    genotype.  The base-environment validator still decides whether the sweep
+    itself can be recorded.
+    """
+    try:
+        config = _normalise_sweep_config(sweep_menu_data)
+        if method_name != MISSION35_METHOD or objective_name != MISSION35_GROWTH_OBJECTIVE:
+            return False
+        if not _mission35_complete_genes(genes):
+            return False
+        condition = _mission35_design_condition(sorted(_knocked_out_genes(genes)))
+        return bool(
+            condition in MISSION35_CURVE_ORDER
+            and config.get('reaction_id') == MISSION35_SWEEP_REACTION
+            and config.get('bound') == MISSION35_SWEEP_BOUND
+            and config.get('preset') == MISSION35_SWEEP_PRESET
+            and [float(v) for v in config.get('values') or []] == MISSION35_SWEEP_VALUES
+        )
+    except Exception:
+        return False
+
+
+def _mission35_curve_rows_match(first, second):
+    if not isinstance(first, dict) or not isinstance(second, dict):
+        return False
+    if first.get('status') != 'ok' or second.get('status') != 'ok':
+        return False
+    for field, tolerance in (
+        ('growth', MISSION35_SWEEP_MATCH_GROWTH_TOLERANCE),
+        ('oxygen_uptake', MISSION35_SWEEP_MATCH_FLUX_TOLERANCE),
+        ('formate_secretion', MISSION35_SWEEP_MATCH_FLUX_TOLERANCE),
+        ('acetate_secretion', MISSION35_SWEEP_MATCH_FLUX_TOLERANCE),
+        ('ethanol_secretion', MISSION35_SWEEP_MATCH_FLUX_TOLERANCE),
+        ('total_absolute_flux', MISSION35_SWEEP_MATCH_TOTAL_TOLERANCE),
+    ):
+        a = _mission35_number(first.get(field))
+        b = _mission35_number(second.get(field))
+        if a is None or b is None or abs(a - b) > tolerance:
+            return False
+    return first.get('active_reaction_count') == second.get('active_reaction_count')
+
+
+def _build_mission35_curve_data(sweep_data=None, existing_report=None):
+    report = _mission35_current_report(existing_report)
+    curves = report['oxygen_curves']
+    sweep_data = sweep_data if isinstance(sweep_data, dict) else {}
+    knockouts = sorted(str(value) for value in (sweep_data.get('knocked_out_genes') or []))
+    condition = _mission35_design_condition(knockouts)
+    expected_disabled = sorted(MISSION35_EXPECTED_DISABLED.get(condition, [])) if condition else []
+    rows = list(sweep_data.get('rows') or [])
+    base_genes = sweep_data.get('base_genes')
+    base_reactions = sweep_data.get('base_reactions')
+    environment = _mission35_exact_default_environment(base_reactions)
+    issues = []
+
+    if sweep_data.get('method') != MISSION35_METHOD:
+        issues.append('Mission 35 oxygen curves must use pFBA.')
+    if sweep_data.get('objective') != MISSION35_GROWTH_OBJECTIVE:
+        issues.append('Mission 35 oxygen curves must use the biomass objective.')
+    if condition not in MISSION35_CURVE_ORDER:
+        issues.append('Record the oxygen curve for exactly b0114 or b0116.')
+    if not _mission35_complete_genes(base_genes):
+        issues.append('The Bound Sweep must carry the complete base gene payload.')
+    if not environment.get('bounds_complete') or not environment.get('default_environment_ready'):
+        issues.append('Start the Mission 35 oxygen sweep from the completely default aerobic environment.')
+    if sweep_data.get('reaction_id') != MISSION35_SWEEP_REACTION or sweep_data.get('bound') != MISSION35_SWEEP_BOUND:
+        issues.append('Sweep the EX_o2_e lower bound for Mission 35.')
+    if sweep_data.get('preset') != MISSION35_SWEEP_PRESET:
+        issues.append('Use the dedicated Final oxygen convergence preset.')
+    values = [_mission35_number(value) for value in (sweep_data.get('values') or [])]
+    if values != MISSION35_SWEEP_VALUES:
+        issues.append('Use exactly the four tested oxygen lower bounds -30, -10, -5 and -2.')
+    if len(rows) != len(MISSION35_SWEEP_VALUES):
+        issues.append('The Mission 35 oxygen curve must contain exactly four visible rows.')
+
+    normalised_rows = []
+    seen_bounds = set()
+    if not issues or rows:
+        for row in rows:
+            if not isinstance(row, dict):
+                issues.append('A Mission 35 Bound Sweep row is malformed.')
+                continue
+            bound_value = _mission35_number(row.get('bound_value'))
+            if bound_value is None or bound_value not in MISSION35_SWEEP_VALUES or bound_value in seen_bounds:
+                issues.append('The Mission 35 oxygen curve contains a missing, duplicate or unexpected bound value.')
+                continue
+            seen_bounds.add(bound_value)
+            if row.get('status') != 'ok':
+                issues.append(f'The oxygen sweep row at {bound_value:g} must be feasible; INFEASIBLE is not a zero result.')
+                continue
+            growth = _mission35_number(row.get('growth_value'))
+            oxygen = _mission35_number(row.get('oxygen_uptake'))
+            uptake_map = row.get('exchange_uptake_fluxes') or {}
+            secretion_map = row.get('exchange_secretion_fluxes') or {}
+            glucose = _mission35_number(uptake_map.get(MISSION35_GLUCOSE_REACTION))
+            formate = _mission35_number(secretion_map.get(MISSION35_FORMATE_REACTION))
+            acetate = _mission35_number(secretion_map.get(MISSION35_ACETATE_REACTION))
+            ethanol = _mission35_number(secretion_map.get(MISSION35_ETHANOL_REACTION))
+            diagnostics = row.get('method_diagnostics') or {}
+            disabled_present = isinstance(diagnostics.get('gpr_disabled_reactions'), list)
+            disabled = sorted(str(value) for value in (diagnostics.get('gpr_disabled_reactions') or []))
+            primary = _mission35_number(diagnostics.get('primary_objective_flux'))
+            score = _mission35_number(diagnostics.get('method_score'))
+            total = _mission35_number(diagnostics.get('total_absolute_flux'))
+            try:
+                active_count = int(diagnostics.get('active_reaction_count'))
+            except Exception:
+                active_count = None
+            row_issues = []
+            if None in (growth, oxygen, glucose, formate, acetate, ethanol, primary, score, total) or active_count is None:
+                row_issues.append('numeric growth/exchange/pFBA evidence is incomplete')
+            else:
+                if growth < MISSION35_MIN_VIABLE_GROWTH:
+                    row_issues.append('predicted growth is not viable')
+                if abs(glucose - MISSION35_EXPECTED_GLUCOSE_UPTAKE) > MISSION35_FLUX_TOLERANCE:
+                    row_issues.append('glucose uptake is not the default 10')
+                oxygen_capacity = abs(float(bound_value))
+                if oxygen > oxygen_capacity + MISSION35_BOUND_TOLERANCE:
+                    row_issues.append('oxygen uptake exceeds the tested lower-bound capacity')
+                if bound_value in (-10.0, -5.0, -2.0) and abs(oxygen - oxygen_capacity) > MISSION35_BOUND_TOLERANCE:
+                    row_issues.append('the expected oxygen-limited row is not bound by its tested capacity')
+                if bound_value == -30.0 and oxygen >= oxygen_capacity - MISSION35_BOUND_TOLERANCE:
+                    row_issues.append('the -30 oxygen row should remain non-binding')
+                if diagnostics.get('method') != MISSION35_METHOD:
+                    row_issues.append('method diagnostics are not pFBA')
+                if diagnostics.get('objective_reaction') != MISSION35_GROWTH_OBJECTIVE:
+                    row_issues.append('method diagnostics do not use the biomass objective')
+                if diagnostics.get('method_score_name') != 'total_absolute_flux':
+                    row_issues.append('pFBA score is not labelled total_absolute_flux')
+                if abs(primary - growth) > MISSION35_PRIMARY_TOLERANCE:
+                    row_issues.append('growth does not match the primary objective flux')
+                if abs(score - total) > MISSION35_SCORE_TOLERANCE:
+                    row_issues.append('pFBA score does not match total absolute flux')
+            if not disabled_present or disabled != expected_disabled:
+                row_issues.append('visible GPR-disabled reactions do not match the curve genotype')
+            if row_issues:
+                issues.append(f'At O2 lower bound {bound_value:g}: ' + '; '.join(row_issues) + '.')
+                continue
+            normalised_rows.append({
+                'bound_value': float(bound_value),
+                'status': 'ok',
+                'growth': _mission35_clean(growth),
+                'glucose_uptake': _mission35_clean(glucose),
+                'oxygen_uptake': _mission35_clean(oxygen),
+                'formate_secretion': _mission35_clean(formate),
+                'acetate_secretion': _mission35_clean(acetate),
+                'ethanol_secretion': _mission35_clean(ethanol),
+                'total_absolute_flux': _mission35_clean(total),
+                'active_reaction_count': active_count,
+                'disabled_reactions': list(disabled),
+            })
+
+    if sorted(seen_bounds) != sorted(MISSION35_SWEEP_VALUES):
+        if 'The Mission 35 oxygen curve must contain exactly four visible rows.' not in issues:
+            issues.append('The Mission 35 oxygen curve is missing one or more required tested bounds.')
+
+    recorded = False
+    if not issues and condition in MISSION35_CURVE_ORDER:
+        normalised_rows.sort(key=lambda row: MISSION35_SWEEP_VALUES.index(float(row['bound_value'])))
+        curves[condition] = {
+            'model_id': MISSION35_MODEL_ID,
+            'condition': condition,
+            'condition_label': MISSION35_DESIGN_LABELS[condition],
+            'method': MISSION35_METHOD,
+            'objective': MISSION35_GROWTH_OBJECTIVE,
+            'knocked_out_genes': list(knockouts),
+            'disabled_reactions': list(expected_disabled),
+            'reaction_id': MISSION35_SWEEP_REACTION,
+            'bound': MISSION35_SWEEP_BOUND,
+            'preset': MISSION35_SWEEP_PRESET,
+            'values': list(MISSION35_SWEEP_VALUES),
+            'rows': normalised_rows,
+        }
+        recorded = True
+
+    report['oxygen_curves'] = curves
+    report = _mission35_update_derived(report)
+    report['current_attempt_type'] = 'oxygen_curve'
+    report['current_attempt_recorded'] = recorded
+    report['current_issues'] = list(issues)
+    report['latest_attempt'] = {
+        'type': 'oxygen_curve',
+        'condition': condition,
+        'knocked_out_genes': list(knockouts),
+        'recorded': recorded,
+        'valid': not issues,
+        'issues': list(issues),
+    }
+    save_mission35_final_certification(report)
+    return report
+
+
+def run_mission35_oxygen_curve_check(sweep_data=None):
+    """Accumulate one already-visible Mission 35 Bound Sweep."""
+    return _build_mission35_curve_data(
+        sweep_data,
+        existing_report=load_mission35_final_certification() or {},
+    )
+
+
+def run_mission35_oxygen_curve_check_remote(backend_url, sweep_data=None):
+    del backend_url
+    return run_mission35_oxygen_curve_check(sweep_data)
+
+
+def _mission35_normalise_text(value):
+    text = unicodedata.normalize('NFKD', str(value or ''))
+    return ''.join(char for char in text if not unicodedata.combining(char)).lower().strip()
+
+
+def normalise_mission35_target_answer(answer):
+    compact = re.sub(r'[^a-z0-9]+', ' ', _mission35_normalise_text(answer)).strip()
+    aliases = {
+        'PDH': {
+            'pdh',
+            'pyruvate dehydrogenase',
+            'pyruvate dehydrogenase complex',
+            'desidrogenase do piruvato',
+            'complexo desidrogenase do piruvato',
+        },
+        'AKGDH': {
+            'akgdh',
+            '2 oxoglutarate dehydrogenase',
+            '2 oxoglutarate dehydrogenase complex',
+            'oxoglutarate dehydrogenase',
+        },
+    }
+    for reaction_id, values in aliases.items():
+        if compact in values:
+            return reaction_id
+    return None
+
+
+def normalise_mission35_bound_answer(answer):
+    text = _mission35_normalise_text(answer).replace(',', '.')
+    if text in {'minus five', 'menos cinco'}:
+        return -5.0
+    match = re.fullmatch(r'\s*(-?\d+(?:\.\d+)?)\s*', text)
+    if not match:
+        return None
+    try:
+        return float(match.group(1))
+    except Exception:
+        return None
+
+
+def normalise_mission35_viability_answer(answer):
+    compact = re.sub(r'[^a-z0-9]+', ' ', _mission35_normalise_text(answer)).strip()
+    negative = {
+        'no', 'nao', 'false', 'not viable', 'not growth compatible',
+        'growth incompatible', 'incompatible', 'nao viavel', 'nao compativel',
+    }
+    positive = {'yes', 'sim', 'true', 'viable', 'growth compatible', 'compatible'}
+    if compact in negative:
+        return False
+    if compact in positive:
+        return True
+    return None
+
+
+def mission35_answer_checks(target_answer, bound_answer, viability_answer, report_data=None):
+    report = _mission35_update_derived(
+        report_data if report_data is not None else (load_mission35_final_certification() or {})
+    )
+    target = normalise_mission35_target_answer(target_answer)
+    bound = normalise_mission35_bound_answer(bound_answer)
+    viability = normalise_mission35_viability_answer(viability_answer)
+    target_ok = bool(
+        report.get('answer_target_ready')
+        and target is not None
+        and target == report.get('unique_approved_target')
+    )
+    bound_ok = bool(
+        report.get('answer_bound_ready')
+        and bound is not None
+        and _mission35_number(report.get('first_convergence_bound')) is not None
+        and abs(bound - float(report['first_convergence_bound'])) <= MISSION35_BOUND_TOLERANCE
+    )
+    viability_ok = bool(
+        report.get('answer_viability_ready')
+        and viability is not None
+        and viability == report.get('product_optimum_growth_compatible')
+    )
+    return {
+        'target': target_ok,
+        'bound': bound_ok,
+        'viability': viability_ok,
+        'all': bool(target_ok and bound_ok and viability_ok and report.get('ready_to_deliver')),
+    }
+
+
+def mission35_answers_match(target_answer, bound_answer, viability_answer, report_data=None):
+    return mission35_answer_checks(
+        target_answer, bound_answer, viability_answer, report_data=report_data
+    ).get('all', False)
+
+
+def _mission35_text_number(value, suffix=''):
+    numeric = _mission35_number(value)
+    return 'pending' if numeric is None else f'{numeric:.3f}{suffix}'
+
+
+def _mission35_disabled_text(run):
+    if not isinstance(run, dict):
+        return 'pending'
+    disabled = list(run.get('disabled_reactions') or [])
+    return ','.join(disabled) if disabled else 'none'
+
+
+def build_mission35_final_certification_report_text(report_data=None):
+    report = report_data or {}
+    if not report:
+        return (
+            'No Mission 35 certification evidence has been recorded yet.\n\n'
+            'This final E. coli dossier combines a design screen, two matched oxygen-response curves and a direct-objective viability audit.\n\n'
+            'Use only visible pFBA results and the dedicated final oxygen sweep preset.'
+        )
+    if report.get('mission_id') != '35' or report.get('check_version') != MISSION35_CHECK_VERSION:
+        return 'Mission 35 E. coli Final Systems Certification\n\nCurrent-format evidence has not been recorded yet.'
+    report = _mission35_update_derived(report)
+    lines = [
+        'Mission 35 E. coli Final Systems Certification',
+        '',
+        'Final dossier protocol:',
+        f'- Method: {MISSION35_METHOD}',
+        f'- Growth objective: {MISSION35_GROWTH_OBJECTIVE}',
+        '- Normal-run environment: completely model-default and aerobic',
+        '- Design Production Flux panel: EX_for_e, EX_ac_e, EX_etoh_e',
+        f'- Approval criteria: formate >= {MISSION35_APPROVAL_MIN_FORMATE:.1f}, growth retention >= {MISSION35_APPROVAL_MIN_GROWTH_RETENTION * 100:.0f}%, <= {MISSION35_APPROVAL_MAX_DISABLED_REACTIONS} GPR-disabled reaction',
+        f'- Oxygen sweep: EX_o2_e lower bound at {", ".join(f"{v:g}" for v in MISSION35_SWEEP_VALUES)}',
+        '- Objective audit: b0114 with EX_for_e as the direct pFBA objective',
+        '',
+        f"Progress: design {report.get('design_recorded_count', 0)}/4 | oxygen curves {report.get('curve_recorded_count', 0)}/2 | objective audit {1 if isinstance((report.get('objective_audit') or {}).get('formate_optimum'), dict) else 0}/1",
+        '',
+        'A. Design Approval Screen',
+        'Condition | disabled | growth | retention | formate | O2 uptake | pFBA total | active',
+    ]
+    design = report.get('design_screen') or {}
+    for condition_id in MISSION35_DESIGN_ORDER:
+        run = design.get(condition_id)
+        if not isinstance(run, dict):
+            lines.append(f'{MISSION35_DESIGN_LABELS[condition_id]} | pending | pending | pending | pending | pending | pending | pending')
+            continue
+        retention = _mission35_number(run.get('growth_retention'))
+        retention_text = 'pending' if retention is None else f'{retention * 100:.1f}%'
+        lines.append(
+            f"{MISSION35_DESIGN_LABELS[condition_id]} | {_mission35_disabled_text(run)} | "
+            f"{_mission35_text_number(run.get('growth'))} | {retention_text} | "
+            f"{_mission35_text_number(run.get('formate_secretion'))} | {_mission35_text_number(run.get('oxygen_uptake'))} | "
+            f"{_mission35_text_number(run.get('total_absolute_flux'))} | {run.get('active_reaction_count', 'pending')}"
+        )
+
+    lines.extend(['', 'B. Oxygen Robustness Curves'])
+    curves = report.get('oxygen_curves') or {}
+    if all(isinstance(curves.get(key), dict) for key in MISSION35_CURVE_ORDER):
+        rows_a = {float(row['bound_value']): row for row in curves['pdh_specific'].get('rows') or []}
+        rows_b = {float(row['bound_value']): row for row in curves['shared_subunit'].get('rows') or []}
+        lines.append('O2 LB | aceE growth | aceE formate | lpd growth | lpd formate | visible phenotype match')
+        for bound in MISSION35_SWEEP_VALUES:
+            a = rows_a.get(float(bound), {})
+            b = rows_b.get(float(bound), {})
+            match = _mission35_curve_rows_match(a, b)
+            lines.append(
+                f"{bound:g} | {_mission35_text_number(a.get('growth'))} | {_mission35_text_number(a.get('formate_secretion'))} | "
+                f"{_mission35_text_number(b.get('growth'))} | {_mission35_text_number(b.get('formate_secretion'))} | {'yes' if match else 'no'}"
+            )
+        lines.append(
+            'Mechanism remains distinct: aceE curve disables '
+            + _mission35_disabled_text(curves.get('pdh_specific'))
+            + '; lpd curve disables '
+            + _mission35_disabled_text(curves.get('shared_subunit'))
+            + '.'
+        )
+    else:
+        for condition_id in MISSION35_CURVE_ORDER:
+            lines.append(f"{MISSION35_DESIGN_LABELS[condition_id]} oxygen curve | {'recorded' if isinstance(curves.get(condition_id), dict) else 'pending'}")
+
+    lines.extend(['', 'C. Objective Viability Audit'])
+    audit = report.get('objective_audit') or {}
+    baseline = audit.get('biomass_optimum')
+    product = audit.get('formate_optimum')
+    if isinstance(baseline, dict):
+        lines.append(
+            'Biomass-objective b0114 | growth '
+            + _mission35_text_number(baseline.get('growth'))
+            + ' | formate '
+            + _mission35_text_number(baseline.get('formate_secretion'))
+        )
+    else:
+        lines.append('Biomass-objective b0114 | pending')
+    if isinstance(product, dict):
+        lines.append(
+            'Direct-formate objective b0114 | formate objective '
+            + _mission35_text_number(product.get('formate_objective_flux'))
+            + ' | biomass '
+            + _mission35_text_number(product.get('biomass_flux'))
+            + ' | O2 uptake '
+            + _mission35_text_number(product.get('oxygen_uptake'))
+        )
+    else:
+        lines.append('Direct-formate objective b0114 | pending')
+
+    latest = report.get('latest_attempt') or {}
+    if latest:
+        lines.append('')
+        if latest.get('recorded'):
+            lines.append(f"Latest valid visible evidence recorded: {latest.get('type')} ({latest.get('condition') or latest.get('objective')}).")
+        else:
+            lines.append('Latest attempt was not recorded:')
+            for issue in latest.get('issues') or ['The visible evidence did not match the controlled Mission 35 protocol.']:
+                lines.append(f'- {issue}')
+            if report.get('design_recorded_count', 0) or report.get('curve_recorded_count', 0) or isinstance(product, dict):
+                lines.append('Previously valid Mission 35 dossier evidence remains available.')
+
+    lines.append('')
+    if report.get('evidence_ready'):
+        lines.extend([
+            'Final dossier evidence complete.',
+            'Use the three answer fields to identify the qualifying reaction target, the first tested oxygen bound where the measured phenotypes converge, and whether the direct product optimum retains growth compatibility.',
+        ])
+    else:
+        lines.append('Final dossier evidence incomplete.')
+        if report.get('missing_design_conditions'):
+            lines.append('Missing design runs: ' + ', '.join(report.get('missing_design_conditions') or []))
+        if report.get('missing_curves'):
+            lines.append('Missing oxygen curves: ' + ', '.join(report.get('missing_curves') or []))
+        if not isinstance(product, dict):
+            lines.append('Missing objective audit: direct EX_for_e objective with b0114.')
+        if report.get('design_screen_ready') and not report.get('unique_target_supported'):
+            lines.append('The design screen does not yet support one unique qualifying reaction target under all three criteria.')
+        if report.get('curve_recorded_count') == 2 and not report.get('phenotype_convergence_supported'):
+            lines.append('The two oxygen curves do not yet support a sustained first phenotype-convergence point with distinct GPR mechanisms.')
+        if isinstance(product, dict) and not report.get('objective_tradeoff_supported'):
+            lines.append('The objective audit does not yet demonstrate the required product-versus-growth trade-off.')
+
+    lines.extend([
+        '',
+        'Interpretation note: approve a design only when production, growth retention and GPR reaction impact all satisfy the stated criteria. More product alone is not sufficient.',
+        'A matched phenotype under oxygen limitation does not erase a mechanistic GPR difference. Bound activity, genotype and observed fluxes are separate evidence layers.',
+        'The direct product objective is a theoretical optimum under this model and medium. Its pFBA secondary score is not a biological quality ranking.',
+        'All mission evidence comes from visible normal simulations or visible Bound Sweep rows. No hidden validation simulation is used.',
+    ])
+    return '\n'.join(lines)
+
+
+def _build_mission35_text(report_data=None):
+    return build_mission35_final_certification_report_text(report_data)

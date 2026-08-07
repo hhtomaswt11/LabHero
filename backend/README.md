@@ -58,3 +58,15 @@ A successful ROOM response also exposes:
 
 The ROOM `method_score` is the significant-flux-change criterion and is kept
 separate from the selected objective-reaction flux.
+
+### GPR-disabled reactions
+
+Successful `/simulate` responses include the additive field:
+
+```json
+{
+  "gpr_disabled_reactions": ["AKGDH", "PDH"]
+}
+```
+
+The field is evaluated by the backend from the complete model GPR after applying the requested gene knockouts. Browser clients should use this visible server result instead of reimplementing GPR parsing. Existing clients remain compatible because the field is optional and no endpoint changed.

@@ -3,6 +3,7 @@ from dataclasses import dataclass
 
 from functions import import_folder
 from utils import get_resource_path
+from progression import mission_requirement_met, unlock_requirement
 
 
 ANIMATION_STATES = (
@@ -18,6 +19,7 @@ class SkinDefinition:
     folder: str
     # price: int = 0
     unlocked: bool = True
+    unlock_after_mission: str | None = None
 
 
 # To add a new skin later: add one entry here and create the folder with the
@@ -65,13 +67,14 @@ SKIN_REGISTRY = [
         # price=0,
         unlocked=True
     ),
-    # SkinDefinition(
-    #     id='golden',
-    #     name='Golden LabHero',
-    #     folder='graphics/character_golden',
-    #     price=0,
-    #     unlocked=False
-    # ),
+    SkinDefinition(
+        id='golden',
+        name='Golden LabHero',
+        folder='graphics/character_golden',
+        # price=0,
+        unlocked=False,
+        unlock_after_mission=unlock_requirement('skin', 'golden'),
+    ),
 ]
 
 
@@ -108,8 +111,15 @@ class SkinManager:
         if not self.skins:
             raise RuntimeError('No valid character skins were found.')
 
-    def skin_ids(self):
-        return [skin.id for skin in self.skins]
+    def skin_ids(self, missions_completed=None, include_locked=True):
+        skins = self.skins if include_locked else self.unlocked_skins(missions_completed)
+        return [skin.id for skin in skins]
+
+    def unlocked_skins(self, missions_completed=None):
+        return [
+            skin for skin in self.skins
+            if self.is_unlocked(skin.id, missions_completed)
+        ]
 
     def get_skin(self, skin_id):
         for skin in self.skins:
@@ -120,8 +130,11 @@ class SkinManager:
     def is_valid_skin(self, skin_id):
         return skin_id in self.animations_by_skin
 
-    def is_unlocked(self, skin_id):
-        return self.get_skin(skin_id).unlocked
+    def is_unlocked(self, skin_id, missions_completed=None):
+        skin = self.get_skin(skin_id)
+        if skin.unlocked:
+            return True
+        return mission_requirement_met(skin.unlock_after_mission, missions_completed)
 
     def get_animations(self, skin_id):
         if skin_id not in self.animations_by_skin:
