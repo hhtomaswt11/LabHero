@@ -1,0 +1,21 @@
+LabHero Checkpoint B — Carter reveal + responsive simulation execution
+
+Changed runtime files:
+- code/level.py
+- code/simulation.py
+- code/window.py
+
+Changed/added regressions:
+- tests/test_checkpoint_b_infrastructure.py (new)
+- tests/test_mission23.py
+- tests/test_multimodel_yeast.py
+
+Runtime intent:
+1. Anchor CarterRevealSprite to the current Tiled Mission03 object instead of old fixed map coordinates.
+2. Desktop: execute run_simul/run_bound_sweep through asyncio.to_thread so Pygame can keep processing frames/events.
+3. Browser: use async pyfetch for /simulate and sequential async requests for Bound Sweep.
+4. Prevent duplicate Run Simulation jobs and show a persistent running/ready status.
+5. Snapshot Bound Sweep controls at click time so responsive UI edits cannot alter an in-flight job.
+6. Preserve legacy synchronous remote wrappers for compatibility/tests; live window path uses async wrappers.
+
+No mission01.py–mission40.py, Tiled map, metabolic model, GPR, ROOM or backend solver files are changed.

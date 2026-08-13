@@ -1,4 +1,5 @@
 import asyncio
+import copy
 import sys
 
 import pygame
@@ -1593,7 +1594,7 @@ class Window:
         menu_bound_sweep.add.vertical_margin(20)
 
 
-        def data_fun() -> None:
+        async def data_fun() -> None:
             """
             Print data of the menu.
             """
@@ -1647,6 +1648,10 @@ class Window:
                 data_reac = menu_reactions.get_input_data()
             raw_fluxes = menu_production_flux.get_input_data()
             data_fluxes = {reaction_id: bool(raw_fluxes.get(reaction_id, False)) for reaction_id in PRODUCTION_FLUX_REACTION_IDS}
+            # Snapshot the sweep controls before yielding to a worker/network request.
+            # The menu stays responsive while the solver runs, so later UI edits must
+            # not change the protocol of an already-started simulation job.
+            bound_sweep_input_data = copy.deepcopy(menu_bound_sweep.get_input_data() or {})
 
 
 
@@ -1723,9 +1728,9 @@ class Window:
                 if environment_input_error:
                     raise ValueError(environment_input_error)
                 if sys.platform == 'emscripten':
-                    self.results = run_simul_remote(BACKEND_URL)
+                    self.results = await run_simul_remote_async(BACKEND_URL)
                 else:
-                    self.results = run_simul()
+                    self.results = await asyncio.to_thread(run_simul)
             except Exception as error:
                 error_message = f'Simulation error: {error}'
                 self.results = (
@@ -1752,13 +1757,13 @@ class Window:
             if (not is_ecoli and '36' in self.player.missions_activated and '36' not in self.player.missions_completed):
                 previous_m36 = load_mission36_fermentation_onset() or {}
                 mission36_baseline_preexisting = bool(previous_m36.get('baseline_ready'))
-                if not bool(menu_bound_sweep.get_input_data().get('execute_sweep', False)) or not mission36_baseline_preexisting:
+                if not bool(bound_sweep_input_data.get('execute_sweep', False)) or not mission36_baseline_preexisting:
                     mission36_data = run_mission36_baseline_check(self.results)
 
             mission37_data = None
             if (not is_ecoli and '37' in self.player.missions_activated and '37' not in self.player.missions_completed):
                 mission37_sweep_requested = bool(
-                    (menu_bound_sweep.get_input_data() or {}).get('execute_sweep', False)
+                    bound_sweep_input_data.get('execute_sweep', False)
                 )
                 if sys.platform == 'emscripten':
                     mission37_data = run_mission37_fermentation_cut_set_check_remote(
@@ -1775,7 +1780,7 @@ class Window:
             mission38_data = None
             if (not is_ecoli and '38' in self.player.missions_activated and '38' not in self.player.missions_completed):
                 mission38_sweep_requested = bool(
-                    (menu_bound_sweep.get_input_data() or {}).get('execute_sweep', False)
+                    bound_sweep_input_data.get('execute_sweep', False)
                 )
                 if sys.platform == 'emscripten':
                     mission38_data = run_mission38_background_dependency_check_remote(
@@ -1792,7 +1797,7 @@ class Window:
             mission39_data = None
             if (not is_ecoli and '39' in self.player.missions_activated and '39' not in self.player.missions_completed):
                 mission39_sweep_requested = bool(
-                    (menu_bound_sweep.get_input_data() or {}).get('execute_sweep', False)
+                    bound_sweep_input_data.get('execute_sweep', False)
                 )
                 if sys.platform == 'emscripten':
                     mission39_data = run_mission39_bypass_rescue_check_remote(
@@ -1813,7 +1818,7 @@ class Window:
                 and '40' in self.player.missions_activated
                 and '40' not in self.player.missions_completed
             )
-            mission40_sweep_menu_data = menu_bound_sweep.get_input_data()
+            mission40_sweep_menu_data = bound_sweep_input_data
             mission40_input_errors = [
                 error for error in (gene_input_error, objective_input_error, environment_input_error)
                 if error
@@ -1957,10 +1962,10 @@ class Window:
                 '35' in self.player.missions_activated
                 and '35' not in self.player.missions_completed
                 and mission35_should_run_bound_sweep(
-                    menu_bound_sweep.get_input_data(), simulation_method, objective_name, data_genes,
+                    bound_sweep_input_data, simulation_method, objective_name, data_genes,
                 )
             )
-            mission36_sweep_menu_data = menu_bound_sweep.get_input_data()
+            mission36_sweep_menu_data = bound_sweep_input_data
             mission36_input_errors = [
                 error for error in (gene_input_error, objective_input_error, environment_input_error)
                 if error
@@ -2003,12 +2008,12 @@ class Window:
             )
             if bound_sweep_mission_active:
                 if sys.platform == 'emscripten':
-                    bound_sweep_data = run_bound_sweep_remote(
-                        BACKEND_URL, menu_bound_sweep.get_input_data(), model_id=self.model_id
+                    bound_sweep_data = await run_bound_sweep_remote_async(
+                        BACKEND_URL, bound_sweep_input_data, model_id=self.model_id
                     )
                 else:
-                    bound_sweep_data = run_bound_sweep(
-                        menu_bound_sweep.get_input_data(), model_id=self.model_id
+                    bound_sweep_data = await asyncio.to_thread(
+                        run_bound_sweep, bound_sweep_input_data, model_id=self.model_id
                     )
 
                 if is_ecoli and '23' in self.player.missions_activated and '23' not in self.player.missions_completed:
@@ -2781,14 +2786,45 @@ class Window:
         # menu.add.button('Restore Data', restore_data, background_color=(100,0,0))
         # menu.add.vertical_margin(20)  # Adds margin
 
-        menu.add.button('Run Simulation', action=data_fun, font_color = 'white', background_color=(20,100,100))
+        simulation_running = False
+        simulation_status_label = menu.add.label(
+            '',
+            font_size=22,
+            font_color=(20, 0, 150),
+            label_id='simulation_status',
+        )
+        menu.add.vertical_margin(8)
+
+        def _simulation_task_finished(task):
+            nonlocal simulation_running
+            simulation_running = False
+            try:
+                task.result()
+            except Exception:
+                simulation_status_label.set_title('Simulation failed safely. Please try again.')
+                animation_text_save('Simulation failed safely.', time=1800)
+            else:
+                simulation_status_label.set_title('Simulation ready. Open New Results.')
+
+        def start_simulation():
+            nonlocal simulation_running
+            if simulation_running:
+                animation_text_save('Simulation already running.', time=1200)
+                return
+
+            simulation_running = True
+            simulation_status_label.set_title('Running simulation...')
+            task = asyncio.create_task(data_fun())
+            task.add_done_callback(_simulation_task_finished)
+
+        menu.add.button('Run Simulation', action=start_simulation, font_color = 'white', background_color=(20,100,100))
         menu.add.vertical_margin(20)  # Adds margin
         # last_results = menu.add.button('Results Log', action=menu_results, font_color = 'black', background_color="grey")
         # menu.add.vertical_margin(50)  # Adds margin
 
         def check_escape():
             keys = pygame.key.get_pressed()
-            if keys[pygame.K_ESCAPE] and menu.is_enabled():
+            if keys[pygame.K_ESCAPE] and menu.is_enabled() and not simulation_running:
                 menu.close()
 
         await run_menu(menu, self.display_surface, on_update=check_escape)

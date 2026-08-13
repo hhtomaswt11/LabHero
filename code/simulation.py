@@ -1,3 +1,4 @@
+import asyncio
 import copy
 import json
 import sys
@@ -14700,13 +14701,7 @@ def run_bound_sweep(sweep_menu_data=None, model_id=None):
     return data
 
 
-def run_bound_sweep_remote(backend_url, sweep_menu_data=None, model_id=None):
-    """Browser sweep: sequentially reuse the model-aware /simulate contract.
-
-    The active model is an explicit input so one sweep request cannot inherit
-    a model from a previous saved simulation.  Omitting it keeps the legacy
-    E. coli behaviour for direct historical callers.
-    """
+def _prepare_remote_bound_sweep(sweep_menu_data=None, model_id=None):
     method_name, objective_name, genes, reactions = _read_simulation_file()
     model_id = normalise_model_id(DEFAULT_MODEL_ID if model_id is None else model_id)
     config = _normalise_sweep_config(sweep_menu_data, model_id=model_id)
@@ -14719,59 +14714,120 @@ def run_bound_sweep_remote(backend_url, sweep_menu_data=None, model_id=None):
     # of truth, including when tests or a future web client provide a partial
     # payload builder.
     base_payload['model_id'] = model_id
+    return method_name, objective_name, model_id, config, selected_fluxes, data, base_payload
+
+
+def _remote_bound_sweep_payload(base_payload, config, bound_value):
+    payload = copy.deepcopy(base_payload)
+    env = payload.setdefault('env_conditions', {})
+    current = list(env.get(config.get('reaction_id'), [-1000.0, 1000.0]))
+    if config.get('bound') == 'upper':
+        current[1] = float(bound_value)
+    else:
+        current[0] = float(bound_value)
+    env[config.get('reaction_id')] = current
+    return payload
+
+
+def _append_remote_bound_sweep_response(
+    data, bound_value, response, config, method_name, objective_name,
+    selected_fluxes, model_id,
+):
+    status = response.get('status')
+    if status == 'infeasible':
+        data['rows'].append(_bound_sweep_infeasible_row(bound_value, response.get('message')))
+        return
+    if status != 'ok':
+        data['rows'].append(_bound_sweep_error_row(
+            bound_value, response.get('message', 'unknown backend error')
+        ))
+        return
+
+    fluxes = response.get('fluxes') or {}
+    flux_getter = lambda reaction_id, mapping=fluxes: mapping.get(reaction_id)
+    primary = _as_float_or_none(response.get('primary_objective_flux', fluxes.get(objective_name)))
+    total_abs = _as_float_or_none(response.get('total_absolute_flux'))
+    if total_abs is None and fluxes:
+        total_abs = sum(abs(float(value)) for value in fluxes.values())
+    active_count = response.get('active_reaction_count')
+    if active_count is None and fluxes:
+        active_count = sum(
+            1 for value in fluxes.values()
+            if abs(float(value)) > MISSION13_ACTIVE_FLUX_TOLERANCE
+        )
+    method_score = _as_float_or_none(response.get('method_score'))
+    diagnostics = {
+        'model_id': response.get('model_id', model_id),
+        'method': response.get('method', method_name),
+        'objective_reaction': response.get('objective_reaction', objective_name),
+        'primary_objective_flux': float(primary) if primary is not None else None,
+        'method_score': float(method_score) if method_score is not None else None,
+        'method_score_name': response.get('method_score_name', _method_score_label(method_name)),
+        'total_absolute_flux': float(total_abs) if total_abs is not None else None,
+        'active_reaction_count': int(active_count) if active_count is not None else None,
+        'gpr_disabled_reactions': sorted(response.get('gpr_disabled_reactions') or []),
+    }
+    data['rows'].append(_build_bound_sweep_row(
+        bound_value, config, method_name, objective_name,
+        selected_fluxes, flux_getter, diagnostics, model_id=model_id,
+    ))
+
+
+def _finish_remote_bound_sweep(data):
+    if any(row.get('status') == 'error' for row in data['rows']):
+        data['error'] = 'One or more remote Bound Sweep rows failed. Inspect row status instead of treating missing values as zero.'
+    save_bound_sweep(data)
+    return data
+
+
+def run_bound_sweep_remote(backend_url, sweep_menu_data=None, model_id=None):
+    """Legacy synchronous browser sweep retained for compatibility/tests."""
+    (
+        method_name, objective_name, model_id, config,
+        selected_fluxes, data, base_payload,
+    ) = _prepare_remote_bound_sweep(sweep_menu_data, model_id=model_id)
 
     for bound_value in config.get('values') or []:
-        payload = copy.deepcopy(base_payload)
-        env = payload.setdefault('env_conditions', {})
-        current = list(env.get(config.get('reaction_id'), [-1000.0, 1000.0]))
-        if config.get('bound') == 'upper':
-            current[1] = float(bound_value)
-        else:
-            current[0] = float(bound_value)
-        env[config.get('reaction_id')] = current
+        payload = _remote_bound_sweep_payload(base_payload, config, bound_value)
         try:
             response = _http_post_json(backend_url.rstrip('/') + '/simulate', payload)
         except Exception as exc:
             data['rows'].append(_bound_sweep_error_row(bound_value, f'Backend error: {exc}'))
             continue
-        status = response.get('status')
-        if status == 'infeasible':
-            data['rows'].append(_bound_sweep_infeasible_row(bound_value, response.get('message')))
-            continue
-        if status != 'ok':
-            data['rows'].append(_bound_sweep_error_row(bound_value, response.get('message', 'unknown backend error')))
-            continue
+        _append_remote_bound_sweep_response(
+            data, bound_value, response, config, method_name, objective_name,
+            selected_fluxes, model_id,
+        )
 
-        fluxes = response.get('fluxes') or {}
-        flux_getter = lambda reaction_id, mapping=fluxes: mapping.get(reaction_id)
-        primary = _as_float_or_none(response.get('primary_objective_flux', fluxes.get(objective_name)))
-        total_abs = _as_float_or_none(response.get('total_absolute_flux'))
-        if total_abs is None and fluxes:
-            total_abs = sum(abs(float(value)) for value in fluxes.values())
-        active_count = response.get('active_reaction_count')
-        if active_count is None and fluxes:
-            active_count = sum(1 for value in fluxes.values() if abs(float(value)) > MISSION13_ACTIVE_FLUX_TOLERANCE)
-        method_score = _as_float_or_none(response.get('method_score'))
-        diagnostics = {
-            'model_id': response.get('model_id', model_id),
-            'method': response.get('method', method_name),
-            'objective_reaction': response.get('objective_reaction', objective_name),
-            'primary_objective_flux': float(primary) if primary is not None else None,
-            'method_score': float(method_score) if method_score is not None else None,
-            'method_score_name': response.get('method_score_name', _method_score_label(method_name)),
-            'total_absolute_flux': float(total_abs) if total_abs is not None else None,
-            'active_reaction_count': int(active_count) if active_count is not None else None,
-            'gpr_disabled_reactions': sorted(response.get('gpr_disabled_reactions') or []),
-        }
-        data['rows'].append(_build_bound_sweep_row(
-            bound_value, config, method_name, objective_name,
-            selected_fluxes, flux_getter, diagnostics, model_id=model_id,
-        ))
+    return _finish_remote_bound_sweep(data)
 
-    if any(row.get('status') == 'error' for row in data['rows']):
-        data['error'] = 'One or more remote Bound Sweep rows failed. Inspect row status instead of treating missing values as zero.'
-    save_bound_sweep(data)
-    return data
+
+async def run_bound_sweep_remote_async(backend_url, sweep_menu_data=None, model_id=None):
+    """Responsive browser sweep using sequential asynchronous /simulate calls.
+
+    Sequential requests deliberately avoid multiplying backend load when many
+    students run four-point sweeps at the same time, while each ``await`` keeps
+    the Pygame/pygbag event loop responsive.
+    """
+    (
+        method_name, objective_name, model_id, config,
+        selected_fluxes, data, base_payload,
+    ) = _prepare_remote_bound_sweep(sweep_menu_data, model_id=model_id)
+
+    for bound_value in config.get('values') or []:
+        payload = _remote_bound_sweep_payload(base_payload, config, bound_value)
+        try:
+            response = await _http_post_json_async(backend_url.rstrip('/') + '/simulate', payload)
+        except Exception as exc:
+            data['rows'].append(_bound_sweep_error_row(bound_value, f'Backend error: {exc}'))
+            continue
+        _append_remote_bound_sweep_response(
+            data, bound_value, response, config, method_name, objective_name,
+            selected_fluxes, model_id,
+        )
+
+    return _finish_remote_bound_sweep(data)
+
 
 
 def _growth_values_from_rows(rows):
@@ -16799,8 +16855,8 @@ def _http_post_json(url, payload):
         # pygbag's pyodide does not expose `from js import XMLHttpRequest`
         # as a constructable JsProxy (XMLHttpRequest.new is None and the
         # plain JsProxy is not callable), so we instantiate via js.eval.
-        # Synchronous XHR lets us stay inside the sync pygame_menu callback
-        # at window.py:data_fun — no async bridge needed for the simulate call.
+        # Legacy synchronous transport retained only for compatibility tests
+        # and old direct callers. The live browser UI uses pyfetch asynchronously.
         import js
         xhr = js.eval("new XMLHttpRequest()")
         xhr.open('POST', url, False)
@@ -16817,20 +16873,22 @@ def _http_post_json(url, payload):
         return json.loads(resp.read().decode('utf-8'))
 
 
-def run_simul_remote(backend_url):
-    payload = _build_request_payload()
-    model_id = payload.get('model_id', DEFAULT_MODEL_ID)
-    selected_fluxes = _read_selected_production_fluxes(model_id)
-    try:
-        response = _http_post_json(backend_url.rstrip('/') + '/simulate', payload)
-    except Exception as e:
-        return payload['objective'], f'Error: {e}', _build_production_flux_data_for_model(
-            model_id, selected_fluxes,
-            error=f'Backend error: {e}'
-        ), _build_medium_flux_data_for_model(
-            model_id, error=f'Backend error: {e}'
-        )
+def _remote_simulation_error_result(payload, model_id, selected_fluxes, error):
+    return payload['objective'], f'Error: {error}', _build_production_flux_data_for_model(
+        model_id, selected_fluxes,
+        error=f'Backend error: {error}'
+    ), _build_medium_flux_data_for_model(
+        model_id, error=f'Backend error: {error}'
+    )
 
+
+def _normalise_remote_simulation_response(payload, response, model_id, selected_fluxes):
+    """Convert one /simulate JSON response into the desktop-visible result tuple.
+
+    Both the legacy synchronous wrapper and the live asynchronous browser path
+    use this exact normaliser so transport changes cannot silently change the
+    scientific result shown to mission validators.
+    """
     if response.get('status') == 'ok':
         fluxes = response.get('fluxes') or {}
         flux_getter = lambda reaction_id: fluxes.get(reaction_id)
@@ -16915,6 +16973,57 @@ def run_simul_remote(backend_url):
             model_id, error=response.get('message', 'unknown backend error')
         )
     )
+
+
+def run_simul_remote(backend_url):
+    """Legacy synchronous remote wrapper retained for compatibility/tests.
+
+    The live browser UI uses :func:`run_simul_remote_async` so network latency
+    never blocks the Pygame/pygbag event loop.
+    """
+    payload = _build_request_payload()
+    model_id = payload.get('model_id', DEFAULT_MODEL_ID)
+    selected_fluxes = _read_selected_production_fluxes(model_id)
+    try:
+        response = _http_post_json(backend_url.rstrip('/') + '/simulate', payload)
+    except Exception as error:
+        return _remote_simulation_error_result(payload, model_id, selected_fluxes, error)
+    return _normalise_remote_simulation_response(payload, response, model_id, selected_fluxes)
+
+
+async def _http_post_json_async(url, payload):
+    """POST JSON without blocking the live UI event loop.
+
+    Pygbag/Pyodide uses ``pyfetch`` in the browser.  Desktop callers are
+    delegated to a worker thread, which is useful for local web smoke tests and
+    keeps this helper directly testable outside Emscripten.
+    """
+    if sys.platform == 'emscripten':
+        from pyodide.http import pyfetch
+
+        response = await pyfetch(
+            url,
+            method='POST',
+            headers={'Content-Type': 'application/json'},
+            body=json.dumps(payload),
+        )
+        if not response.ok:
+            raise RuntimeError(f'HTTP {response.status}')
+        return json.loads(await response.string())
+
+    return await asyncio.to_thread(_http_post_json, url, payload)
+
+
+async def run_simul_remote_async(backend_url):
+    """Asynchronous browser simulation using the same /simulate contract."""
+    payload = _build_request_payload()
+    model_id = payload.get('model_id', DEFAULT_MODEL_ID)
+    selected_fluxes = _read_selected_production_fluxes(model_id)
+    try:
+        response = await _http_post_json_async(backend_url.rstrip('/') + '/simulate', payload)
+    except Exception as error:
+        return _remote_simulation_error_result(payload, model_id, selected_fluxes, error)
+    return _normalise_remote_simulation_response(payload, response, model_id, selected_fluxes)
 
 
 

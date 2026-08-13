@@ -9,6 +9,7 @@ bundled iMM904 SBML still produces its expected default biomass optimum.
 """
 from __future__ import annotations
 
+import asyncio
 import gzip
 import hashlib
 import json
@@ -17,7 +18,7 @@ import types
 import unittest
 import xml.etree.ElementTree as ET
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
 import numpy as np
 from scipy.optimize import linprog
@@ -422,14 +423,129 @@ class MultiModelYeastRegressionTests(unittest.TestCase):
             self.assertEqual(payload['model_id'], 'yeast_iMM904')
             self.assertEqual(float(payload['env_conditions']['EX_glc__D_e'][0]), value)
 
+
+    def test_async_remote_yeast_sweep_matches_sync_contract(self):
+        values = [-0.5, -1.0, -2.0, -10.0]
+        responses = [
+            {
+                'status': 'ok',
+                'model_id': 'yeast_iMM904',
+                'method': 'pFBA',
+                'objective': 'BIOMASS_SC5_notrace',
+                'objective_reaction': 'BIOMASS_SC5_notrace',
+                'primary_objective_flux': 0.1 + index * 0.01,
+                'method_score': 100.0 + index,
+                'method_score_name': 'total_absolute_flux',
+                'total_absolute_flux': 100.0 + index,
+                'active_reaction_count': 10 + index,
+                'fluxes': {
+                    'BIOMASS_SC5_notrace': 0.1 + index * 0.01,
+                    'EX_glc__D_e': value,
+                    'EX_o2_e': -2.0,
+                    'EX_etoh_e': 1.0 + index,
+                    'EX_co2_e': 2.0 + index,
+                },
+            }
+            for index, value in enumerate(values)
+        ]
+        base_env = {
+            row['id']: [float(row['lb']), float(row['ub'])]
+            for row in model_registry.build_ui_context('yeast_iMM904')['exchanges']
+        }
+        request_payload = {
+            'model_id': 'yeast_iMM904',
+            'method': 'pFBA',
+            'objective': 'BIOMASS_SC5_notrace',
+            'gene_knockouts': [],
+            'env_conditions': base_env,
+        }
+        sweep_menu = {
+            'sweep_variable': [[('Glucose', 'EX_glc__D_e:lower')]],
+            'sweep_values': [[('Yeast threshold', 'yeast_glucose_fermentation_threshold')]],
+        }
+
+        common = (
+            patch.object(simulation, '_read_simulation_file', return_value=(
+                'pFBA', 'BIOMASS_SC5_notrace', {}, {},
+            )),
+            patch.object(simulation, '_read_selected_production_fluxes', return_value=['EX_etoh_e', 'EX_co2_e']),
+            patch.object(simulation, '_build_request_payload', return_value=request_payload),
+            patch.object(simulation, 'save_bound_sweep'),
+        )
+        with common[0], common[1], common[2], common[3], patch.object(
+            simulation, '_http_post_json', side_effect=responses
+        ):
+            sync_data = simulation.run_bound_sweep_remote('/api', sweep_menu, model_id='yeast_iMM904')
+
+        common = (
+            patch.object(simulation, '_read_simulation_file', return_value=(
+                'pFBA', 'BIOMASS_SC5_notrace', {}, {},
+            )),
+            patch.object(simulation, '_read_selected_production_fluxes', return_value=['EX_etoh_e', 'EX_co2_e']),
+            patch.object(simulation, '_build_request_payload', return_value=request_payload),
+            patch.object(simulation, 'save_bound_sweep'),
+        )
+        with common[0], common[1], common[2], common[3], patch.object(
+            simulation, '_http_post_json_async', new=AsyncMock(side_effect=responses)
+        ):
+            async_data = asyncio.run(
+                simulation.run_bound_sweep_remote_async('/api', sweep_menu, model_id='yeast_iMM904')
+            )
+
+        self.assertEqual(async_data, sync_data)
+
+    def test_async_remote_simulation_matches_sync_result_normalisation(self):
+        payload = {
+            'model_id': 'yeast_iMM904',
+            'method': 'pFBA',
+            'objective': 'BIOMASS_SC5_notrace',
+            'gene_knockouts': [],
+            'env_conditions': {},
+        }
+        response = {
+            'status': 'ok',
+            'model_id': 'yeast_iMM904',
+            'method': 'pFBA',
+            'objective': 'BIOMASS_SC5_notrace',
+            'objective_reaction': 'BIOMASS_SC5_notrace',
+            'primary_objective_flux': 0.22294,
+            'method_score': 303.621,
+            'method_score_name': 'total_absolute_flux',
+            'total_absolute_flux': 303.621,
+            'active_reaction_count': 298,
+            'gpr_disabled_reactions': [],
+            'fluxes': {
+                'BIOMASS_SC5_notrace': 0.22294,
+                'EX_etoh_e': 9.910,
+                'EX_glc__D_e': -10.0,
+                'EX_o2_e': -2.0,
+                'EX_acald_e': -10.0,
+            },
+        }
+        with (
+            patch.object(simulation, '_build_request_payload', return_value=payload),
+            patch.object(simulation, '_read_selected_production_fluxes', return_value=['EX_etoh_e']),
+            patch.object(simulation, '_http_post_json', return_value=response),
+        ):
+            sync_result = simulation.run_simul_remote('/api')
+
+        with (
+            patch.object(simulation, '_build_request_payload', return_value=payload),
+            patch.object(simulation, '_read_selected_production_fluxes', return_value=['EX_etoh_e']),
+            patch.object(simulation, '_http_post_json_async', new=AsyncMock(return_value=response)),
+        ):
+            async_result = asyncio.run(simulation.run_simul_remote_async('/api'))
+
+        self.assertEqual(async_result, sync_result)
+
     def test_window_passes_active_model_explicitly_to_bound_sweep(self):
         window_source = (CODE_DIR / 'window.py').read_text()
         self.assertIn(
-            'BACKEND_URL, menu_bound_sweep.get_input_data(), model_id=self.model_id',
+            'BACKEND_URL, bound_sweep_input_data, model_id=self.model_id',
             window_source,
         )
         self.assertIn(
-            'menu_bound_sweep.get_input_data(), model_id=self.model_id',
+            'bound_sweep_input_data, model_id=self.model_id',
             window_source,
         )
 

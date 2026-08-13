@@ -426,7 +426,7 @@ class Mission23RegressionTests(unittest.TestCase):
         source = (CODE_DIR / 'window.py').read_text()
         self.assertIn("('Ammonium lower bound (EX_nh4_e)', 'EX_nh4_e:lower')", source)
         self.assertIn("('Ammonium sensitivity: -5, -4, -2, -1', 'ammonium_sensitivity')", source)
-        self.assertIn('run_bound_sweep_remote(', source)
+        self.assertIn('run_bound_sweep_remote_async(', source)
         self.assertIn('run_mission23_sensitivity_check_remote(', source)
         self.assertIn('return build_mission23_nutrient_sensitivity_report_text(report_data)', source)
 

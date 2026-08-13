@@ -170,6 +170,9 @@ class Level:
 			Generic((x * TILE_SIZE, y * TILE_SIZE), pygame.Surface((TILE_SIZE, TILE_SIZE)), self.collision_sprites) # apenas neste grupo porque não queremos mostrar estes tiles, apenas colidir
 
 		# Player
+		# Keep the post-Mission-06 Carter reveal anchored to the current
+		# Tiled interaction object instead of the coordinates of an older map.
+		carter_reveal_pos = None
 		for obj in tmx_data.get_layer_by_name('Player'):
 			if obj.name == 'Start':
 				self.player = Player(
@@ -217,6 +220,7 @@ class Level:
 
 			if obj.name == 'Mission03':
 				Interaction((obj.x, obj.y), (obj.width, obj.height), self.interaction_sprites, obj.name)
+				carter_reveal_pos = (obj.x, obj.y)
 
 			if obj.name == 'Mission07':
 				Interaction((obj.x, obj.y), (obj.width, obj.height), self.interaction_sprites, obj.name)
@@ -288,10 +292,11 @@ class Level:
 				Interaction((obj.x, obj.y), (obj.width, obj.height), self.interaction_sprites, obj.name)
 			
 
-		CarterRevealSprite(
-			pos = (1216, 1024),
-			groups = self.all_sprites,
-			player = self.player)
+		if carter_reveal_pos is not None:
+			CarterRevealSprite(
+				pos = carter_reveal_pos,
+				groups = self.all_sprites,
+				player = self.player)
 
 		Generic(
 			pos = (0,0),
