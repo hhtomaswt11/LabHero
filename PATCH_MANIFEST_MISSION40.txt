@@ -1,0 +1,25 @@
+Mission 40 — Final Rescue Robustness Certification
+
+New files:
+- code/mission40.py
+- data/missions/mission40.md
+- tests/test_mission40.py
+- PATCH_MANIFEST_MISSION40.txt
+
+Modified files:
+- code/level.py
+- code/player.py
+- code/save_load.py
+- code/simulation.py
+- code/window.py
+- MISSION_PROGRESS_OVERVIEW.md
+- YEAST_SIMULATOR_TEST_PLAN.txt
+
+Implementation:
+- Connects the existing Tiled `Mortis` object and existing `mortis.jpg` dialogue asset; no map edit.
+- Adds two matched yeast glucose Bound Sweeps in fixed PDC1+PDC5+PDC6+FRD1 background: model-default vs EX_acald_e uptake enabled.
+- Reuses the existing model-aware Bound Sweep and `/simulate` contracts; no Mission 40 endpoint and no hidden validator simulation.
+- Preflights invalid final-curve requests before the four-row sweep so off-protocol setups do not launch expensive pFBA rows.
+- Derives pairwise growth-fold, acetaldehyde-uptake and ethanol-rescue evidence from visible rows and asks for all tested bounds satisfying the final criteria.
+- Preserves earlier valid curves after invalid attempts, supports either curve order, and updates repeated curves instead of duplicating them.
+- Marks Mission 40 as the final LabHero metabolic-model certification; no Mission 41 is introduced.

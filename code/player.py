@@ -6,7 +6,7 @@ import time
 from utils import *
 
 class Player(pygame.sprite.Sprite):
-    def __init__(self, pos, group, collision_sprites, tree_sprites, interaction, soil_layer, toggle_shop, desk_menu, books, ecoli, inventory2, talk_1, talk_2, talk_3, talk_7, talk_11, talk_16, talk_21, talk_23, talk_25, talk_27, talk_29, talk_32, talk_35, dialogues, skin_manager=None):
+    def __init__(self, pos, group, collision_sprites, tree_sprites, interaction, soil_layer, toggle_shop, desk_menu, yeast_simulator, books, ecoli, inventory2, talk_1, talk_2, talk_3, talk_7, talk_11, talk_16, talk_21, talk_23, talk_25, talk_27, talk_29, talk_32, talk_35, talk_36, talk_37, talk_38, talk_39, talk_40, dialogues, skin_manager=None):
         super().__init__(group)
 
         self.skin_manager = skin_manager
@@ -66,7 +66,13 @@ class Player(pygame.sprite.Sprite):
         self.talk_29 = talk_29
         self.talk_32 = talk_32
         self.talk_35 = talk_35
+        self.talk_36 = talk_36
+        self.talk_37 = talk_37
+        self.talk_38 = talk_38
+        self.talk_39 = talk_39
+        self.talk_40 = talk_40
         self.desk_menu = desk_menu
+        self.yeast_simulator = yeast_simulator
         self.books = books
         self.ecoli = ecoli
         self.dialogues = dialogues
@@ -327,9 +333,21 @@ class Player(pygame.sprite.Sprite):
                         self.talk_32()
                     elif collided_interaction_sprite[0].name == 'Final':
                         self.talk_35()
+                    elif collided_interaction_sprite[0].name == 'Vale':
+                        self.talk_36()
+                    elif collided_interaction_sprite[0].name == 'Voss':
+                        self.talk_37()
+                    elif collided_interaction_sprite[0].name == 'Umbra':
+                        self.talk_38()
+                    elif collided_interaction_sprite[0].name == 'Morbus':
+                        self.talk_39()
+                    elif collided_interaction_sprite[0].name == 'Mortis':
+                        self.talk_40()
                     elif collided_interaction_sprite[0].name == 'Desk':
                         animation_text_save('... please wait ...', time=100)
                         self.desk_menu()
+                    elif collided_interaction_sprite[0].name == 'YeastSimulator':
+                        self.yeast_simulator()
                     elif collided_interaction_sprite[0].name == 'Books':
                         self.books()
                     elif collided_interaction_sprite[0].name == 'Ecoli':

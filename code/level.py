@@ -24,12 +24,18 @@ from mission27 import Mission27
 from mission29 import Mission29
 from mission32 import Mission32
 from mission35 import Mission35
+from mission36 import Mission36
+from mission37 import Mission37
+from mission38 import Mission38
+from mission39 import Mission39
+from mission40 import Mission40
 from dialogues import Dialogues
 from save_load import save_file
 from functions import *
 from utils import *
 from skins import SkinManager
 from skin_menu import SkinSelectionMenu
+from progression import is_model_unlocked
 
 class Level:
 	def __init__(self, load_game):
@@ -55,6 +61,7 @@ class Level:
 		# MENUS
 		self.menu_active = False
 		self.desk_active = False
+		self.yeast_simulator_active = False
 		self.books_active = False
 		self.ecoli_active = False
 		self.talk_1_active = False
@@ -83,8 +90,23 @@ class Level:
 		self.talk_32 = Mission32(self.toggle_talk_32, self.player)
 		self.talk_35_active = False
 		self.talk_35 = Mission35(self.toggle_talk_35, self.player)
+		self.talk_36_active = False
+		self.talk_36 = Mission36(self.toggle_talk_36, self.player)
+		self.talk_37_active = False
+		self.talk_37 = Mission37(self.toggle_talk_37, self.player)
+		self.talk_38_active = False
+		self.talk_38 = Mission38(self.toggle_talk_38, self.player)
+		self.talk_39_active = False
+		self.talk_39 = Mission39(self.toggle_talk_39, self.player)
+		self.talk_40_active = False
+		self.talk_40 = Mission40(self.toggle_talk_40, self.player)
 		self.menu = Menu(self.player, self.toggle_shop)
-		self.window = Window(self.desk_menu, self.player)
+		self.window = Window(self.desk_menu, self.player, model_id='ecoli_core')
+		# The large iMM904 UI is created only when the unlocked computer is
+		# actually opened.  This keeps pre-Mission-35 startup light and mirrors
+		# the future browser flow, where model-specific assets should be loaded
+		# on demand rather than at initial page load.
+		self.yeast_window = None
 		self.books = Books(self.read_books)
 		self.ecoli = Ecoli(self.see_ecoli)
 		self.dialogues = Dialogues(self.toggle_dialogue, self.player)
@@ -159,6 +181,7 @@ class Level:
 					soil_layer = self.soil_layer,
 					toggle_shop = self.toggle_shop,
 					desk_menu = self.desk_menu,
+					yeast_simulator = self.yeast_simulator_menu,
 					books = self.read_books,
 					ecoli = self.see_ecoli,
 					# inventory = self.load_game,
@@ -176,6 +199,11 @@ class Level:
 					talk_29 = self.toggle_talk_29,
 					talk_32 = self.toggle_talk_32,
 					talk_35 = self.toggle_talk_35,
+					talk_36 = self.toggle_talk_36,
+					talk_37 = self.toggle_talk_37,
+					talk_38 = self.toggle_talk_38,
+					talk_39 = self.toggle_talk_39,
+					talk_40 = self.toggle_talk_40,
 					dialogues = self.toggle_dialogue,
 					skin_manager = self.skin_manager
 					# music = self.music_bg
@@ -221,6 +249,24 @@ class Level:
 				Interaction((obj.x, obj.y), (obj.width, obj.height), self.interaction_sprites, obj.name)
 			
 			if obj.name == 'Desk':
+				Interaction((obj.x, obj.y), (obj.width, obj.height), self.interaction_sprites, obj.name)
+
+			if obj.name == 'Vale':
+				Interaction((obj.x, obj.y), (obj.width, obj.height), self.interaction_sprites, obj.name)
+
+			if obj.name == 'Voss':
+				Interaction((obj.x, obj.y), (obj.width, obj.height), self.interaction_sprites, obj.name)
+
+			if obj.name == 'Umbra':
+				Interaction((obj.x, obj.y), (obj.width, obj.height), self.interaction_sprites, obj.name)
+
+			if obj.name == 'Morbus':
+				Interaction((obj.x, obj.y), (obj.width, obj.height), self.interaction_sprites, obj.name)
+
+			if obj.name == 'Mortis':
+				Interaction((obj.x, obj.y), (obj.width, obj.height), self.interaction_sprites, obj.name)
+
+			if obj.name == 'YeastSimulator':
 				Interaction((obj.x, obj.y), (obj.width, obj.height), self.interaction_sprites, obj.name)
 			
 			if obj.name == 'Books':
@@ -299,11 +345,35 @@ class Level:
 	def toggle_talk_35(self):
 		self.talk_35_active = not self.talk_35_active
 
+	def toggle_talk_36(self):
+		self.talk_36_active = not self.talk_36_active
+
+	def toggle_talk_37(self):
+		self.talk_37_active = not self.talk_37_active
+
+	def toggle_talk_38(self):
+		self.talk_38_active = not self.talk_38_active
+
+	def toggle_talk_39(self):
+		self.talk_39_active = not self.talk_39_active
+
+	def toggle_talk_40(self):
+		self.talk_40_active = not self.talk_40_active
+
 	def toggle_dialogue(self):
 		self.dialogues_active = not self.dialogues_active
 
 	def desk_menu(self):
 		self.desk_active = not self.desk_active
+
+	def yeast_simulator_menu(self):
+		if not is_model_unlocked('yeast_iMM904', self.player.missions_completed):
+			animation_text_save('Complete Mission 35 to unlock the yeast simulator.', time=2500)
+			return
+		if self.yeast_window is None:
+			animation_text_save('Loading yeast simulator...', time=250)
+			self.yeast_window = Window(self.yeast_simulator_menu, self.player, model_id='yeast_iMM904')
+		self.yeast_simulator_active = not self.yeast_simulator_active
 
 	def read_books(self):
 		self.books_active = not self.books_active
@@ -315,6 +385,7 @@ class Level:
 		return (
 			self.menu_active or
 			self.desk_active or
+			self.yeast_simulator_active or
 			self.books_active or
 			self.ecoli_active or
 			self.talk_1_active or
@@ -330,6 +401,11 @@ class Level:
 			self.talk_29_active or
 			self.talk_32_active or
 			self.talk_35_active or
+			self.talk_36_active or
+			self.talk_37_active or
+			self.talk_38_active or
+			self.talk_39_active or
+			self.talk_40_active or
 			self.dialogues_active
 		)
 
@@ -433,8 +509,29 @@ class Level:
 		elif self.talk_35_active:
 			await self.talk_35.update()
 
+		elif self.talk_36_active:
+			await self.talk_36.update()
+
+		elif self.talk_37_active:
+			await self.talk_37.update()
+
+		elif self.talk_38_active:
+			await self.talk_38.update()
+
+		elif self.talk_39_active:
+			await self.talk_39.update()
+
+		elif self.talk_40_active:
+			await self.talk_40.update()
+
 		elif self.desk_active:
 			await self.window.update()
+
+		elif self.yeast_simulator_active:
+			if self.yeast_window is not None:
+				await self.yeast_window.update()
+			else:
+				self.yeast_simulator_active = False
 
 		elif self.books_active:
 			await self.books.update()

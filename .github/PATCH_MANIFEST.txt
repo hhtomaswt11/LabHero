@@ -255,11 +255,9 @@ Implementation:
 - Independent SciPy/SBML regression reproduces the bundled-model WT and complete-PDC-cut-set phenotype and separately verifies that PYRDC/PYRDC2 are controlled by the three PDC genes in the bundled GPR.
 - Browser parity remains `UI -> explicit model_id -> POST /simulate -> structured visible result -> mission validator`; Mission 37 adds no new web-only scientific contract.
 
-2026-08-11 Mission 39 — Pathway Bypass Rescue (Morbus):
-- Adds code/mission39.py, data/missions/mission39.md and tests/test_mission39.py.
-- Reuses the existing Tiled `Morbus` object and `graphics/dialogues/morbus.jpg`; no map edit is required. Level/Player wiring makes Morbus interactable and gates Mission 39 behind Mission 38 completion.
-- Keeps the vulnerable PDC1+PDC5+PDC6+FRD1 genotype fixed and compares four normal pFBA environments: default, EX_pyr_e uptake allowed, EX_etoh_e uptake allowed and EX_acald_e uptake allowed. Bound Sweep remains OFF and no hidden solver is launched by the validator.
-- Adds EX_acald_e to the compact yeast Exchange Flux Report so actual acetaldehyde uptake is visible on desktop and browser from the same `/simulate` flux vector.
-- Derives the final interpretation from recorded visible evidence only: actual supplement uptake, growth fold versus the default-medium reference and ethanol recovery. The player-facing report never hardcodes the answer.
-- Browser parity remains the existing `model_id -> POST /simulate -> structured visible result -> mission validator` contract; no Mission-39-specific backend endpoint is added.
-- Final-game positioning: Mission 39 remains compact/penultimate; Morbus's completion dialogue now hands off to Mortis for Mission 40's final robustness certification. Mission 40 itself is not implemented by this patch.
+Mission 38 — Umbra / Background-Dependent Compensation Audit
+- Added code/mission38.py, data/missions/mission38.md, tests/test_mission38.py.
+- Wired existing Tiled object Umbra to Mission 38 without modifying data/map_lb.tmx.
+- Added JSON-safe Mission 38 evidence persistence for desktop/web.
+- Added visible-result-only Mission 38 validator and report to the yeast New Results screen.
+- Mission 38 uses six normal pFBA runs, model-default environment, exact tracked exchanges EX_etoh_e/EX_succ_e/EX_pyr_e and Bound Sweep OFF.

@@ -1,4 +1,4 @@
-"""Visual-safety regression tests for the fixed 1280x720 dialogue panel."""
+"""Visual-safety regression tests for fixed-size dialogue/feedback renderers."""
 from __future__ import annotations
 
 import ast
@@ -25,15 +25,46 @@ from utils import (  # noqa: E402
 )
 
 
-DIALOGUE_MODULES = (
-    'mission01', 'mission02', 'mission03', 'mission04', 'mission05',
-    'mission06', 'mission07', 'mission11', 'mission16', 'mission21',
-    'mission23', 'mission25', 'mission26', 'mission32', 'mission34', 'mission35',
-)
 MAX_SAFE_LINE_WIDTH = 1040
 MAX_LINES_WITH_BUTTONS = 3
 MAX_LINES_WITHOUT_BUTTONS = 5
+# animation_text_save() renders one centered 30px line on a 1280px-wide screen.
+# Keep a small margin rather than accepting text that only fits edge-to-edge.
+MAX_SAFE_ANIMATION_TEXT_WIDTH = 1240
 LONG_PLAYER_NAME = 'W' * 100
+
+
+def _is_named_call(node, name):
+    if not isinstance(node, ast.Call):
+        return False
+    func = node.func
+    return (
+        isinstance(func, ast.Name) and func.id == name
+    ) or (
+        isinstance(func, ast.Attribute) and func.attr == name
+    )
+
+
+def _discover_dialogue_modules():
+    """Discover every mission module that actually calls menu_message().
+
+    This deliberately avoids a hand-maintained module list so future missions are
+    covered automatically as soon as they introduce fixed-panel NPC dialogue.
+    """
+    modules = []
+    for source_path in sorted(CODE_DIR.glob('mission[0-9][0-9].py')):
+        tree = ast.parse(source_path.read_text(encoding='utf-8'))
+        if any(
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Attribute)
+            and node.func.attr == 'menu_message'
+            for node in ast.walk(tree)
+        ):
+            modules.append(source_path.stem)
+    return tuple(modules)
+
+
+DIALOGUE_MODULES = _discover_dialogue_modules()
 
 
 class DialogueLayoutTests(unittest.TestCase):
@@ -71,6 +102,11 @@ class DialogueLayoutTests(unittest.TestCase):
             {'self': fake_self},
         )
 
+    def test_dialogue_discovery_includes_all_current_fixed_panel_missions(self):
+        # These missions historically fell outside the old hand-maintained list.
+        for module_name in ('mission27', 'mission29', 'mission36', 'mission37', 'mission38'):
+            self.assertIn(module_name, DIALOGUE_MODULES)
+
     def test_all_mission_dialogue_lines_fit_and_buttons_remain_visible(self):
         violations = []
         for module_name in DIALOGUE_MODULES:
@@ -79,14 +115,20 @@ class DialogueLayoutTests(unittest.TestCase):
             tree = ast.parse(source_path.read_text(encoding='utf-8'))
 
             for class_node in (n for n in tree.body if isinstance(n, ast.ClassDef)):
-                for update_node in (
+                methods = (
                     n for n in class_node.body
                     if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))
-                    and n.name == 'update'
-                ):
+                    and any(
+                        isinstance(call, ast.Call)
+                        and isinstance(call.func, ast.Attribute)
+                        and call.func.attr == 'menu_message'
+                        for call in ast.walk(n)
+                    )
+                )
+                for method_node in methods:
                     assignments = {}
                     calls = []
-                    for node in ast.walk(update_node):
+                    for node in ast.walk(method_node):
                         if isinstance(node, ast.Assign) and isinstance(node.value, ast.List):
                             for target in node.targets:
                                 key = self._assignment_key(target)
@@ -166,6 +208,96 @@ class DialogueLayoutTests(unittest.TestCase):
                         f'{width}px > {MAX_SAFE_LINE_WIDTH}px: {message!r}'
                     )
 
+        self.assertEqual([], violations, '\n'.join(violations))
+
+    def test_static_animation_feedback_lines_fit_screen(self):
+        """Guard every literal animation_text_save() message in code/."""
+        violations = []
+        for source_path in sorted(CODE_DIR.rglob('*.py')):
+            tree = ast.parse(source_path.read_text(encoding='utf-8'))
+            for node in ast.walk(tree):
+                if not _is_named_call(node, 'animation_text_save') or not node.args:
+                    continue
+                argument = node.args[0]
+                if not (
+                    isinstance(argument, ast.Constant)
+                    and isinstance(argument.value, str)
+                ):
+                    continue
+                width = self.font.size(argument.value)[0]
+                if width > MAX_SAFE_ANIMATION_TEXT_WIDTH:
+                    violations.append(
+                        f'{source_path.relative_to(PROJECT_ROOT)}:{node.lineno}: '
+                        f'{width}px > {MAX_SAFE_ANIMATION_TEXT_WIDTH}px: '
+                        f'{argument.value!r}'
+                    )
+        self.assertEqual([], violations, '\n'.join(violations))
+
+    def test_mission07_and_08_issue_feedback_templates_fit_screen(self):
+        """M7/M8 forward current_issues[0] into the one-line overlay.
+
+        Inspect their validator issue templates automatically so a future edit
+        cannot silently reintroduce an oversized error message.
+        """
+        simulation = importlib.import_module('simulation')
+        source_path = Path(simulation.__file__)
+        tree = ast.parse(source_path.read_text(encoding='utf-8'))
+        target_builders = {'_build_mission07_data', '_build_mission08_data'}
+        target_runners = {'run_mission07_objective_check', 'run_mission08_constraint_check'}
+        messages = []
+
+        for function_node in (
+            node for node in tree.body
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+        ):
+            if function_node.name in target_builders:
+                for node in ast.walk(function_node):
+                    if not (
+                        isinstance(node, ast.Call)
+                        and isinstance(node.func, ast.Attribute)
+                        and isinstance(node.func.value, ast.Name)
+                        and node.func.value.id == 'issues'
+                        and node.func.attr == 'append'
+                        and node.args
+                    ):
+                        continue
+                    expression_node = node.args[0]
+                    if not isinstance(expression_node, (ast.Constant, ast.JoinedStr)):
+                        continue
+                    expression = ast.Expression(body=expression_node)
+                    ast.fix_missing_locations(expression)
+                    try:
+                        value = eval(
+                            compile(expression, str(source_path), 'eval'),
+                            simulation.__dict__,
+                            {},
+                        )
+                    except Exception:
+                        continue
+                    if isinstance(value, str):
+                        messages.append((function_node.name, node.lineno, value))
+
+            if function_node.name in target_runners:
+                for node in ast.walk(function_node):
+                    if not isinstance(node, ast.Assign):
+                        continue
+                    if not any(
+                        isinstance(target, ast.Name) and target.id == 'objective_error'
+                        for target in node.targets
+                    ):
+                        continue
+                    if isinstance(node.value, ast.Constant) and isinstance(node.value.value, str):
+                        messages.append((function_node.name, node.lineno, node.value.value))
+
+        self.assertTrue(messages)
+        violations = []
+        for function_name, line_no, message in messages:
+            width = self.font.size(message)[0]
+            if width > MAX_SAFE_ANIMATION_TEXT_WIDTH:
+                violations.append(
+                    f'{function_name}:{line_no}: {width}px > '
+                    f'{MAX_SAFE_ANIMATION_TEXT_WIDTH}px: {message!r}'
+                )
         self.assertEqual([], violations, '\n'.join(violations))
 
     def test_long_player_name_is_compacted_only_for_dialogue_display(self):

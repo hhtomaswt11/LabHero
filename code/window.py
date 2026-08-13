@@ -10,18 +10,37 @@ from options_values import *
 from simulation import *
 from functions import animation_text_save
 from async_menu import run_menu
+from model_registry import (
+    build_ui_context,
+    build_legacy_tables,
+    normalise_model_id,
+    parse_gene_knockout_text,
+    build_gene_knockout_preview,
+    build_compact_environment_payload,
+    build_compact_environment_preview,
+)
 
 
 _YIELD_ON_WEB = sys.platform == 'emscripten'
 
 
 def _selected_menu_value(data, key):
+    """Return a pygame-menu input value without corrupting plain text fields.
+
+    DropSelect widgets expose a nested tuple/list value, while TextInput widgets
+    expose a plain string.  Indexing a string as ``value[0][0]`` silently turns
+    ``BIOMASS_SC5_notrace`` into ``B``; large-model text objectives therefore
+    need an explicit string branch.
+    """
     value = data.get(key)
 
-    try:
-        selected = value[0][0]
-    except Exception:
-        selected = str(value)
+    if isinstance(value, str):
+        selected = value
+    else:
+        try:
+            selected = value[0][0]
+        except Exception:
+            selected = str(value)
     return normalise_method_name(selected) if key == 'method' else selected
 
 
@@ -29,8 +48,9 @@ def _method_display_name(method_name):
     return LMOMA_DISPLAY_NAME if normalise_method_name(method_name) == 'lMOMA' else method_name
 
 
-def _format_gene(gene_id):
-    return GENE_LABELS.get(gene_id, gene_id)
+def _format_gene(gene_id, gene_labels=None):
+    labels = GENE_LABELS if gene_labels is None else gene_labels
+    return labels.get(gene_id, gene_id)
 
 
 def _format_reaction_menu_label(reaction_name, reaction_id):
@@ -46,13 +66,15 @@ def _normalise_gene_search_text(value):
     )
 
 
-def _gene_matches_search(gene_id, search_text):
+def _gene_matches_search(gene_id, search_text, gene_names=None, gene_labels=None):
     query = _normalise_gene_search_text(search_text)
     if not query:
         return True
 
-    gene_name = GENE_NAMES.get(gene_id, '')
-    gene_label = GENE_LABELS.get(gene_id, gene_id)
+    names = GENE_NAMES if gene_names is None else gene_names
+    labels = GENE_LABELS if gene_labels is None else gene_labels
+    gene_name = names.get(gene_id, '')
+    gene_label = labels.get(gene_id, gene_id)
     gene_number = gene_id[1:] if gene_id.startswith('b') else gene_id
 
     searchable_values = (
@@ -70,15 +92,21 @@ def _gene_matches_search(gene_id, search_text):
     )
 
 
-def _build_clean_gene_data(raw_gene_data):
-    """Keep only real model genes, ignoring UI-only widgets like the search box."""
+def _parse_gene_knockout_text(value, gene_ids, gene_names=None):
+    """Backward-compatible UI wrapper around the model-registry parser."""
+    return parse_gene_knockout_text(value, gene_ids, gene_names)
+
+
+def _build_clean_gene_data(raw_gene_data, gene_ids=None):
+    """Keep only real model genes, ignoring UI-only widgets like search fields."""
+    active_gene_ids = list(GENES if gene_ids is None else gene_ids)
     return {
-        gene_id: bool(raw_gene_data.get(gene_id, True))
-        for gene_id in GENES
+        gene_id: bool((raw_gene_data or {}).get(gene_id, True))
+        for gene_id in active_gene_ids
     }
 
 
-def _build_gene_summary(genes):
+def _build_gene_summary(genes, gene_labels=None):
     knocked_out_genes = [
         gene_id for gene_id, is_active in genes.items()
         if not is_active
@@ -88,7 +116,7 @@ def _build_gene_summary(genes):
         return 'No gene knockouts.'
 
     return '\n'.join(
-        f'- {_format_gene(gene_id)}'
+        f'- {_format_gene(gene_id, gene_labels)}'
         for gene_id in knocked_out_genes
     )
 
@@ -135,6 +163,51 @@ def _build_environmental_summary(reactions):
 
     return '\n'.join(changed_conditions)
 
+
+
+def _build_environmental_summary_for_table(reactions, reactions_table):
+    changed_conditions = []
+    reaction_values = list((reactions or {}).values())
+
+    for i in range(len(reactions_table.index)):
+        lb_key = f'reaction_{i}_lb'
+        ub_key = f'reaction_{i}_ub'
+        if lb_key in (reactions or {}) and ub_key in (reactions or {}):
+            lower_bound_open = bool(reactions[lb_key])
+            upper_bound_open = bool(reactions[ub_key])
+        else:
+            lb_index = i * 2
+            ub_index = lb_index + 1
+            if ub_index >= len(reaction_values):
+                break
+            lower_bound_open = bool(reaction_values[lb_index])
+            upper_bound_open = bool(reaction_values[ub_index])
+
+        default_lower_bound_open = reactions_table.lb.iloc[i] != 0
+        default_upper_bound_open = reactions_table.ub.iloc[i] != 0
+        if lower_bound_open != default_lower_bound_open or upper_bound_open != default_upper_bound_open:
+            reaction_id = reactions_table.index[i]
+            reaction_name = reactions_table.name.iloc[i]
+            lower_bound_value = resolve_exchange_bound_value(
+                reactions_table.lb.iloc[i], lower_bound_open, 'lower'
+            )
+            upper_bound_value = resolve_exchange_bound_value(
+                reactions_table.ub.iloc[i], upper_bound_open, 'upper'
+            )
+            changed_conditions.append(
+                f'- {reaction_name} ({reaction_id}): '
+                f'Lower Bound {"Open" if lower_bound_open else "Closed"} ({lower_bound_value}), '
+                f'Upper Bound {"Open" if upper_bound_open else "Closed"} ({upper_bound_value})'
+            )
+
+    return '\n'.join(changed_conditions) if changed_conditions else 'No environmental changes.'
+
+
+def _build_production_flux_summary_for_options(production_flux_data, options):
+    selected = [option for option in options if bool((production_flux_data or {}).get(option['id'], False))]
+    if not selected:
+        return 'No production fluxes selected.'
+    return '\n'.join(f"- {option['label']}" for option in selected)
 
 
 def _build_clean_production_flux_data(raw_flux_data):
@@ -245,6 +318,14 @@ def _build_exchange_flux_report_text(exchange_fluxes):
         return f"Exchange Flux Report\n\nError: {exchange_fluxes.get('error')}"
 
     items_by_id = _exchange_items_by_id(exchange_fluxes)
+    model_id = exchange_fluxes.get('model_id', 'ecoli_core')
+    model_line = None
+    if model_id != 'ecoli_core':
+        try:
+            context = build_ui_context(model_id)
+            model_line = f"Model: {context['display_name']} | {context['organism_name']}"
+        except Exception:
+            model_line = f'Model: {model_id}'
 
     sections = [
         (
@@ -264,17 +345,30 @@ def _build_exchange_flux_report_text(exchange_fluxes):
     lines = [
         'Exchange Flux Report',
         '',
+    ]
+    if model_line:
+        lines.extend([model_line, ''])
+    lines.extend([
         'Exchange reactions connect the cell to the medium.',
         'Negative flux means uptake/consumption. Positive flux means secretion/export.',
         '',
-    ]
+    ])
 
+    rendered_ids = set()
     for title, reaction_ids in sections:
         measured_ids = [reaction_id for reaction_id in reaction_ids if reaction_id in items_by_id]
         if not measured_ids:
             continue
         lines.append(f'{title}:')
         for reaction_id in measured_ids:
+            lines.append(_format_exchange_flux_line(reaction_id, items_by_id))
+            rendered_ids.add(reaction_id)
+        lines.append('')
+
+    additional_ids = [reaction_id for reaction_id in items_by_id if reaction_id not in rendered_ids]
+    if additional_ids:
+        lines.append('Additional measured exchanges:')
+        for reaction_id in additional_ids:
             lines.append(_format_exchange_flux_line(reaction_id, items_by_id))
         lines.append('')
 
@@ -319,6 +413,47 @@ def _build_bound_sweep_report_text(sweep_data):
             measured_label = 'Glucose uptake'
         else:
             measured_label = 'Tested uptake'
+
+    if sweep_data.get('model_id') == 'yeast_iMM904':
+        lines = [
+            'Bound Sweep Report', '',
+            f'Variable tested: {reaction_name} ({reaction_id}) {bound_label}',
+            f"Method: {sweep_data.get('method')} | Objective: {sweep_data.get('objective')}",
+            'The glucose bound varies while the base oxygen bound remains fixed.', '',
+            'Rows:',
+            'Glucose LB | growth | glucose uptake | O2 uptake | ethanol | CO2 | total absolute flux',
+        ]
+        for row in rows:
+            tracked = row.get('tracked_flux_values') or {}
+            diagnostics = row.get('method_diagnostics') or {}
+            status_note = '' if row.get('status') == 'ok' else f" {row.get('status', 'unknown')}"
+            lines.append(
+                f"{_format_sweep_number(row.get('bound_value'))} | "
+                f"{_format_sweep_number(row.get('growth_value'))}{status_note} | "
+                f"{_format_sweep_number(row.get('tested_reaction_uptake'))} | "
+                f"{_format_sweep_number(row.get('oxygen_uptake'))} | "
+                f"{_format_sweep_number(tracked.get('EX_etoh_e'))} | "
+                f"{_format_sweep_number(tracked.get('EX_co2_e'))} | "
+                f"{_format_sweep_number(diagnostics.get('total_absolute_flux'))}"
+            )
+        if len(rows) >= 2:
+            try:
+                first, last = rows[0], rows[-1]
+                lines.extend([
+                    '', 'Trend summary:',
+                    f"- Growth change from first to last point: {_format_sweep_number(float(last.get('growth_value')) - float(first.get('growth_value')))}",
+                    f"- Glucose uptake change: {_format_sweep_number(float(last.get('tested_reaction_uptake')) - float(first.get('tested_reaction_uptake')))}",
+                    f"- O2 uptake change: {_format_sweep_number(float(last.get('oxygen_uptake')) - float(first.get('oxygen_uptake')))}",
+                ])
+            except Exception:
+                pass
+        lines.extend([
+            '', 'Interpretation guide:',
+            '- Increasing glucose availability can make a different fixed constraint become binding.',
+            '- Compare realised O2 uptake with its configured capacity; configured does not automatically mean binding.',
+            '- Then inspect when ethanol secretion becomes positive. Derive the transition from the visible rows.',
+        ])
+        return '\n'.join(lines)
 
     lines = [
         'Bound Sweep Report',
@@ -441,6 +576,9 @@ def _visible_biomass_flux(results):
             value = production_data.get('biomass_raw')
             if value is not None:
                 return max(float(value), 0.0)
+            biomass_reaction = production_data.get('biomass_reaction')
+            if biomass_reaction and results[0] == biomass_reaction:
+                return max(float(results[1]), 0.0)
     except Exception:
         pass
 
@@ -466,9 +604,18 @@ def _build_simulation_results_text(results):
         diagnostics = {}
     method_name = diagnostics.get('method')
     heading = 'Primary objective flux' if method_name == 'pFBA' else 'Objective flux'
+    model_id = diagnostics.get('model_id')
+    model_prefix = ''
+    if model_id and model_id != 'ecoli_core':
+        try:
+            context = build_ui_context(model_id)
+            model_prefix = f"Model: {context['display_name']} | {context['organism_name']}\n\n"
+        except Exception:
+            model_prefix = f'Model: {model_id}\n\n'
     text = (
-        f'{heading}:\n'
-        f'{objective_name}: {objective_result}'
+        model_prefix
+        + f'{heading}:\n'
+        + f'{objective_name}: {objective_result}'
     )
 
     if method_name == 'pFBA':
@@ -500,6 +647,8 @@ def _build_simulation_results_text(results):
         text += '\n\nExplicit reference:'
         text += f"\nMethod: {diagnostics.get('reference_method') or 'not available'}"
         reference_growth = diagnostics.get('reference_primary_objective_flux')
+        reference_target = diagnostics.get('reference_target_reaction')
+        reference_target_flux = diagnostics.get('reference_target_flux')
         reference_cytbd = diagnostics.get('reference_cytbd_flux')
         if reference_growth is not None:
             text += f'\nReference biomass flux: {_clean_report_number(reference_growth):.3f}'
@@ -527,7 +676,12 @@ def _build_simulation_results_text(results):
             text += f' (safety limit {float(time_limit):g} s)'
         text += '\nThe ROOM score is not biomass, total absolute flux or the active-reaction count.'
     biomass_flux = _visible_biomass_flux(results)
-    if objective_name != MISSION07_BIOMASS_OBJECTIVE and biomass_flux is not None:
+    biomass_reaction = MISSION07_BIOMASS_OBJECTIVE
+    try:
+        biomass_reaction = (results[2] or {}).get('biomass_reaction') or biomass_reaction
+    except Exception:
+        pass
+    if objective_name != biomass_reaction and biomass_flux is not None:
         biomass_flux = _clean_report_number(biomass_flux)
         text += f'\n\nPredicted biomass flux: {biomass_flux:.3f}'
         if biomass_flux <= MISSION07_FLUX_TOLERANCE:
@@ -726,11 +880,27 @@ def _build_mission25_text(report_data):
 
 
 class Window:
-    def __init__(self, toggle_menu, player) -> None:
+    def __init__(self, toggle_menu, player, model_id='ecoli_core') -> None:
 
         # general setup
         self.player = player
         self.toggle_menu = toggle_menu
+        self.model_id = normalise_model_id(model_id)
+        self.model_context = build_ui_context(self.model_id)
+        self.model_reactions, self.model_reactions_all = build_legacy_tables(self.model_id)
+        # Preserve the richer E. coli display names already loaded by the
+        # legacy module while using metadata-driven names for yeast.
+        if self.model_id == 'ecoli_core':
+            self.model_reactions = REACTIONS
+            self.model_reactions_all = REACTIONS_v0
+            self.model_context['genes'] = list(GENES)
+            self.model_context['gene_names'] = dict(GENE_NAMES)
+            self.model_context['gene_labels'] = dict(GENE_LABELS)
+            self.model_context['production_flux_options'] = list(PRODUCTION_FLUX_OPTIONS)
+            self.model_context['production_flux_ids'] = list(PRODUCTION_FLUX_REACTION_IDS)
+            self.model_context['production_flux_labels'] = dict(PRODUCTION_FLUX_LABELS)
+            self.model_context['production_flux_names'] = dict(PRODUCTION_FLUX_NAMES)
+            self.model_context['default_objective'] = str(objective)
         self.display_surface = pygame.display.get_surface()
         # font_path = get_resource_path('font/LycheeSoda.ttf')
         # font2_path = get_resource_path('font/NotoColorEmoji-Regular.ttf')
@@ -744,13 +914,27 @@ class Window:
 
     async def setup(self):
 
+        # Model-local aliases keep the long-standing Mission 1-35 code bound
+        # to E. coli while allowing this same Window class to render iMM904.
+        REACTIONS = self.model_reactions
+        REACTIONS_v0 = self.model_reactions_all
+        GENES = list(self.model_context['genes'])
+        GENE_NAMES = self.model_context['gene_names']
+        GENE_LABELS = self.model_context['gene_labels']
+        PRODUCTION_FLUX_OPTIONS = self.model_context['production_flux_options']
+        PRODUCTION_FLUX_REACTION_IDS = self.model_context['production_flux_ids']
+        PRODUCTION_FLUX_LABELS = self.model_context['production_flux_labels']
+        PRODUCTION_FLUX_NAMES = self.model_context['production_flux_names']
+        objective = self.model_context['default_objective']
+        is_ecoli = self.model_id == 'ecoli_core'
+
         ecoli_rip = get_resource_path('graphics/environment/ecoli_rip.jpg')
         
         menu = pygame_menu.Menu(
             height=720,
             onclose=self.toggle_menu,
             theme=mytheme,
-            title='Simulation Menu',
+            title=('Simulation Menu' if is_ecoli else f"{self.model_context['display_name']} Simulator"),
             width=1280,
         )
 
@@ -774,7 +958,7 @@ class Window:
 
         # MENU REACTIONS
         menu_reactions.add.vertical_margin(50)
-        if '02' in self.player.missions_activated and '02' not in self.player.missions_completed:
+        if is_ecoli and '02' in self.player.missions_activated and '02' not in self.player.missions_completed:
             environment_help = (
                 'Mission 02 reflection:\n'
                 'Use exchange reactions to design a fair nutrient-replacement experiment. '
@@ -795,47 +979,153 @@ class Window:
             font_size=26,
         )
         menu_reactions.add.vertical_margin(20)
-        # Reactions (Range slider) // pode-se alterar as bounds para text inputs de forma a alterar para 0,0 (com range slider não é possível)
-        for i in range(len(REACTIONS.name)):
-            reaction_label = _format_reaction_menu_label(REACTIONS.name.iloc[i], REACTIONS.index[i])
-            menu_reactions.add.label(reaction_label, wordwrap=True)
-            if REACTIONS.lb.iloc[i] != 0:
-                default_lb_bool = True
-            else:
-                default_lb_bool = False
-            if REACTIONS.ub.iloc[i] != 0:
-                default_ub_bool = True
-            else:
-                default_ub_bool = False
-            menu_reactions.add.toggle_switch(
-                'Lower Bound',
-                default_lb_bool,
-                onchange=None,
-                state_text=('Closed', 'Open'),
-                state_text_font_size=20,
-                font_size=24,
-                state_color=('grey', 'gold'),
-                state_text_font_color=('black', 'black'),
-                toggleswitch_id=f'reaction_{i}_lb',
-            )
-            menu_reactions.add.toggle_switch(
-                'Upper Bound',
-                default_ub_bool,
-                onchange=None,
-                state_text=('Closed', 'Open'),
-                state_text_font_size=20,
-                font_size=24,
-                state_color=('grey', 'gold'),
-                state_text_font_color=('black', 'black'),
-                toggleswitch_id=f'reaction_{i}_ub',
-            )
-            # menu_reactions.add.range_slider('Lower Bound', REACTIONS.lb[i], (-1000,0), 10, font_size=30, range_box_color = 'gold', rangeslider_id=REACTIONS.index[i]+'lb') #, rangeslider_id=OPTIONS['Reactions'][i])
-            # menu_reactions.add.range_slider('Upper Bound', REACTIONS.ub[i], (0, 1000), 10, font_size=30, range_box_color = 'gold', rangeslider_id=REACTIONS.index[i]+'ub') #, rangeslider_id=OPTIONS['Reactions'][i])
 
-            menu_reactions.add.vertical_margin(30)
+        # A compact large-model editor avoids creating hundreds of pygame-menu
+        # widgets up-front.  iMM904 has 164 exchanges, which previously meant
+        # ~500 labels/switches plus margins before the main menu could even be
+        # displayed.  The compact editor preserves the exact same underlying
+        # reaction_<i>_lb/ub payload used by desktop and web simulations.
+        compact_environment_inputs = None
+        if self.model_context.get('environment_ui_mode') == 'compact_text':
+            menu_reactions.add.label(
+                f"Large-model mode: {len(self.model_context.get('exchanges') or [])} exchange reactions are available. "
+                "The model-default medium is preserved unless you list an exact exchange id below.",
+                wordwrap=True,
+                padding=(20, 20, 20, 20),
+                background_color='white',
+                font_size=24,
+            )
+            menu_reactions.add.vertical_margin(10)
+            menu_reactions.add.label(
+                'Lower bound controls uptake; upper bound controls secretion. '
+                'Examples: close oxygen uptake with EX_o2_e, or open a normally closed nutrient uptake by listing its exchange id under lower bounds to open.',
+                wordwrap=True,
+                padding=(20, 20, 20, 20),
+                background_color='white',
+                font_size=22,
+            )
+            menu_reactions.add.vertical_margin(10)
+            lower_open_input = None
+            lower_close_input = None
+            upper_open_input = None
+            upper_close_input = None
+            environment_preview_label = None
 
-            if _YIELD_ON_WEB and (i + 1) % 4 == 0:
-                await asyncio.sleep(0)
+            def refresh_environment_preview(*_args, **_kwargs):
+                if environment_preview_label is None:
+                    return
+                environment_preview_label.set_title(
+                    build_compact_environment_preview(
+                        self.model_context.get('exchanges') or [],
+                        lower_open_text=lower_open_input.get_value() if lower_open_input is not None else '',
+                        lower_close_text=lower_close_input.get_value() if lower_close_input is not None else '',
+                        upper_open_text=upper_open_input.get_value() if upper_open_input is not None else '',
+                        upper_close_text=upper_close_input.get_value() if upper_close_input is not None else '',
+                    )
+                )
+
+            lower_open_input = menu_reactions.add.text_input(
+                'Lower bounds to open: ', default='', input_underline='_',
+                input_underline_len=44, maxchar=500, maxwidth=44,
+                maxwidth_dynamically_update=False, textinput_id='env_lower_open',
+                background_color='white', font_color=(20, 0, 150),
+                onreturn=refresh_environment_preview,
+            )
+            lower_close_input = menu_reactions.add.text_input(
+                'Lower bounds to close: ', default='', input_underline='_',
+                input_underline_len=44, maxchar=500, maxwidth=44,
+                maxwidth_dynamically_update=False, textinput_id='env_lower_close',
+                background_color='white', font_color=(20, 0, 150),
+                onreturn=refresh_environment_preview,
+            )
+            upper_open_input = menu_reactions.add.text_input(
+                'Upper bounds to open: ', default='', input_underline='_',
+                input_underline_len=44, maxchar=500, maxwidth=44,
+                maxwidth_dynamically_update=False, textinput_id='env_upper_open',
+                background_color='white', font_color=(20, 0, 150),
+                onreturn=refresh_environment_preview,
+            )
+            upper_close_input = menu_reactions.add.text_input(
+                'Upper bounds to close: ', default='', input_underline='_',
+                input_underline_len=44, maxchar=500, maxwidth=44,
+                maxwidth_dynamically_update=False, textinput_id='env_upper_close',
+                background_color='white', font_color=(20, 0, 150),
+                onreturn=refresh_environment_preview,
+            )
+            compact_environment_inputs = (
+                lower_open_input,
+                lower_close_input,
+                upper_open_input,
+                upper_close_input,
+            )
+            menu_reactions.add.vertical_margin(10)
+
+            environment_preview_label = menu_reactions.add.label(
+                'Registered environmental changes: none (model defaults).',
+                wordwrap=True,
+                padding=(20, 20, 20, 20),
+                background_color='white',
+                font_size=22,
+            )
+
+            menu_reactions.add.button(
+                'Validate / Preview Environment',
+                refresh_environment_preview,
+                font_color='white',
+                background_color=(20, 100, 100),
+            )
+            menu_reactions.add.label(
+                'After editing a field, press Enter or use Validate / Preview Environment to refresh the registered-change preview.',
+                wordwrap=True,
+                padding=(15, 15, 15, 15),
+                background_color='white',
+                font_size=20,
+            )
+            menu_reactions.add.vertical_margin(10)
+            common_exchanges = ', '.join(self.model_context.get('exchange_report_ids') or [])
+            menu_reactions.add.label(
+                'Common exchanges in this simulator: ' + common_exchanges,
+                wordwrap=True,
+                padding=(20, 20, 20, 20),
+                background_color='white',
+                font_size=21,
+            )
+        else:
+            # Small-model mode: retain the original direct toggle interface.
+            for i in range(len(REACTIONS.name)):
+                reaction_label = _format_reaction_menu_label(REACTIONS.name.iloc[i], REACTIONS.index[i])
+                menu_reactions.add.label(reaction_label, wordwrap=True)
+                # MEWpy's native E. coli reaction table can yield numpy.bool_
+                # from comparisons. pygame-menu 4.4.3 deliberately accepts only
+                # built-in bool/int toggle defaults, so normalise explicitly.
+                default_lb_bool = bool(REACTIONS.lb.iloc[i] != 0)
+                default_ub_bool = bool(REACTIONS.ub.iloc[i] != 0)
+                menu_reactions.add.toggle_switch(
+                    'Lower Bound',
+                    default_lb_bool,
+                    onchange=None,
+                    state_text=('Closed', 'Open'),
+                    state_text_font_size=20,
+                    font_size=24,
+                    state_color=('grey', 'gold'),
+                    state_text_font_color=('black', 'black'),
+                    toggleswitch_id=f'reaction_{i}_lb',
+                )
+                menu_reactions.add.toggle_switch(
+                    'Upper Bound',
+                    default_ub_bool,
+                    onchange=None,
+                    state_text=('Closed', 'Open'),
+                    state_text_font_size=20,
+                    font_size=24,
+                    state_color=('grey', 'gold'),
+                    state_text_font_color=('black', 'black'),
+                    toggleswitch_id=f'reaction_{i}_ub',
+                )
+                menu_reactions.add.vertical_margin(30)
+
+                if _YIELD_ON_WEB and (i + 1) % 4 == 0:
+                    await asyncio.sleep(0)
         menu_reactions.add.vertical_margin(20)
         menu_reactions.add.button('Back', pygame_menu.events.BACK, background_color=(70, 70, 70))
         menu_reactions.add.vertical_margin(20)
@@ -897,7 +1187,7 @@ class Window:
             ('35', ['b0114', 'b0726', 'b0116']),
         ]
         for mission_id, candidates in gene_mission_candidates:
-            if mission_id in self.player.missions_activated and mission_id not in self.player.missions_completed:
+            if is_ecoli and mission_id in self.player.missions_activated and mission_id not in self.player.missions_completed:
                 active_gene_mission_candidates.update(candidates)
                 active_gene_mission_ids.append(mission_id)
 
@@ -922,115 +1212,150 @@ class Window:
         )
         menu_genes.add.vertical_margin(20)
 
-        menu_genes.add.label(
-            "Search by gene id, number or name. Examples: b1241, 1241, adhE, pta. Use Reset Genes to reactivate all genes.",
-            wordwrap=True,
-            padding=(20, 20, 20, 20),
-            background_color="white",
-            font_size=24
-        )
-        menu_genes.add.vertical_margin(10)
+        yeast_knockout_input = None
+        if self.model_context.get('gene_ui_mode') == 'text':
+            menu_genes.add.label(
+                f"This model contains {len(GENES)} genes. Enter knockout gene ids or common names separated by commas. "
+                "The complete iMM904 catalogue is validated when you run the simulation. Example: YOL086C or ADH1.",
+                wordwrap=True,
+                padding=(20, 20, 20, 20),
+                background_color="white",
+                font_size=24,
+            )
+            menu_genes.add.vertical_margin(10)
+            gene_preview_label = None
 
-        gene_toggle_widgets = {}
-        gene_search_input = None
-        gene_search_status = menu_genes.add.label(
-            f"Showing all {len(GENES)} genes.",
-            font_size=22,
-            font_color=(20, 0, 150)
-        )
+            def refresh_gene_preview(*_args, **_kwargs):
+                if gene_preview_label is None or yeast_knockout_input is None:
+                    return
+                gene_preview_label.set_title(
+                    build_gene_knockout_preview(
+                        yeast_knockout_input.get_value(), GENES, GENE_NAMES
+                    )
+                )
 
-        def apply_gene_search(search_text=None, **_kwargs):
-            current_search = '' if search_text is None else str(search_text)
-            if search_text is None and gene_search_input is not None:
-                current_search = str(gene_search_input.get_value())
+            yeast_knockout_input = menu_genes.add.text_input(
+                'Knockout genes: ',
+                default='',
+                input_underline='_',
+                input_underline_len=52,
+                maxchar=240,
+                maxwidth=52,
+                maxwidth_dynamically_update=False,
+                textinput_id='gene_knockout_text',
+                background_color='white',
+                font_color=(20, 0, 150),
+                onreturn=refresh_gene_preview,
+            )
+            menu_genes.add.vertical_margin(10)
 
-            visible_count = 0
-            for gene_id, widget in gene_toggle_widgets.items():
-                if _gene_matches_search(gene_id, current_search):
-                    widget.show()
-                    visible_count += 1
+            gene_preview_label = menu_genes.add.label(
+                'Registered knockouts: none (wild type).',
+                wordwrap=True,
+                padding=(20, 20, 20, 20),
+                background_color='white',
+                font_size=22,
+            )
+
+            menu_genes.add.button(
+                'Validate / Preview Genes',
+                refresh_gene_preview,
+                font_color='white',
+                background_color=(20, 100, 100),
+            )
+            menu_genes.add.vertical_margin(10)
+            menu_genes.add.label(
+                'Leave the field empty for wild type. Common names are accepted only when they map unambiguously to one model gene. '
+                'After editing, press Enter or use Validate / Preview Genes to refresh the canonical selection shown above.',
+                wordwrap=True,
+                padding=(20, 20, 20, 20),
+                background_color='white',
+                font_size=22,
+            )
+        else:
+            menu_genes.add.label(
+                "Search by gene id, number or name. Examples: b1241, 1241, adhE, pta. Use Reset Genes to reactivate all genes.",
+                wordwrap=True,
+                padding=(20, 20, 20, 20),
+                background_color="white",
+                font_size=24
+            )
+            menu_genes.add.vertical_margin(10)
+
+            gene_toggle_widgets = {}
+            gene_search_input = None
+            gene_search_status = menu_genes.add.label(
+                f"Showing all {len(GENES)} genes.",
+                font_size=22,
+                font_color=(20, 0, 150)
+            )
+
+            def apply_gene_search(search_text=None, **_kwargs):
+                current_search = '' if search_text is None else str(search_text)
+                if search_text is None and gene_search_input is not None:
+                    current_search = str(gene_search_input.get_value())
+
+                visible_count = 0
+                for gene_id, widget in gene_toggle_widgets.items():
+                    if _gene_matches_search(gene_id, current_search, GENE_NAMES, GENE_LABELS):
+                        widget.show()
+                        visible_count += 1
+                    else:
+                        widget.hide()
+
+                if current_search.strip():
+                    gene_search_status.set_title(
+                        f"Search: {current_search} | {visible_count} gene(s) found."
+                    )
                 else:
-                    widget.hide()
+                    gene_search_status.set_title(f"Showing all {len(GENES)} genes.")
 
-            if current_search.strip():
-                gene_search_status.set_title(
-                    f"Search: {current_search} | {visible_count} gene(s) found."
-                )
-            else:
-                gene_search_status.set_title(f"Showing all {len(GENES)} genes.")
+            def clear_gene_search(*_args, **_kwargs):
+                if gene_search_input is not None:
+                    gene_search_input.set_value('')
+                apply_gene_search('')
 
-        def clear_gene_search(*_args, **_kwargs):
-            if gene_search_input is not None:
-                gene_search_input.set_value('')
+            def reset_gene_toggles(*_args, **_kwargs):
+                for widget in gene_toggle_widgets.values():
+                    widget.set_value(True)
+                if gene_search_input is not None:
+                    gene_search_input.set_value('')
+                apply_gene_search('')
+                gene_search_status.set_title(f"All {len(GENES)} genes are active again.")
+
+            gene_search_input = menu_genes.add.text_input(
+                'Search gene: ',
+                default='',
+                input_underline='_',
+                maxchar=30,
+                maxwidth=30,
+                onchange=apply_gene_search,
+                onreturn=apply_gene_search,
+                textinput_id='gene_search',
+                background_color="white",
+                font_color=(20, 0, 150)
+            )
+            menu_genes.add.vertical_margin(10)
+            menu_genes.add.button('Search / Refresh', apply_gene_search, font_color='white', background_color=(20, 100, 100))
+            menu_genes.add.button('Clear Search', clear_gene_search, font_color='white', background_color=(70, 70, 70))
+            menu_genes.add.button('Reset Genes', reset_gene_toggles, font_color='white', background_color=(150, 40, 40))
+            menu_genes.add.vertical_margin(20)
+
+            for i, gene_id in enumerate(GENES):
+                gene_label = GENE_LABELS.get(gene_id, gene_id)
+                if gene_id in active_gene_mission_candidates:
+                    gene_toggle_widgets[gene_id] = menu_genes.add.toggle_switch(
+                        gene_label, True, kwargs=gene_id, toggleswitch_id=gene_id,
+                        background_color="gold", font_color="black"
+                    )
+                else:
+                    gene_toggle_widgets[gene_id] = menu_genes.add.toggle_switch(
+                        gene_label, True, kwargs=gene_id, toggleswitch_id=gene_id
+                    )
+                if _YIELD_ON_WEB and (i + 1) % 8 == 0:
+                    await asyncio.sleep(0)
             apply_gene_search('')
 
-        def reset_gene_toggles(*_args, **_kwargs):
-            """Reactivate every gene and restore the genes page to its default state."""
-            for widget in gene_toggle_widgets.values():
-                widget.set_value(True)
-
-            if gene_search_input is not None:
-                gene_search_input.set_value('')
-            apply_gene_search('')
-            gene_search_status.set_title(f"All {len(GENES)} genes are active again.")
-
-        gene_search_input = menu_genes.add.text_input(
-            'Search gene: ',
-            default='',
-            input_underline='_',
-            maxchar=30,
-            maxwidth=30,
-            onchange=apply_gene_search,
-            onreturn=apply_gene_search,
-            textinput_id='gene_search',
-            background_color="white",
-            font_color=(20, 0, 150)
-        )
-        menu_genes.add.vertical_margin(10)
-        menu_genes.add.button(
-            'Search / Refresh',
-            apply_gene_search,
-            font_color='white',
-            background_color=(20, 100, 100)
-        )
-        menu_genes.add.button(
-            'Clear Search',
-            clear_gene_search,
-            font_color='white',
-            background_color=(70, 70, 70)
-        )
-        menu_genes.add.button(
-            'Reset Genes',
-            reset_gene_toggles,
-            font_color='white',
-            background_color=(150, 40, 40)
-        )
-        menu_genes.add.vertical_margin(20)
-
-        for i, gene_id in enumerate(GENES):
-            gene_label = GENE_LABELS.get(gene_id, gene_id)
-
-            if gene_id in active_gene_mission_candidates:
-                gene_toggle_widgets[gene_id] = menu_genes.add.toggle_switch(
-                    gene_label,
-                    True,
-                    kwargs=gene_id,
-                    toggleswitch_id=gene_id,
-                    background_color="gold",
-                    font_color="black"
-                )
-            else:
-                gene_toggle_widgets[gene_id] = menu_genes.add.toggle_switch(
-                    gene_label,
-                    True,
-                    kwargs=gene_id,
-                    toggleswitch_id=gene_id
-                )
-
-            if _YIELD_ON_WEB and (i + 1) % 8 == 0:
-                await asyncio.sleep(0)
-
-        apply_gene_search('')
         menu_genes.add.vertical_margin(20)
         menu_genes.add.button('Back', pygame_menu.events.BACK, background_color=(70, 70, 70))
         menu_genes.add.vertical_margin(20)
@@ -1125,25 +1450,54 @@ class Window:
             width=1280
         )
 
-        objectives = []
-        default_obj = 0
-        # print(str(objective))
-        
-        for i in range(len(REACTIONS_v0)):
-            if REACTIONS_v0.index[i] == str(objective):
-                default_obj = i
-            objectives.append((REACTIONS_v0.index[i], REACTIONS_v0.index[i]))
-        
-        menu_objective.add.dropselect(title='Objective: ',
-                                   items=objectives,
-                                   default=default_obj,
-                                   selection_box_height=8,
-                                   selection_box_width=500,
-                                   dropselect_id='objective')
+        objective_ids = list(self.model_context.get('objective_ids') or list(REACTIONS_v0.index))
+        objective_text_input = None
+        if self.model_context.get('objective_ui_mode') == 'text':
+            menu_objective.add.label(
+                'Large-model mode: enter an exact reaction id. The complete iMM904 reaction catalogue is validated before the solver runs.',
+                wordwrap=True,
+                padding=(20, 20, 20, 20),
+                background_color='white',
+                font_size=24,
+            )
+            menu_objective.add.vertical_margin(10)
+            # pygame-menu 4.4.3 recomputes variable-length underline geometry
+            # whenever the TextInput cursor blinks.  With a full-width underline
+            # this repeatedly invalidates the menu surface and causes the entire
+            # submenu to visibly jitter.  iMM904 reaction ids are at most 19
+            # characters, so a fixed 24-character field is ample and stable.
+            objective_text_input = menu_objective.add.text_input(
+                'Objective reaction: ',
+                default=str(objective),
+                input_underline='_',
+                input_underline_len=24,
+                maxchar=100,
+                maxwidth=24,
+                maxwidth_dynamically_update=False,
+                textinput_id='objective',
+                background_color='white',
+                font_color=(20, 0, 150),
+            )
+        else:
+            objectives = []
+            default_obj = 0
+            for i, reaction_id in enumerate(objective_ids):
+                if reaction_id == str(objective):
+                    default_obj = i
+                objectives.append((reaction_id, reaction_id))
+            menu_objective.add.dropselect(
+                title='Objective: ',
+                items=objectives,
+                default=default_obj,
+                selection_box_height=8,
+                selection_box_width=500,
+                dropselect_id='objective'
+            )
         # menu_objective.add.range_slider('Fraction', default=90, range_values=(0,100), increment=1, rangeslider_id='obj_fraction')
 
         menu_objective.add.vertical_margin(30)
-        menu_objective.add.label("TIP: \nBy default, you want \"Biomass” to be set as the objective because you want to see if E. Coli can grow or even survive in the environment you create.",
+        menu_objective.add.label(
+            f"TIP: \nBy default, use {self.model_context['default_objective']} to evaluate predicted growth for {self.model_context['organism_name']}.",
                                 #  max_char=1,
                                  wordwrap=True,
                                 #  align=pygame_menu.locals.ALIGN_CENTER,
@@ -1186,9 +1540,8 @@ class Window:
             font_size=26
         )
         menu_bound_sweep.add.vertical_margin(20)
-        menu_bound_sweep.add.dropselect(
-            title='Sweep variable: ',
-            items=[
+        if is_ecoli:
+            sweep_variable_items = [
                 ('Ammonium lower bound (EX_nh4_e)', 'EX_nh4_e:lower'),
                 ('Carbon dioxide upper bound (EX_co2_e)', 'EX_co2_e:upper'),
                 ('Oxygen lower bound (EX_o2_e)', 'EX_o2_e:lower'),
@@ -1198,18 +1551,8 @@ class Window:
                 ('L-Malate lower bound (EX_mal__L_e)', 'EX_mal__L_e:lower'),
                 ('Fumarate lower bound (EX_fum_e)', 'EX_fum_e:lower'),
                 ('2-Oxoglutarate lower bound (EX_akg_e)', 'EX_akg_e:lower'),
-            ],
-            default=0,
-            selection_box_height=4,
-            selection_box_width=520,
-            dropselect_id='sweep_variable',
-            background_color='white',
-            font_color=(20, 0, 150)
-        )
-        menu_bound_sweep.add.vertical_margin(20)
-        menu_bound_sweep.add.dropselect(
-            title='Sweep values: ',
-            items=[
+            ]
+            sweep_value_items = [
                 ('Ammonium sensitivity: -5, -4, -2, -1', 'ammonium_sensitivity'),
                 ('CO2 export capacity: 25, 20, 10, 0', 'co2_export_capacity'),
                 ('O2 genotype interaction: -25, -10, -1, 0', 'oxygen_transition'),
@@ -1217,14 +1560,26 @@ class Window:
                 ('Alternative carbon: -20, -10, -5, -1, 0', 'alternative_carbon_limitation'),
                 ('PFK redundancy threshold: -30, -10, -5, -2', 'pfk_redundancy_threshold'),
                 ('Final oxygen convergence: -30, -10, -5, -2', 'final_oxygen_convergence'),
-            ],
-            default=0,
-            selection_box_height=4,
-            selection_box_width=520,
-            dropselect_id='sweep_values',
-            background_color='white',
-            font_color=(20, 0, 150)
+            ]
+        else:
+            sweep_variable_items = [('D-Glucose lower bound (EX_glc__D_e)', 'EX_glc__D_e:lower')]
+            sweep_value_items = [('Yeast glucose fermentation threshold: -0.5, -1, -2, -10', 'yeast_glucose_fermentation_threshold')]
+        menu_bound_sweep.add.dropselect(
+            title='Sweep variable: ', items=sweep_variable_items, default=0,
+            selection_box_height=4, selection_box_width=520,
+            dropselect_id='sweep_variable', background_color='white', font_color=(20, 0, 150)
         )
+        menu_bound_sweep.add.vertical_margin(20)
+        menu_bound_sweep.add.dropselect(
+            title='Sweep values: ', items=sweep_value_items, default=0,
+            selection_box_height=4, selection_box_width=520,
+            dropselect_id='sweep_values', background_color='white', font_color=(20, 0, 150)
+        )
+        if not is_ecoli:
+            menu_bound_sweep.add.toggle_switch(
+                'Execute this sweep with the next Run Simulation: ', False,
+                toggleswitch_id='execute_sweep', background_color='white', font_color=(20,0,150)
+            )
         menu_bound_sweep.add.vertical_margin(20)
         menu_bound_sweep.add.label(
             "Active-mission note: follow the current scientist briefing before selecting a sweep. Some missions require one curve; advanced missions may require matched curves under different genotypes or base conditions.",
@@ -1256,9 +1611,42 @@ class Window:
             data_simul = menu.get_input_data()
             data_objective = menu_objective.get_input_data()
             raw_data_genes = menu_genes.get_input_data()
-            data_genes = _build_clean_gene_data(raw_data_genes)
-            data_reac = menu_reactions.get_input_data()
-            data_fluxes = _build_clean_production_flux_data(menu_production_flux.get_input_data())
+            gene_input_error = None
+            if self.model_context.get('gene_ui_mode') == 'text':
+                refresh_gene_preview()
+                raw_knockouts = yeast_knockout_input.get_value() if yeast_knockout_input is not None else ''
+                data_genes, _knockouts, unknown_genes, ambiguous_genes = _parse_gene_knockout_text(
+                    raw_knockouts, GENES, GENE_NAMES
+                )
+                problems = []
+                if unknown_genes:
+                    problems.append('Unknown gene id/name: ' + ', '.join(unknown_genes))
+                if ambiguous_genes:
+                    problems.append('Ambiguous common gene name: ' + ', '.join(ambiguous_genes))
+                if problems:
+                    gene_input_error = '; '.join(problems)
+            else:
+                data_genes = _build_clean_gene_data(raw_data_genes, GENES)
+            environment_input_error = None
+            if self.model_context.get('environment_ui_mode') == 'compact_text':
+                refresh_environment_preview()
+                lower_open_text = compact_environment_inputs[0].get_value() if compact_environment_inputs else ''
+                lower_close_text = compact_environment_inputs[1].get_value() if compact_environment_inputs else ''
+                upper_open_text = compact_environment_inputs[2].get_value() if compact_environment_inputs else ''
+                upper_close_text = compact_environment_inputs[3].get_value() if compact_environment_inputs else ''
+                data_reac, environment_errors = build_compact_environment_payload(
+                    self.model_context.get('exchanges') or [],
+                    lower_open_text=lower_open_text,
+                    lower_close_text=lower_close_text,
+                    upper_open_text=upper_open_text,
+                    upper_close_text=upper_close_text,
+                )
+                if environment_errors:
+                    environment_input_error = '; '.join(environment_errors)
+            else:
+                data_reac = menu_reactions.get_input_data()
+            raw_fluxes = menu_production_flux.get_input_data()
+            data_fluxes = {reaction_id: bool(raw_fluxes.get(reaction_id, False)) for reaction_id in PRODUCTION_FLUX_REACTION_IDS}
 
 
 
@@ -1273,32 +1661,39 @@ class Window:
             )
 
             simulation_method = _selected_menu_value(data_simul, 'method')
-            objective_name = _selected_menu_value(data_objective, 'objective')
+            if objective_text_input is not None:
+                objective_name = str(objective_text_input.get_value()).strip()
+            else:
+                objective_name = str(_selected_menu_value(data_objective, 'objective')).strip()
+            objective_input_error = None
+            if objective_name not in set(self.model_context.get('all_reaction_ids') or []):
+                objective_input_error = f'Unknown objective reaction for {self.model_context["display_name"]}: {objective_name}'
 
             menu_summary.add.vertical_margin(30)
 
             _add_summary_section(
                 menu_summary,
                 'General setup',
+                f"Model: {self.model_context['display_name']} ({self.model_id})\n"
                 f'Simulation method: {_method_display_name(simulation_method)}\nObjective: {objective_name}'
             )
 
             _add_summary_section(
                 menu_summary,
                 'Gene knockouts',
-                _build_gene_summary(data_genes)
+                _build_gene_summary(data_genes, GENE_LABELS)
             )
 
             _add_summary_section(
                 menu_summary,
                 'Environmental changes',
-                _build_environmental_summary(data_reac)
+                _build_environmental_summary_for_table(data_reac, REACTIONS)
             )
 
             _add_summary_section(
                 menu_summary,
                 'Production fluxes to track',
-                _build_production_flux_summary(data_fluxes)
+                _build_production_flux_summary_for_options(data_fluxes, PRODUCTION_FLUX_OPTIONS)
             )
 
             menu_summary.add.button(
@@ -1308,9 +1703,25 @@ class Window:
             )
 
 
-            save_simulation_file([data_simul, data_objective, data_genes, data_reac, data_fluxes])
+            # Persist a canonical text-objective shape for large models.
+            # pygame-menu TextInput values are plain strings whereas the E. coli
+            # DropSelect uses nested selector data.  Keeping the written yeast
+            # payload explicit avoids depending on widget-internal serialization
+            # and is also the shape the future web client can send directly.
+            saved_objective_data = (
+                {'objective': objective_name}
+                if objective_text_input is not None
+                else data_objective
+            )
+            save_simulation_file([data_simul, saved_objective_data, data_genes, data_reac, data_fluxes, {'model_id': self.model_id}])
             animation_text_save('Running')
             try:
+                if gene_input_error:
+                    raise ValueError(gene_input_error)
+                if objective_input_error:
+                    raise ValueError(objective_input_error)
+                if environment_input_error:
+                    raise ValueError(environment_input_error)
                 if sys.platform == 'emscripten':
                     self.results = run_simul_remote(BACKEND_URL)
                 else:
@@ -1336,31 +1747,125 @@ class Window:
 
             compare_runs = capture_compare_run_snapshot(self.results)
 
+            mission36_data = None
+            mission36_baseline_preexisting = False
+            if (not is_ecoli and '36' in self.player.missions_activated and '36' not in self.player.missions_completed):
+                previous_m36 = load_mission36_fermentation_onset() or {}
+                mission36_baseline_preexisting = bool(previous_m36.get('baseline_ready'))
+                if not bool(menu_bound_sweep.get_input_data().get('execute_sweep', False)) or not mission36_baseline_preexisting:
+                    mission36_data = run_mission36_baseline_check(self.results)
+
+            mission37_data = None
+            if (not is_ecoli and '37' in self.player.missions_activated and '37' not in self.player.missions_completed):
+                mission37_sweep_requested = bool(
+                    (menu_bound_sweep.get_input_data() or {}).get('execute_sweep', False)
+                )
+                if sys.platform == 'emscripten':
+                    mission37_data = run_mission37_fermentation_cut_set_check_remote(
+                        BACKEND_URL,
+                        self.results,
+                        sweep_requested=mission37_sweep_requested,
+                    )
+                else:
+                    mission37_data = run_mission37_fermentation_cut_set_check(
+                        self.results,
+                        sweep_requested=mission37_sweep_requested,
+                    )
+
+            mission38_data = None
+            if (not is_ecoli and '38' in self.player.missions_activated and '38' not in self.player.missions_completed):
+                mission38_sweep_requested = bool(
+                    (menu_bound_sweep.get_input_data() or {}).get('execute_sweep', False)
+                )
+                if sys.platform == 'emscripten':
+                    mission38_data = run_mission38_background_dependency_check_remote(
+                        BACKEND_URL,
+                        self.results,
+                        sweep_requested=mission38_sweep_requested,
+                    )
+                else:
+                    mission38_data = run_mission38_background_dependency_check(
+                        self.results,
+                        sweep_requested=mission38_sweep_requested,
+                    )
+
+            mission39_data = None
+            if (not is_ecoli and '39' in self.player.missions_activated and '39' not in self.player.missions_completed):
+                mission39_sweep_requested = bool(
+                    (menu_bound_sweep.get_input_data() or {}).get('execute_sweep', False)
+                )
+                if sys.platform == 'emscripten':
+                    mission39_data = run_mission39_bypass_rescue_check_remote(
+                        BACKEND_URL,
+                        self.results,
+                        sweep_requested=mission39_sweep_requested,
+                    )
+                else:
+                    mission39_data = run_mission39_bypass_rescue_check(
+                        self.results,
+                        sweep_requested=mission39_sweep_requested,
+                    )
+
+            mission40_data = None
+            mission40_sweep_requested = False
+            mission40_active = bool(
+                not is_ecoli
+                and '40' in self.player.missions_activated
+                and '40' not in self.player.missions_completed
+            )
+            mission40_sweep_menu_data = menu_bound_sweep.get_input_data()
+            mission40_input_errors = [
+                error for error in (gene_input_error, objective_input_error, environment_input_error)
+                if error
+            ]
+            if mission40_active:
+                mission40_sweep_explicitly_requested = bool(
+                    (mission40_sweep_menu_data or {}).get('execute_sweep', False)
+                )
+                mission40_sweep_requested = bool(
+                    mission40_sweep_explicitly_requested
+                    and mission40_should_run_bound_sweep(
+                        mission40_sweep_menu_data,
+                        simulation_method,
+                        objective_name,
+                        data_genes,
+                        input_errors=mission40_input_errors,
+                    )
+                )
+                if not mission40_sweep_requested:
+                    mission40_data = run_mission40_rejected_sweep_attempt(
+                        mission40_sweep_menu_data,
+                        simulation_method,
+                        objective_name,
+                        data_genes,
+                        input_errors=mission40_input_errors,
+                    )
+
             mission01_data = None
-            if '01' in self.player.missions_activated and '01' not in self.player.missions_completed:
+            if is_ecoli and '01' in self.player.missions_activated and '01' not in self.player.missions_completed:
                 mission01_data = run_mission01_comparison_check(compare_runs)
 
             mission02_data = None
-            if '02' in self.player.missions_activated and '02' not in self.player.missions_completed:
+            if is_ecoli and '02' in self.player.missions_activated and '02' not in self.player.missions_completed:
                 mission02_data = run_mission02_source_trial_check(self.results)
 
             mission03_data = None
-            if '03' in self.player.missions_activated and '03' not in self.player.missions_completed:
+            if is_ecoli and '03' in self.player.missions_activated and '03' not in self.player.missions_completed:
                 mission03_data = run_mission03_gene_trial_check(self.results)
 
             mission04_data = None
-            if '04' in self.player.missions_activated and '04' not in self.player.missions_completed:
+            if is_ecoli and '04' in self.player.missions_activated and '04' not in self.player.missions_completed:
                 mission04_data = run_mission04_production_trial_check(self.results)
 
             mission21_data = None
-            if '21' in self.player.missions_activated and '21' not in self.player.missions_completed:
+            if is_ecoli and '21' in self.player.missions_activated and '21' not in self.player.missions_completed:
                 if sys.platform == 'emscripten':
                     mission21_data = run_mission21_comparison_check_remote(BACKEND_URL, self.results)
                 else:
                     mission21_data = run_mission21_comparison_check(self.results)
 
             mission22_data = None
-            if '22' in self.player.missions_activated and '22' not in self.player.missions_completed:
+            if is_ecoli and '22' in self.player.missions_activated and '22' not in self.player.missions_completed:
                 if sys.platform == 'emscripten':
                     mission22_data = run_mission22_comparison_check_remote(BACKEND_URL, self.results)
                 else:
@@ -1371,35 +1876,35 @@ class Window:
             mission24_data = None
 
             mission25_data = None
-            if '25' in self.player.missions_activated and '25' not in self.player.missions_completed:
+            if is_ecoli and '25' in self.player.missions_activated and '25' not in self.player.missions_completed:
                 if sys.platform == 'emscripten':
                     mission25_data = run_mission25_context_check_remote(BACKEND_URL, self.results)
                 else:
                     mission25_data = run_mission25_context_check(self.results)
 
             mission27_data = None
-            if '27' in self.player.missions_activated and '27' not in self.player.missions_completed:
+            if is_ecoli and '27' in self.player.missions_activated and '27' not in self.player.missions_completed:
                 if sys.platform == 'emscripten':
                     mission27_data = run_mission27_rescue_check_remote(BACKEND_URL, self.results)
                 else:
                     mission27_data = run_mission27_rescue_check(self.results)
 
             mission28_data = None
-            if '28' in self.player.missions_activated and '28' not in self.player.missions_completed:
+            if is_ecoli and '28' in self.player.missions_activated and '28' not in self.player.missions_completed:
                 if sys.platform == 'emscripten':
                     mission28_data = run_mission28_dependency_check_remote(BACKEND_URL, self.results)
                 else:
                     mission28_data = run_mission28_dependency_check(self.results)
 
             mission29_data = None
-            if '29' in self.player.missions_activated and '29' not in self.player.missions_completed:
+            if is_ecoli and '29' in self.player.missions_activated and '29' not in self.player.missions_completed:
                 if sys.platform == 'emscripten':
                     mission29_data = run_mission29_redundancy_check_remote(BACKEND_URL, self.results)
                 else:
                     mission29_data = run_mission29_redundancy_check(self.results)
 
             mission31_data = None
-            if '31' in self.player.missions_activated and '31' not in self.player.missions_completed:
+            if is_ecoli and '31' in self.player.missions_activated and '31' not in self.player.missions_completed:
                 if sys.platform == 'emscripten':
                     mission31_data = run_mission31_environmental_suppression_check_remote(
                         BACKEND_URL, self.results
@@ -1409,7 +1914,7 @@ class Window:
 
 
             mission32_data = None
-            if '32' in self.player.missions_activated and '32' not in self.player.missions_completed:
+            if is_ecoli and '32' in self.player.missions_activated and '32' not in self.player.missions_completed:
                 if sys.platform == 'emscripten':
                     mission32_data = run_mission32_respiratory_cut_set_check_remote(
                         BACKEND_URL, self.results
@@ -1418,7 +1923,7 @@ class Window:
                     mission32_data = run_mission32_respiratory_cut_set_check(self.results)
 
             mission33_data = None
-            if '33' in self.player.missions_activated and '33' not in self.player.missions_completed:
+            if is_ecoli and '33' in self.player.missions_activated and '33' not in self.player.missions_completed:
                 if sys.platform == 'emscripten':
                     mission33_data = run_mission33_reference_adjustment_check_remote(
                         BACKEND_URL, self.results
@@ -1428,7 +1933,7 @@ class Window:
 
 
             mission34_data = None
-            if '34' in self.player.missions_activated and '34' not in self.player.missions_completed:
+            if is_ecoli and '34' in self.player.missions_activated and '34' not in self.player.missions_completed:
                 if sys.platform == 'emscripten':
                     mission34_data = run_mission34_shared_subunit_check_remote(
                         BACKEND_URL, self.results
@@ -1437,7 +1942,7 @@ class Window:
                     mission34_data = run_mission34_shared_subunit_check(self.results)
 
             mission35_data = None
-            if '35' in self.player.missions_activated and '35' not in self.player.missions_completed:
+            if is_ecoli and '35' in self.player.missions_activated and '35' not in self.player.missions_completed:
                 if sys.platform == 'emscripten':
                     mission35_data = run_mission35_final_certification_check_remote(
                         BACKEND_URL, self.results
@@ -1452,49 +1957,82 @@ class Window:
                 '35' in self.player.missions_activated
                 and '35' not in self.player.missions_completed
                 and mission35_should_run_bound_sweep(
-                    menu_bound_sweep.get_input_data(),
+                    menu_bound_sweep.get_input_data(), simulation_method, objective_name, data_genes,
+                )
+            )
+            mission36_sweep_menu_data = menu_bound_sweep.get_input_data()
+            mission36_input_errors = [
+                error for error in (gene_input_error, objective_input_error, environment_input_error)
+                if error
+            ]
+            mission36_sweep_explicitly_requested = bool(
+                not is_ecoli
+                and '36' in self.player.missions_activated
+                and '36' not in self.player.missions_completed
+                and bool((mission36_sweep_menu_data or {}).get('execute_sweep', False))
+            )
+            mission36_sweep_requested = bool(
+                mission36_sweep_explicitly_requested
+                and mission36_should_run_bound_sweep(
+                    mission36_sweep_menu_data, simulation_method, objective_name,
+                    data_genes, baseline_preexisting=mission36_baseline_preexisting,
+                    input_errors=mission36_input_errors,
+                )
+            )
+            if (
+                mission36_sweep_explicitly_requested
+                and mission36_baseline_preexisting
+                and not mission36_sweep_requested
+            ):
+                mission36_data = run_mission36_rejected_sweep_attempt(
+                    mission36_sweep_menu_data,
                     simulation_method,
                     objective_name,
                     data_genes,
+                    baseline_preexisting=True,
+                    input_errors=mission36_input_errors,
                 )
-            )
             bound_sweep_mission_active = (
                 ('23' in self.player.missions_activated and '23' not in self.player.missions_completed)
                 or ('24' in self.player.missions_activated and '24' not in self.player.missions_completed)
                 or ('26' in self.player.missions_activated and '26' not in self.player.missions_completed)
                 or ('30' in self.player.missions_activated and '30' not in self.player.missions_completed)
                 or mission35_sweep_requested
+                or mission36_sweep_requested
+                or mission40_sweep_requested
             )
             if bound_sweep_mission_active:
                 if sys.platform == 'emscripten':
                     bound_sweep_data = run_bound_sweep_remote(
-                        BACKEND_URL, menu_bound_sweep.get_input_data()
+                        BACKEND_URL, menu_bound_sweep.get_input_data(), model_id=self.model_id
                     )
                 else:
-                    bound_sweep_data = run_bound_sweep(menu_bound_sweep.get_input_data())
+                    bound_sweep_data = run_bound_sweep(
+                        menu_bound_sweep.get_input_data(), model_id=self.model_id
+                    )
 
-                if '23' in self.player.missions_activated and '23' not in self.player.missions_completed:
+                if is_ecoli and '23' in self.player.missions_activated and '23' not in self.player.missions_completed:
                     if sys.platform == 'emscripten':
                         mission23_data = run_mission23_sensitivity_check_remote(
                             BACKEND_URL, bound_sweep_data
                         )
                     else:
                         mission23_data = run_mission23_sensitivity_check(bound_sweep_data)
-                if '24' in self.player.missions_activated and '24' not in self.player.missions_completed:
+                if is_ecoli and '24' in self.player.missions_activated and '24' not in self.player.missions_completed:
                     if sys.platform == 'emscripten':
                         mission24_data = run_mission24_export_capacity_check_remote(
                             BACKEND_URL, bound_sweep_data
                         )
                     else:
                         mission24_data = run_mission24_export_capacity_check(bound_sweep_data)
-                if '26' in self.player.missions_activated and '26' not in self.player.missions_completed:
+                if is_ecoli and '26' in self.player.missions_activated and '26' not in self.player.missions_completed:
                     if sys.platform == 'emscripten':
                         mission26_data = run_mission26_interaction_curve_check_remote(
                             BACKEND_URL, bound_sweep_data
                         )
                     else:
                         mission26_data = run_mission26_interaction_curve_check(bound_sweep_data)
-                if '30' in self.player.missions_activated and '30' not in self.player.missions_completed:
+                if is_ecoli and '30' in self.player.missions_activated and '30' not in self.player.missions_completed:
                     if sys.platform == 'emscripten':
                         mission30_data = run_mission30_redundancy_threshold_check_remote(
                             BACKEND_URL, bound_sweep_data
@@ -1508,6 +2046,10 @@ class Window:
                         )
                     else:
                         mission35_data = run_mission35_oxygen_curve_check(bound_sweep_data)
+                if mission36_sweep_requested:
+                    mission36_data = run_mission36_curve_check(bound_sweep_data)
+                if mission40_sweep_requested:
+                    mission40_data = run_mission40_curve_check(bound_sweep_data)
 
             menu_compare_runs = pygame_menu.Menu(
                 height=720,
@@ -1583,103 +2125,103 @@ class Window:
             )
 
             mission07_data = None
-            if '07' in self.player.missions_activated and '07' not in self.player.missions_completed:
+            if is_ecoli and '07' in self.player.missions_activated and '07' not in self.player.missions_completed:
                 mission07_data = run_mission07_objective_check(self.results)
 
             mission08_data = None
-            if '08' in self.player.missions_activated and '08' not in self.player.missions_completed:
+            if is_ecoli and '08' in self.player.missions_activated and '08' not in self.player.missions_completed:
                 mission08_data = run_mission08_constraint_check(self.results)
 
             mission09_data = None
-            if '09' in self.player.missions_activated and '09' not in self.player.missions_completed:
+            if is_ecoli and '09' in self.player.missions_activated and '09' not in self.player.missions_completed:
                 if sys.platform == 'emscripten':
                     mission09_data = run_mission09_design_check_remote(BACKEND_URL, self.results)
                 else:
                     mission09_data = run_mission09_design_check(self.results)
 
             mission10_data = None
-            if '10' in self.player.missions_activated and '10' not in self.player.missions_completed:
+            if is_ecoli and '10' in self.player.missions_activated and '10' not in self.player.missions_completed:
                 if sys.platform == 'emscripten':
                     mission10_data = run_mission10_robust_design_check_remote(BACKEND_URL, self.results)
                 else:
                     mission10_data = run_mission10_robust_design_check(self.results)
 
             mission11_data = None
-            if '11' in self.player.missions_activated and '11' not in self.player.missions_completed:
+            if is_ecoli and '11' in self.player.missions_activated and '11' not in self.player.missions_completed:
                 if sys.platform == 'emscripten':
                     mission11_data = run_mission11_flux_fingerprint_check_remote(BACKEND_URL, self.results)
                 else:
                     mission11_data = run_mission11_flux_fingerprint_check(self.results)
 
             mission12_data = None
-            if '12' in self.player.missions_activated and '12' not in self.player.missions_completed:
+            if is_ecoli and '12' in self.player.missions_activated and '12' not in self.player.missions_completed:
                 if sys.platform == 'emscripten':
                     mission12_data = run_mission12_byproduct_check_remote(BACKEND_URL, self.results)
                 else:
                     mission12_data = run_mission12_byproduct_check(self.results)
 
             mission13_data = None
-            if '13' in self.player.missions_activated and '13' not in self.player.missions_completed:
+            if is_ecoli and '13' in self.player.missions_activated and '13' not in self.player.missions_completed:
                 if sys.platform == 'emscripten':
                     mission13_data = run_mission13_method_check_remote(BACKEND_URL, self.results)
                 else:
                     mission13_data = run_mission13_method_check(self.results)
 
             mission14_data = None
-            if '14' in self.player.missions_activated and '14' not in self.player.missions_completed:
+            if is_ecoli and '14' in self.player.missions_activated and '14' not in self.player.missions_completed:
                 if sys.platform == 'emscripten':
                     mission14_data = run_mission14_reduction_check_remote(BACKEND_URL, self.results)
                 else:
                     mission14_data = run_mission14_reduction_check(self.results)
 
             mission15_data = None
-            if '15' in self.player.missions_activated and '15' not in self.player.missions_completed:
+            if is_ecoli and '15' in self.player.missions_activated and '15' not in self.player.missions_completed:
                 if sys.platform == 'emscripten':
                     mission15_data = run_mission15_diagnostic_report_check_remote(BACKEND_URL, self.results)
                 else:
                     mission15_data = run_mission15_diagnostic_report_check(self.results)
 
             mission16_data = None
-            if '16' in self.player.missions_activated and '16' not in self.player.missions_completed:
+            if is_ecoli and '16' in self.player.missions_activated and '16' not in self.player.missions_completed:
                 if sys.platform == 'emscripten':
                     mission16_data = run_mission16_medium_report_check_remote(BACKEND_URL, self.results)
                 else:
                     mission16_data = run_mission16_medium_report_check(self.results)
 
             mission17_data = None
-            if '17' in self.player.missions_activated and '17' not in self.player.missions_completed:
+            if is_ecoli and '17' in self.player.missions_activated and '17' not in self.player.missions_completed:
                 if sys.platform == 'emscripten':
                     mission17_data = run_mission17_essential_medium_check_remote(BACKEND_URL, self.results)
                 else:
                     mission17_data = run_mission17_essential_medium_check(self.results)
 
             mission18_data = None
-            if '18' in self.player.missions_activated and '18' not in self.player.missions_completed:
+            if is_ecoli and '18' in self.player.missions_activated and '18' not in self.player.missions_completed:
                 if sys.platform == 'emscripten':
                     mission18_data = run_mission18_export_bottleneck_check_remote(BACKEND_URL, self.results)
                 else:
                     mission18_data = run_mission18_export_bottleneck_check(self.results)
 
             mission19_data = None
-            if '19' in self.player.missions_activated and '19' not in self.player.missions_completed:
+            if is_ecoli and '19' in self.player.missions_activated and '19' not in self.player.missions_completed:
                 if sys.platform == 'emscripten':
                     mission19_data = run_mission19_perturbation_check_remote(BACKEND_URL, self.results)
                 else:
                     mission19_data = run_mission19_perturbation_check(self.results)
 
             mission20_data = None
-            if '20' in self.player.missions_activated and '20' not in self.player.missions_completed:
+            if is_ecoli and '20' in self.player.missions_activated and '20' not in self.player.missions_completed:
                 if sys.platform == 'emscripten':
                     mission20_data = run_mission20_robustness_report_check_remote(BACKEND_URL, self.results)
                 else:
                     mission20_data = run_mission20_robustness_report_check(self.results)
 
             mission05_data = None
-            if '05' in self.player.missions_activated and '05' not in self.player.missions_completed:
+            if is_ecoli and '05' in self.player.missions_activated and '05' not in self.player.missions_completed:
                 mission05_data = run_mission05_production_trial_check(self.results)
 
             challenge_data = None
-            if '06' in self.player.missions_activated and '06' not in self.player.missions_completed:
+            if is_ecoli and '06' in self.player.missions_activated and '06' not in self.player.missions_completed:
                 if sys.platform == 'emscripten':
                     challenge_data = run_challenge_score_remote(BACKEND_URL, self.results)
                 else:
@@ -1698,7 +2240,15 @@ class Window:
             
             menu.add.button('New Results', action=menu_simul, font_color = 'white', background_color=(0,150,50), button_id='new_results')
             result_display_text = _build_simulation_results_text(self.results)
-            menu_simul.add.label(result_display_text, label_id='results')
+            # Error messages for large-model validation can be longer than
+            # one screen line.  Word wrapping keeps failures readable instead
+            # of clipping them beyond the right edge of the 1280px results menu.
+            menu_simul.add.label(
+                result_display_text,
+                label_id='results',
+                wordwrap=True,
+                padding=(20, 20, 20, 20),
+            )
             save_results(result_display_text)
             save_file(self.player.get_save_data())
             menu_simul.add.vertical_margin(50, margin_id='nr_margin')
@@ -1736,6 +2286,46 @@ class Window:
                     button_id='bound_sweep_report'
                 )
             menu_simul.add.vertical_margin(20)
+
+            if mission36_data is not None:
+                menu_simul.add.label(
+                    build_mission36_fermentation_report_text(mission36_data),
+                    wordwrap=True, padding=(20,20,20,20), background_color='white',
+                    font_size=22, label_id='mission36_fermentation_onset_check'
+                )
+                menu_simul.add.vertical_margin(20)
+
+            if mission37_data is not None:
+                menu_simul.add.label(
+                    build_mission37_fermentation_cut_set_report_text(mission37_data),
+                    wordwrap=True, padding=(20,20,20,20), background_color='white',
+                    font_size=22, label_id='mission37_fermentation_cut_set_check'
+                )
+                menu_simul.add.vertical_margin(20)
+
+            if mission38_data is not None:
+                menu_simul.add.label(
+                    build_mission38_background_dependency_report_text(mission38_data),
+                    wordwrap=True, padding=(20,20,20,20), background_color='white',
+                    font_size=22, label_id='mission38_background_dependency_check'
+                )
+                menu_simul.add.vertical_margin(20)
+
+            if mission39_data is not None:
+                menu_simul.add.label(
+                    build_mission39_bypass_rescue_report_text(mission39_data),
+                    wordwrap=True, padding=(20,20,20,20), background_color='white',
+                    font_size=22, label_id='mission39_bypass_rescue_check'
+                )
+                menu_simul.add.vertical_margin(20)
+
+            if mission40_data is not None:
+                menu_simul.add.label(
+                    build_mission40_final_certification_report_text(mission40_data),
+                    wordwrap=True, padding=(20,20,20,20), background_color='white',
+                    font_size=22, label_id='mission40_final_certification_check'
+                )
+                menu_simul.add.vertical_margin(20)
 
             if mission01_data is not None:
                 menu_simul.add.label(
@@ -2164,24 +2754,28 @@ class Window:
         #     menu_reactions.reset_value()
 
 
+        menu.add.label(f"Model: {self.model_context['display_name']} | {self.model_context['organism_name']}", font_size=24, font_color=(20, 0, 150))
         menu.add.label('TIP: See Book "How to Simulate"', font_size = 20)
         menu.add.vertical_margin(20)
         menu.add.label('Change options: ', font_size = 40)
         menu.add.vertical_margin(20)
 
+        method_items = []
+        for method_token in self.model_context['supported_methods']:
+            if method_token == 'lMOMA':
+                method_items.append((LMOMA_DISPLAY_NAME, 'lmoma'))
+            else:
+                method_items.append((method_token, method_token.lower()))
         menu.add.dropselect(title='Simulation Method ',
-                            items=[('FBA', 'fba'),
-                                   ('pFBA', 'pfba'),
-                                #    ('MOMA', 'moma'),
-                                   (LMOMA_DISPLAY_NAME, 'lmoma'),
-                                   ('ROOM','room')],
-                                   default=0,
-                                   selection_box_height=5, dropselect_id='method', background_color="white", font_color=(20,0,150))
+                            items=method_items,
+                            default=0,
+                            selection_box_height=5, dropselect_id='method', background_color="white", font_color=(20,0,150))
         menu.add.button('Objective', menu_objective, font_color = (20,0,150), background_color="white")
         menu.add.button('Production Flux', menu_production_flux, font_color = (20,0,150), background_color="white")
         menu.add.button('Genes', menu_genes, font_color = (20,0,150), background_color="white")
         menu.add.button('Environmental Conditions', menu_reactions, font_color = (20,0,150), background_color="white")
-        menu.add.button('Bound Sweep Setup', menu_bound_sweep, font_color = (20,0,150), background_color="white")
+        if is_ecoli or self.model_id == 'yeast_iMM904':
+            menu.add.button('Bound Sweep Setup', menu_bound_sweep, font_color = (20,0,150), background_color="white")
         # menu.add.button('Environmental Conditions', menu_reactions_backup, font_color = (20,0,150), background_color="white")
         menu.add.vertical_margin(50)  # Adds margin
         # menu.add.button('Restore Data', restore_data, background_color=(100,0,0))

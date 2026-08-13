@@ -398,24 +398,29 @@ class Mission23RegressionTests(unittest.TestCase):
                 'active_reaction_count': data['active'],
                 'fluxes': fluxes,
             })
-        with patch.object(simulation, '_read_simulation_file', return_value=(
-            'pFBA', simulation.MISSION23_GROWTH_OBJECTIVE,
-            simulation._build_active_genes_data(), simulation._build_default_reactions_data(),
-        )):
-            with patch.object(simulation, '_read_selected_production_fluxes', return_value=['EX_ac_e', 'EX_co2_e']):
-                with patch.object(simulation, '_build_request_payload', return_value={
-                    'method': 'pFBA', 'objective': simulation.MISSION23_GROWTH_OBJECTIVE,
-                    'gene_knockouts': [], 'env_conditions': simulation._build_default_env_conditions_payload(),
-                }):
-                    with patch.object(simulation, '_http_post_json', side_effect=responses) as post:
-                        with patch.object(simulation, 'save_bound_sweep'):
-                            data = simulation.run_bound_sweep_remote('/api', {
-                                'sweep_variable': [[('NH4', 'EX_nh4_e:lower')]],
-                                'sweep_values': [[('NH4 values', 'ammonium_sensitivity')]],
-                            })
+        with patch.object(simulation, '_read_simulation_model_id', return_value='yeast_iMM904'):
+            with patch.object(simulation, '_read_simulation_file', return_value=(
+                'pFBA', simulation.MISSION23_GROWTH_OBJECTIVE,
+                simulation._build_active_genes_data(), simulation._build_default_reactions_data(),
+            )):
+                with patch.object(simulation, '_read_selected_production_fluxes', return_value=['EX_ac_e', 'EX_co2_e']):
+                    with patch.object(simulation, '_build_request_payload', return_value={
+                        'method': 'pFBA', 'objective': simulation.MISSION23_GROWTH_OBJECTIVE,
+                        'gene_knockouts': [], 'env_conditions': simulation._build_default_env_conditions_payload(),
+                    }):
+                        with patch.object(simulation, '_http_post_json', side_effect=responses) as post:
+                            with patch.object(simulation, 'save_bound_sweep'):
+                                data = simulation.run_bound_sweep_remote('/api', {
+                                    'sweep_variable': [[('NH4', 'EX_nh4_e:lower')]],
+                                    'sweep_values': [[('NH4 values', 'ammonium_sensitivity')]],
+                                })
         self.assertEqual(post.call_count, 4)
         self.assertEqual(len(data['rows']), 4)
         self.assertTrue(all(row['status'] == 'ok' for row in data['rows']))
+        for call, value in zip(post.call_args_list, self.VALUES):
+            payload = call.args[1]
+            self.assertEqual(payload['model_id'], simulation.DEFAULT_MODEL_ID)
+            self.assertEqual(float(payload['env_conditions']['EX_nh4_e'][0]), value)
 
     def test_window_integrates_local_and_browser_sweeps(self):
         source = (CODE_DIR / 'window.py').read_text()

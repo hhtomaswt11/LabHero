@@ -244,7 +244,7 @@ The current pygbag build keeps player and mission state in an in-memory web stor
 
 ### Browser-only simulation paths
 
-Normal visible simulations, including Mission 19's FBA/lMOMA comparison, use the FastAPI service and validate the already visible structured result. For lMOMA, the backend computes an explicit wild-type FBA reference in the selected medium before applying the GPR-derived mutant constraints; the browser never runs MEWpy locally. The remaining dedicated browser work is the bound-sweep workflow used by Missions 26-28; it must not attempt to instantiate MEWpy inside the browser build.
+Normal visible simulations, including Mission 19's FBA/lMOMA comparison, use the FastAPI service and validate the already visible structured result. For lMOMA, the backend computes an explicit wild-type FBA reference in the selected medium before applying the GPR-derived mutant constraints; the browser never runs MEWpy locally. Bound Sweeps are now model-aware and reuse the same `POST /simulate` contract: the browser submits each tested bound as a normal backend simulation and assembles the visible rows client-side for the E. coli sweep missions and Mission 36. The remaining browser work is transport/UX hardening (replace synchronous XHR with an asynchronous request flow, plus loading/error handling), not a second scientific sweep implementation.
 
 ### Dependency security
 

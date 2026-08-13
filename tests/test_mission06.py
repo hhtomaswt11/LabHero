@@ -128,6 +128,33 @@ class Mission06RegressionTests(unittest.TestCase):
         self.assertFalse(simulation.is_mission06_unlocked(['04']))
         self.assertTrue(simulation.is_mission06_unlocked(['05']))
 
+    def test_visible_result_builder_does_not_depend_on_request_payload(self):
+        """Mission 06 validation is a visible-result path, not a web payload path."""
+        production, medium = self._synthetic_flux_data(
+            growth=0.874,
+            ethanol=0.0,
+            oxygen_uptake=21.799,
+        )
+        with patch.object(
+            simulation,
+            '_read_selected_production_fluxes',
+            return_value=[simulation.MISSION06_TARGET_FLUX],
+        ) as selected_reader:
+            report = simulation._build_mission06_challenge_data(
+                simulation.MISSION06_METHOD,
+                simulation.MISSION06_GROWTH_OBJECTIVE,
+                0.874,
+                dict(self.genes),
+                dict(self.reactions),
+                production_fluxes=production,
+                medium_fluxes=medium,
+                existing_report={},
+            )
+
+        selected_reader.assert_called_once_with()
+        self.assertTrue(report['baseline_recorded'])
+        self.assertTrue(report['current_run_valid'], report['current_issues'])
+
     def test_old_target_b2297_remains_redundant_and_scores_zero(self):
         growth, production, _medium, _genes, constraints, _result = self._simulate(['b2297'])
         self.assertNotEqual(constraints.get('PTAr'), (0.0, 0.0))

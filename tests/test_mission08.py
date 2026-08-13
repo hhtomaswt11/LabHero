@@ -208,7 +208,7 @@ class Mission08RegressionTests(unittest.TestCase):
             dict(method='ROOM', message='Use FBA'),
             dict(objective='EX_etoh_e', message='EX_lac__D_e'),
             dict(genes=knocked_out, message='all genes active'),
-            dict(reactions=extra_environment, message='every environmental bound'),
+            dict(reactions=extra_environment, message='environmental bounds'),
             dict(tracked=False, message='Track EX_lac__D_e'),
         ]
         for case in cases:
@@ -265,7 +265,7 @@ class Mission08RegressionTests(unittest.TestCase):
             medium_fluxes=medium,
         )
         self.assertFalse(oxygen_using['current_run_valid'])
-        self.assertTrue(any('already show zero oxygen' in issue for issue in oxygen_using['current_issues']))
+        self.assertTrue(any('zero oxygen uptake' in issue for issue in oxygen_using['current_issues']))
 
     def test_objective_value_must_match_visible_d_lactate_flux(self):
         product, medium = self._synthetic_flux_data(d_lactate=18.0)

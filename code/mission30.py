@@ -250,7 +250,7 @@ class Mission30_info:
             return
         if not report.get('evidence_ready') or not report.get('threshold_supported'):
             self.failed.play()
-            animation_text_save('Complete all four matched oxygen curves and preserve the solver status at every tested bound before answering.', time=3800)
+            animation_text_save('Complete all four oxygen curves with valid solver status before answering.', time=3800)
             return
         if not mission30_answer_matches(answer, report):
             self.failed.play()

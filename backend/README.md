@@ -20,9 +20,26 @@ so edits under `app/` reload automatically.
 ## Status
 
 The `/simulate` endpoint is implemented and uses MEWpy/Cobra to run simulations
-with the bundled `e_coli_core.xml.gz` model. It accepts the simulation method,
-objective reaction, gene knockouts and environmental conditions, then returns a
-method-aware structured result with an `ok`, `infeasible` or `error` status.
+with the registered `e_coli_core.xml.gz` and `iMM904.xml.gz` models. It accepts
+`model_id`, the simulation method, objective reaction, gene knockouts and
+environmental conditions, then returns a method-aware structured result with an `ok`, `infeasible` or `error` status.
+
+The model is selected explicitly with:
+
+```json
+{
+  "model_id": "yeast_iMM904",
+  "method": "pFBA",
+  "objective": "BIOMASS_SC5_notrace",
+  "gene_knockouts": [],
+  "env_conditions": {}
+}
+```
+
+`model_id` defaults to `ecoli_core` for older clients. Model templates are cached
+read-only, then copied for every request before objectives, bounds or knockout
+constraints are applied. This avoids cross-user state leakage when multiple
+students use the deployed service concurrently.
 
 For successful simulations, the contract separates:
 
@@ -50,11 +67,16 @@ aerobic cut-set case.
 A successful ROOM response also exposes:
 
 - `reference_method` and `reference_objective_reaction`;
-- `reference_primary_objective_flux` and `reference_cytbd_flux`;
+- `reference_primary_objective_flux` and the backwards-compatible `reference_cytbd_flux`;
 - `reference_uses_same_environment`;
 - `reference_has_no_gene_knockouts`;
 - `room_delta`, `room_epsilon` and `room_linear`;
 - `room_solver` and `room_time_limit_seconds`.
+
+The generic fields `reference_target_reaction`, `reference_target_flux`,
+`mutant_target_reaction` and `mutant_target_flux` are available when a registered
+model defines a ROOM reference target. Mission 33 keeps its older CYTBD field for
+compatibility.
 
 The ROOM `method_score` is the significant-flux-change criterion and is kept
 separate from the selected objective-reaction flux.
@@ -70,3 +92,7 @@ Successful `/simulate` responses include the additive field:
 ```
 
 The field is evaluated by the backend from the complete model GPR after applying the requested gene knockouts. Browser clients should use this visible server result instead of reimplementing GPR parsing. Existing clients remain compatible because the field is optional and no endpoint changed.
+
+
+### Mission 36 / yeast Bound Sweep
+The yeast glucose-threshold curve intentionally reuses the existing `POST /simulate` contract for each bound value. No mission-specific solver endpoint is required: `model_id=yeast_iMM904` plus explicit `env_conditions` keeps desktop and browser evidence on the same simulation contract.

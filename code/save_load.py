@@ -1090,3 +1090,129 @@ def clear_mission35_final_certification():
         'mission35_final_certification',
         'mission35_final_certification.txt',
     )
+
+
+def save_mission36_fermentation_onset(data):
+    if _IS_WEB:
+        _MEMSTORE['mission36_fermentation_onset'] = data
+        return
+    with open(get_save_path('mission36_fermentation_onset.txt'), 'w') as report_file:
+        json.dump(data, report_file)
+
+
+def load_mission36_fermentation_onset():
+    if _IS_WEB:
+        return _MEMSTORE.get('mission36_fermentation_onset')
+    try:
+        with open(get_save_path('mission36_fermentation_onset.txt')) as report_file:
+            return json.load(report_file)
+    except (FileNotFoundError, Exception):
+        return None
+
+
+def clear_mission36_fermentation_onset():
+    _delete_save_artifact('mission36_fermentation_onset', 'mission36_fermentation_onset.txt')
+
+
+def save_mission37_fermentation_cut_set(data):
+    """Persist Mission 37 visible yeast cut-set evidence."""
+    if _IS_WEB:
+        _MEMSTORE['mission37_fermentation_cut_set'] = data
+        return
+    with open(get_save_path('mission37_fermentation_cut_set.txt'), 'w') as report_file:
+        json.dump(data, report_file)
+
+
+def load_mission37_fermentation_cut_set():
+    if _IS_WEB:
+        return _MEMSTORE.get('mission37_fermentation_cut_set')
+    try:
+        with open(get_save_path('mission37_fermentation_cut_set.txt')) as report_file:
+            return json.load(report_file)
+    except (FileNotFoundError, Exception):
+        return None
+
+
+def clear_mission37_fermentation_cut_set():
+    _delete_save_artifact(
+        'mission37_fermentation_cut_set',
+        'mission37_fermentation_cut_set.txt',
+    )
+
+
+def save_mission38_background_dependency(data):
+    """Persist Mission 38 visible yeast background-dependency evidence."""
+    if _IS_WEB:
+        _MEMSTORE['mission38_background_dependency'] = data
+        return
+    with open(get_save_path('mission38_background_dependency.txt'), 'w') as report_file:
+        json.dump(data, report_file)
+
+
+def load_mission38_background_dependency():
+    if _IS_WEB:
+        return _MEMSTORE.get('mission38_background_dependency')
+    try:
+        with open(get_save_path('mission38_background_dependency.txt')) as report_file:
+            return json.load(report_file)
+    except (FileNotFoundError, Exception):
+        return None
+
+
+def clear_mission38_background_dependency():
+    _delete_save_artifact(
+        'mission38_background_dependency',
+        'mission38_background_dependency.txt',
+    )
+
+
+def save_mission39_bypass_rescue(data):
+    """Persist Mission 39 visible yeast bypass-rescue evidence."""
+    if _IS_WEB:
+        _MEMSTORE['mission39_bypass_rescue'] = data
+        return
+    with open(get_save_path('mission39_bypass_rescue.txt'), 'w') as report_file:
+        json.dump(data, report_file)
+
+
+def load_mission39_bypass_rescue():
+    if _IS_WEB:
+        return _MEMSTORE.get('mission39_bypass_rescue')
+    try:
+        with open(get_save_path('mission39_bypass_rescue.txt')) as report_file:
+            return json.load(report_file)
+    except (FileNotFoundError, Exception):
+        return None
+
+
+def clear_mission39_bypass_rescue():
+    _delete_save_artifact(
+        'mission39_bypass_rescue',
+        'mission39_bypass_rescue.txt',
+    )
+
+
+def save_mission40_final_certification(data):
+    """Persist Mission 40 visible final matched-curve evidence."""
+    if _IS_WEB:
+        _MEMSTORE['mission40_final_certification'] = data
+        return
+    with open(get_save_path('mission40_final_certification.txt'), 'w') as report_file:
+        json.dump(data, report_file)
+
+
+def load_mission40_final_certification():
+    if _IS_WEB:
+        return _MEMSTORE.get('mission40_final_certification')
+    try:
+        with open(get_save_path('mission40_final_certification.txt')) as report_file:
+            return json.load(report_file)
+    except (FileNotFoundError, Exception):
+        return None
+
+
+def clear_mission40_final_certification():
+    _delete_save_artifact(
+        'mission40_final_certification',
+        'mission40_final_certification.txt',
+    )
