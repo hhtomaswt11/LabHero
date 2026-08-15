@@ -48,6 +48,10 @@ class Level:
 
 		# sprite groups
 		self.all_sprites = CameraGroup()
+		# Only sprites with real per-frame behaviour belong here. Static map
+		# sprites stay in all_sprites for drawing but no longer receive thousands
+		# of unnecessary Sprite.update() dispatches in the browser.
+		self.dynamic_sprites = pygame.sprite.Group()
 		self.collision_sprites = pygame.sprite.Group()
 		self.tree_sprites = pygame.sprite.Group()
 		self.interaction_sprites = pygame.sprite.Group()
@@ -148,7 +152,7 @@ class Level:
 		water_frames_path = get_resource_path('graphics/water')
 		water_frames = import_folder(water_frames_path)
 		for x, y, surf in tmx_data.get_layer_by_name('Water').tiles():
-			Water((x* TILE_SIZE, y* TILE_SIZE), water_frames, self.all_sprites)
+			Water((x* TILE_SIZE, y* TILE_SIZE), water_frames, [self.all_sprites, self.dynamic_sprites])
 
 
 		# Trees
@@ -159,7 +163,8 @@ class Level:
 				groups = [self.all_sprites, self.collision_sprites, self.tree_sprites],
 				name = obj.name,
 				player_add = self.player_add,
-				all_sprites = self.all_sprites)
+				all_sprites = self.all_sprites,
+				dynamic_sprites = self.dynamic_sprites)
 
 		# Wildflowers
 		for obj in tmx_data.get_layer_by_name('Decoration'):
@@ -177,7 +182,7 @@ class Level:
 			if obj.name == 'Start':
 				self.player = Player(
 					pos = (obj.x,obj.y),
-					group = self.all_sprites,
+					group = [self.all_sprites, self.dynamic_sprites],
 					collision_sprites = self.collision_sprites,
 					tree_sprites = self.tree_sprites,
 					interaction = self.interaction_sprites,
@@ -295,12 +300,12 @@ class Level:
 		if carter_reveal_pos is not None:
 			CarterRevealSprite(
 				pos = carter_reveal_pos,
-				groups = self.all_sprites,
+				groups = [self.all_sprites, self.dynamic_sprites],
 				player = self.player)
 
 		Generic(
 			pos = (0,0),
-			surf = pygame.image.load(surf_path).convert_alpha(),
+			surf = pygame.image.load(surf_path).convert(),
 			groups = self.all_sprites,
 			z = LAYERS['ground'])
 
@@ -431,7 +436,7 @@ class Level:
 					Particle(
 						pos = plant.rect.topleft,
 						surf = plant.image,
-						groups = self.all_sprites,
+						groups = [self.all_sprites, self.dynamic_sprites],
 						z = LAYERS['main']
 					)
 					x = plant.rect.centerx // TILE_SIZE
@@ -549,7 +554,7 @@ class Level:
 			self.dialogues.update()
 
 		else:
-			self.all_sprites.update(dt)
+			self.dynamic_sprites.update(dt)
 			self.plant_collision()
 
 		

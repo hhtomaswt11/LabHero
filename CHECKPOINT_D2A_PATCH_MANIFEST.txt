@@ -1,0 +1,33 @@
+LabHero Checkpoint D.2A - Dynamic Sprite Updates
+================================================
+
+Scope
+-----
+Performance-only runtime change. Static map sprites remain in the camera/draw
+group but no longer receive a no-op update(dt) dispatch every gameplay frame.
+
+Changed runtime files
+---------------------
+- code/level.py
+  * adds Level.dynamic_sprites
+  * Player, Water and CarterRevealSprite join both draw + dynamic groups
+  * transient harvest particles join both draw + dynamic groups
+  * gameplay loop updates dynamic_sprites instead of all_sprites
+  * static map sprites remain draw-only
+
+- code/sprites.py
+  * Tree receives a reference to dynamic_sprites solely so damage particles
+    are registered in the dynamic group and still expire normally
+
+Added tests
+-----------
+- tests/test_checkpoint_d2a_dynamic_updates.py
+
+Explicitly out of scope
+-----------------------
+- mission01.py ... mission40.py
+- simulation.py / scientific validation
+- map_lb.tmx / ground raster
+- collision geometry / movement substeps
+- backend / models / GPR / ROOM
+- camera draw ordering and culling

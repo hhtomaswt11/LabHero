@@ -1,0 +1,26 @@
+LabHero Checkpoint D.2B - Opaque Ground Surface
+
+Purpose
+-------
+Reduce per-frame/background surface overhead in desktop/browser rendering by
+loading the fully opaque pre-rendered ground with pygame Surface.convert()
+instead of convert_alpha().
+
+Changed
+-------
+- code/level.py
+  - graphics/world/ground_lb.png now uses convert().
+- tests/test_checkpoint_d2b_opaque_ground.py
+  - guards that the ground remains 5120x3904 and fully opaque;
+  - guards the specific convert() load path;
+  - guards that the ground remains draw-only on LAYERS['ground'].
+
+Intentionally unchanged
+-----------------------
+- ground_lb.png bytes
+- data/map_lb.tmx
+- player movement / collision substepping
+- dynamic sprite update architecture
+- mission01.py ... mission40.py
+- simulation.py / GPR / ROOM
+- backend and model files

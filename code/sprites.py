@@ -47,9 +47,10 @@ class WildFlower(Generic):
         self.hitbox = self.rect.copy().inflate(-20,-self.rect.height*0.9)
 
 class Tree(Generic):
-    def __init__(self, pos, surf, groups, name, player_add, all_sprites):
+    def __init__(self, pos, surf, groups, name, player_add, all_sprites, dynamic_sprites):
         super().__init__(pos, surf, groups)
         self.all_sprites = all_sprites
+        self.dynamic_sprites = dynamic_sprites
 
         
         # apples
@@ -80,7 +81,7 @@ class Tree(Generic):
             Particle(
                 pos = random_apple.rect.topleft,
                 surf = random_apple.image,
-                groups =  self.all_sprites,
+                groups = [self.all_sprites, self.dynamic_sprites],
                 z = LAYERS['fruit'])
             self.player_add('apple')
             random_apple.kill()
