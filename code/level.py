@@ -565,12 +565,22 @@ class CameraGroup(pygame.sprite.Group):
 		self.offset.x = player.rect.centerx - SCREEN_WIDTH / 2
 		self.offset.y = player.rect.centery - SCREEN_HEIGHT / 2
 
-		for layer in LAYERS.values(): # ordem dos sprites (eixo z)
-			for sprite in sorted(self.sprites(), key=lambda sprite: sprite.rect.centery): # para ordenar os sprites (pelo y) para estar atrás/à frente dos objetos
-				if sprite.z == layer:
-					offset_rect = sprite.rect.copy()
-					offset_rect.center -= self.offset
-					self.display_surface.blit(sprite.image, offset_rect)
+		# Preserve the exact old draw order (z layer first, then Y position),
+		# but sort the sprite list only once instead of once per layer.  Also
+		# avoid issuing blits for the many map sprites that are outside the
+		# current camera viewport; this matters noticeably in the WASM build.
+		view_rect = pygame.Rect(
+			int(self.offset.x),
+			int(self.offset.y),
+			SCREEN_WIDTH,
+			SCREEN_HEIGHT
+		)
+		for sprite in sorted(self.sprites(), key=lambda sprite: (sprite.z, sprite.rect.centery)):
+			if not sprite.rect.colliderect(view_rect):
+				continue
+			offset_rect = sprite.rect.copy()
+			offset_rect.center -= self.offset
+			self.display_surface.blit(sprite.image, offset_rect)
 
 
 					# # analytics (só para visualizar melhor)

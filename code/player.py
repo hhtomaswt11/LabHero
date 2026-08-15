@@ -3,7 +3,28 @@ from settings import *
 from functions import *
 from timers import Timer
 import time
+from math import ceil
 from utils import *
+
+
+# Maximum distance advanced before checking collisions again.  Keeping this
+# below the player hitbox dimensions prevents a low-FPS browser frame from
+# jumping completely across a thin collision region (collision tunnelling).
+MAX_COLLISION_STEP = 16.0
+
+
+def _movement_substep_plan(distance, max_step=MAX_COLLISION_STEP):
+    """Return (number_of_steps, distance_per_step) for one movement axis.
+
+    Normal 60 FPS movement stays a single step.  Long browser frames are split
+    into several small advances so collision checks cover the path travelled,
+    not only the final position.
+    """
+    distance = float(distance)
+    if distance == 0.0:
+        return 0, 0.0
+    steps = max(1, ceil(abs(distance) / float(max_step)))
+    return steps, distance / steps
 
 class Player(pygame.sprite.Sprite):
     def __init__(self, pos, group, collision_sprites, tree_sprites, interaction, soil_layer, toggle_shop, desk_menu, yeast_simulator, books, ecoli, inventory2, talk_1, talk_2, talk_3, talk_7, talk_11, talk_16, talk_21, talk_23, talk_25, talk_27, talk_29, talk_32, talk_35, talk_36, talk_37, talk_38, talk_39, talk_40, dialogues, skin_manager=None):
@@ -379,19 +400,28 @@ class Player(pygame.sprite.Sprite):
     def move(self, dt):
         # normalize vector (diagonal speed same as horizontal/vertical speed)
         if self.direction.magnitude() > 0:
-            self.direction = self.direction.normalize() 
-        
-        # horizontal movement
-        self.pos.x += self.direction.x * self.speed * dt
-        self.hitbox.centerx = round(self.pos.x)
-        self.rect.centerx = self.hitbox.centerx
-        self.collision('horizontal')
+            self.direction = self.direction.normalize()
 
-        # vertical movement
-        self.pos.y += self.direction.y * self.speed * dt
-        self.hitbox.centery = round(self.pos.y)
-        self.rect.centery = self.hitbox.centery
-        self.collision('vertical')
+        # A slow browser frame can represent tens or even hundreds of pixels of
+        # movement at once.  Checking collisions only at the final position can
+        # therefore skip completely over a thin wall.  Split each axis into
+        # bounded advances and keep the existing axis-separated collision rules
+        # after every advance.
+        horizontal_distance = self.direction.x * self.speed * dt
+        horizontal_steps, horizontal_step = _movement_substep_plan(horizontal_distance)
+        for _ in range(horizontal_steps):
+            self.pos.x += horizontal_step
+            self.hitbox.centerx = round(self.pos.x)
+            self.rect.centerx = self.hitbox.centerx
+            self.collision('horizontal')
+
+        vertical_distance = self.direction.y * self.speed * dt
+        vertical_steps, vertical_step = _movement_substep_plan(vertical_distance)
+        for _ in range(vertical_steps):
+            self.pos.y += vertical_step
+            self.hitbox.centery = round(self.pos.y)
+            self.rect.centery = self.hitbox.centery
+            self.collision('vertical')
 
     def collision(self, direction):
         for sprite in self.collision_sprites.sprites():

@@ -1,0 +1,20 @@
+Checkpoint D.1 — Web Movement Robustness
+
+Changed files:
+- code/player.py
+  - Adds bounded per-axis movement substeps (max 16 px) so long browser frames
+    cannot tunnel through collision hitboxes.
+  - Keeps existing speed, direction normalization, hitboxes and collision rules.
+- code/level.py
+  - Camera rendering now sorts sprites once by (z, y), equivalent to the old
+    layer-then-y ordering.
+  - Skips blits for sprites outside the current viewport.
+- tests/test_checkpoint_d1_web_movement.py
+  - Regression coverage for 60/10/5 FPS movement distances and render ordering.
+
+Intentionally unchanged:
+- mission01.py ... mission40.py
+- simulation.py / solver logic
+- backend API / models
+- map_lb.tmx / ground_lb.png
+- progression / save logic
