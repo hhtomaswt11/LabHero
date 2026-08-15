@@ -1,0 +1,46 @@
+LabHero Checkpoint C - Local Web Smoke Test Preparation
+
+Source checkpoint:
+- User ZIP: LabHero_chat(20260814-001759).zip
+- 40 mission modules preserved unchanged.
+- Final map remains 80 x 61 tiles; no TMX/gameplay source changes in this patch.
+
+Changes:
+1. tests/test_checkpoint_b_infrastructure.py
+   - Removed the stale hard-coded Mission03 Y>2000 assertion from the Carter test.
+   - The test now verifies that Mission03 is inside the current TMX bounds and that level.py anchors CarterRevealSprite to its live Tiled coordinates.
+
+2. tests/test_checkpoint_c_web_local.py (new)
+   - Verifies TMX <-> ground_lb.png pixel-size parity (5120 x 3904).
+   - Verifies every tile layer matches the 80 x 61 map grid.
+   - Verifies critical gameplay/interactions remain unique and in bounds.
+   - Verifies same-origin /api configuration and nginx proxy wiring.
+   - Verifies Docker Compose frontend/backend wiring.
+   - Verifies the local smoke helper checks both API health and frontend.
+
+3. deploy/local_smoke.sh (new)
+   - Builds and starts the existing frontend/backend Docker Compose stack.
+   - Waits for http://localhost/api/health.
+   - Verifies http://localhost/ responds.
+   - Prints the browser URL and useful log command.
+
+4. deploy/README.md
+   - Documents the local smoke helper.
+   - Clarifies localhost testing before production deployment.
+   - Updates the browser transport note: the live path now uses Pygbag async Fetch (`aio.fetch`)/sequential async sweeps.
+
+Local static/regression validation in the assistant environment:
+- compileall: OK
+- Checkpoint B: 6/6 OK
+- Checkpoint C: 6/6 OK
+- multi-model yeast: 29/29 OK
+- Mission 40: 26/26 OK
+- Mission 39: 25/25 OK
+- Mission 38: 22/22 OK
+- Mission 37: 22/22 OK
+- Mission 36: 21/21 OK
+- Mission 35: 28/28 OK
+- Mission 30: 20/20 OK
+- Total defined test functions after this patch: 1059
+
+Live Docker/Pygbag browser execution cannot be performed in the assistant sandbox because Docker/Pygbag are not installed there. The next validation step must be run on the user's Ubuntu machine using deploy/local_smoke.sh.

@@ -346,6 +346,9 @@ class Mission16RegressionTests(unittest.TestCase):
     def test_ui_has_progression_guard_idempotent_activation_and_short_answer(self):
         source = (CODE_DIR / 'mission16.py').read_text(encoding='utf-8')
         self.assertIn('is_mission16_unlocked', source)
+        npc_source = source.split('class Mission16_info:', 1)[0]
+        self.assertIn('if not is_mission16_unlocked(self.missions_completed):', npc_source)
+        self.assertIn('self.menu_message(locked_dialogue, buttons=False)', npc_source)
         self.assertIn('initialise_mission16_context_rescue()', source)
         self.assertIn("if '16' in self.missions_activated", source)
         self.assertIn('Environmental factor:', source)

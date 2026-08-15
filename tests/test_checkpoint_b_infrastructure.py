@@ -16,7 +16,16 @@ class CheckpointBInfrastructureTests(unittest.TestCase):
             if group.get('name') == 'Player'
         )
         carter = next(obj for obj in player_group.findall('object') if obj.get('name') == 'Mission03')
-        self.assertGreater(float(carter.get('y')), 2000.0)  # redesigned-map checkpoint
+        map_width = float(root.get('width')) * float(root.get('tilewidth'))
+        map_height = float(root.get('height')) * float(root.get('tileheight'))
+        x = float(carter.get('x'))
+        y = float(carter.get('y'))
+        width = float(carter.get('width', 0.0))
+        height = float(carter.get('height', 0.0))
+        self.assertGreaterEqual(x, 0.0)
+        self.assertGreaterEqual(y, 0.0)
+        self.assertLessEqual(x + width, map_width)
+        self.assertLessEqual(y + height, map_height)
 
         source = (CODE / 'level.py').read_text(encoding='utf-8')
         self.assertIn("if obj.name == 'Mission03':", source)
@@ -58,7 +67,7 @@ class CheckpointBInfrastructureTests(unittest.TestCase):
         )
         self.assertNotRegex(source, r'(?m)^\s*bound_sweep_data\s*=\s*run_bound_sweep_remote\(')
 
-    def test_browser_http_path_uses_pyfetch_and_shared_result_normaliser(self):
+    def test_browser_http_path_uses_pygbag_async_fetch_and_shared_result_normaliser(self):
         source = (CODE / 'simulation.py').read_text(encoding='utf-8')
         tree = ast.parse(source)
         funcs = {node.name: node for node in tree.body if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))}
@@ -67,7 +76,9 @@ class CheckpointBInfrastructureTests(unittest.TestCase):
         async_sim = ast.get_source_segment(source, funcs['run_simul_remote_async'])
         sync_sim = ast.get_source_segment(source, funcs['run_simul_remote'])
 
-        self.assertIn('from pyodide.http import pyfetch', async_http)
+        self.assertIn('from aio.fetch import RequestHandler', async_http)
+        self.assertIn('await handler.post(url, payload)', async_http)
+        self.assertNotIn('pyodide.http', async_http)
         self.assertNotIn('XMLHttpRequest', async_http)
         self.assertIn('_normalise_remote_simulation_response', async_sim)
         self.assertIn('_normalise_remote_simulation_response', sync_sim)

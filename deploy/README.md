@@ -151,6 +151,15 @@ cd LabHero/deploy
 
 ### 3.2 Build and start
 
+For the first local browser smoke test, the repository includes a helper that builds the two containers, waits for the API health check and verifies that nginx serves the frontend:
+
+```bash
+cd deploy
+./local_smoke.sh
+```
+
+The equivalent manual commands are:
+
 ```bash
 docker compose build
 docker compose up -d
@@ -166,7 +175,7 @@ curl http://localhost/api/health     # {"status":"ok"}
 curl -I http://localhost/            # Content-Type: text/html
 ```
 
-Then open the public URL in a browser. The first page load takes 30-60 s as the browser bootstraps pyodide and installs the game's Python dependencies. This is one-time per browser (cached afterwards by the service worker).
+For local validation, open `http://localhost/` in Firefox or Chrome. On the final server, open the configured public URL instead. The first page load takes 30-60 s as the browser bootstraps pyodide and installs the game's Python dependencies. This is one-time per browser (cached afterwards by the service worker).
 
 ---
 
@@ -244,7 +253,7 @@ The current pygbag build keeps player and mission state in an in-memory web stor
 
 ### Browser-only simulation paths
 
-Normal visible simulations, including Mission 19's FBA/lMOMA comparison, use the FastAPI service and validate the already visible structured result. For lMOMA, the backend computes an explicit wild-type FBA reference in the selected medium before applying the GPR-derived mutant constraints; the browser never runs MEWpy locally. Bound Sweeps are now model-aware and reuse the same `POST /simulate` contract: the browser submits each tested bound as a normal backend simulation and assembles the visible rows client-side for the E. coli sweep missions and Mission 36. The remaining browser work is transport/UX hardening (replace synchronous XHR with an asynchronous request flow, plus loading/error handling), not a second scientific sweep implementation.
+Normal visible simulations, including Mission 19's FBA/lMOMA comparison, use the FastAPI service and validate the already visible structured result. For lMOMA, the backend computes an explicit wild-type FBA reference in the selected medium before applying the GPR-derived mutant constraints; the browser never runs MEWpy locally. Bound Sweeps are now model-aware and reuse the same `POST /simulate` contract: the browser submits each tested bound as a normal backend simulation and assembles the visible rows client-side for the E. coli sweep missions and Mission 36. The live browser simulation path now uses Pygbag asynchronous Fetch (`aio.fetch`), and Bound Sweep requests are awaited sequentially so the Pygame/pygbag event loop stays responsive without multiplying backend load. A legacy synchronous helper remains only for backwards-compatible direct callers/tests; it is not used by the live simulator UI.
 
 ### Dependency security
 

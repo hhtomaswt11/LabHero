@@ -62,6 +62,11 @@ class Mission16:
             self.toggle_menu()
 
     async def update(self):
+        locked_dialogue = [
+            "Dr. Almeida is still completing your objective-conflict training.",
+            "Complete Mission 15 before beginning Dr. Rio's medium-engineering programme.",
+        ]
+
         self.m16_step1 = [
             f"Hello {self.player.player_name}. I'm Dr. Rio.",
             "Dr. Almeida showed that one optimum does not establish a robust design.",
@@ -136,7 +141,9 @@ class Mission16:
         ]
 
         self.input()
-        if '20' in self.missions_completed:
+        if not is_mission16_unlocked(self.missions_completed):
+            self.menu_message(locked_dialogue, buttons=False)
+        elif '20' in self.missions_completed:
             self.menu_message(self.m20_step2, buttons=False)
         elif '19' in self.missions_completed and '20' in self.missions_activated:
             self.menu_message(self.m20_step1, target_mission='20')

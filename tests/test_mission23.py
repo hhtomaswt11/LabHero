@@ -433,6 +433,9 @@ class Mission23RegressionTests(unittest.TestCase):
     def test_mission_ui_has_gating_idempotence_and_direct_answer_guards(self):
         source = (CODE_DIR / 'mission23.py').read_text()
         self.assertIn('is_mission23_unlocked', source)
+        npc_source = source.split('class Mission23_info:', 1)[0]
+        self.assertIn('if not is_mission23_unlocked(self.missions_completed):', npc_source)
+        self.assertIn('self.menu_message(locked_dialogue, buttons=False)', npc_source)
         self.assertIn("if '23' in self.missions_activated", source)
         self.assertIn('initialise_mission23_nutrient_sensitivity_curve', source)
         self.assertIn('normalise_mission23_answer', source)

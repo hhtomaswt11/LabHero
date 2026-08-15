@@ -16994,22 +16994,24 @@ def run_simul_remote(backend_url):
 async def _http_post_json_async(url, payload):
     """POST JSON without blocking the live UI event loop.
 
-    Pygbag/Pyodide uses ``pyfetch`` in the browser.  Desktop callers are
-    delegated to a worker thread, which is useful for local web smoke tests and
-    keeps this helper directly testable outside Emscripten.
+    Pygbag runs CPython compiled to WebAssembly rather than a full Pyodide
+    runtime, so Pyodide-specific ``pyfetch`` is not a portable dependency here.
+    In Emscripten use Pygbag's own async Fetch bridge.  Desktop callers are
+    delegated to a worker thread, keeping the helper directly testable outside
+    the browser.
     """
     if sys.platform == 'emscripten':
-        from pyodide.http import pyfetch
+        from aio.fetch import RequestHandler
 
-        response = await pyfetch(
-            url,
-            method='POST',
-            headers={'Content-Type': 'application/json'},
-            body=json.dumps(payload),
-        )
-        if not response.ok:
-            raise RuntimeError(f'HTTP {response.status}')
-        return json.loads(await response.string())
+        handler = RequestHandler()
+        handler.debug = False
+        response_text = await handler.post(url, payload)
+        if not response_text:
+            raise RuntimeError('Empty response from simulation backend')
+        response = json.loads(response_text)
+        if not isinstance(response, dict):
+            raise RuntimeError('Invalid JSON response from simulation backend')
+        return response
 
     return await asyncio.to_thread(_http_post_json, url, payload)
 

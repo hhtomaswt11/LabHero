@@ -51,6 +51,11 @@ class Mission21:
             self.toggle_menu()
 
     async def update(self):
+        locked_dialogue = [
+            "Dr. Rio is still completing your medium-context training.",
+            "Complete Mission 20 before beginning Dr. Vega's comparison laboratory.",
+        ]
+
         intro21_dialogue = [
             f"Hello {self.player.player_name}. I'm Dr. Vega.",
             "My lab studies controlled before-and-after comparisons.",
@@ -83,7 +88,9 @@ class Mission21:
         ]
 
         self.input()
-        if '22' in self.missions_completed:
+        if not is_mission21_unlocked(self.missions_completed):
+            self.menu_message(locked_dialogue, buttons=False)
+        elif '22' in self.missions_completed:
             self.menu_message(completed22_dialogue, buttons=False)
         elif '22' in self.missions_activated:
             self.menu_message(active22_dialogue, menu_to_open=self.menu22)
