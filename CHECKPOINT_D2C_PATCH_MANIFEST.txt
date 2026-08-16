@@ -1,0 +1,36 @@
+LabHero Checkpoint D.2C — Static House-Bottom Rendering
+
+Scope
+-----
+Performance-only rendering optimization for the web build.
+
+Changed runtime file
+--------------------
+- code/level.py
+
+Changed/added regression tests
+------------------------------
+- tests/test_checkpoint_d2a_dynamic_updates.py
+- tests/test_checkpoint_d2c_static_house_bottom.py
+
+What changed
+------------
+HouseFloor (1186 tiles) and HouseFurnitureBottom (220 tiles) are still loaded
+from the exact same pytmx TMX layers, using the exact same tile surfaces,
+positions, Y ordering and LAYERS['house bottom'] z position. They are no longer
+instantiated as 1406 Generic/Pygame Sprite objects inside all_sprites.
+
+Instead, CameraGroup receives a pre-sorted static list. Per frame, bisect narrows
+that list to the vertical camera range and Rect.colliderect performs the final
+horizontal viewport cull. This removes those 1406 objects from the global
+per-frame Sprite sort without changing collisions, map data, tile surfaces, or
+mission/scientific code.
+
+Intentionally untouched
+-----------------------
+- mission01.py ... mission40.py
+- code/player.py anti-tunnelling logic
+- code/simulation.py
+- data/map_lb.tmx
+- graphics/world/ground_lb.png
+- backend/ and solver/model code

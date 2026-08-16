@@ -91,8 +91,17 @@ class CheckpointD2ADynamicUpdateTests(unittest.TestCase):
         )
         block = ast.get_source_segment(self.level_source, setup)
 
-        # House graphics and the large pre-rendered ground remain draw-only.
-        self.assertIn("Generic((x* TILE_SIZE, y* TILE_SIZE), surf, self.all_sprites, LAYERS['house bottom'])", block)
+        # Static house-bottom graphics remain draw-only. D.2C stores them in a
+        # dedicated static camera layer rather than as updateable Sprite objects.
+        self.assertIn('self.all_sprites.set_house_bottom_tiles(house_bottom_tiles)', block)
+        self.assertNotIn('dynamic_sprites', ast.get_source_segment(
+            self.level_source,
+            next(
+                node for node in ast.walk(setup_tree)
+                if isinstance(node, ast.For)
+                and "['HouseFloor', 'HouseFurnitureBottom']" in (ast.get_source_segment(self.level_source, node) or '')
+            ),
+        ))
         self.assertIn("Generic((x* TILE_SIZE, y* TILE_SIZE), surf, self.all_sprites, LAYERS['main'])", block)
         ground_match = re.search(
             r"Generic\(\s*pos\s*=\s*\(0,0\),[\s\S]*?groups\s*=\s*self\.all_sprites,[\s\S]*?z\s*=\s*LAYERS\['ground'\]",

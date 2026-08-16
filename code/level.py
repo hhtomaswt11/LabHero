@@ -1,4 +1,5 @@
 import pygame 
+from bisect import bisect_left, bisect_right
 from settings import *
 from player import Player
 from sprites import *
@@ -135,10 +136,18 @@ class Level:
 		tmx_data = load_pygame(map_path)
 		surf_path = get_resource_path('graphics/world/ground_lb.png')
 
-		# house
+		# HouseFloor + HouseFurnitureBottom are large, completely static tile
+		# layers. Keep their exact pytmx surfaces/positions/order, but do not
+		# allocate 1406 Sprite objects or include them in the global per-frame
+		# sort. CameraGroup draws this pre-sorted layer directly at the same z.
+		house_bottom_tiles = []
+		house_bottom_order = 0
 		for layer in ['HouseFloor', 'HouseFurnitureBottom']:
-			for x, y, surf in tmx_data.get_layer_by_name(layer).tiles(): # 'HouseFurnitureBottom' mesmo nome que layers no programa Tiled
-				Generic((x* TILE_SIZE, y* TILE_SIZE), surf, self.all_sprites, LAYERS['house bottom'])
+			for x, y, surf in tmx_data.get_layer_by_name(layer).tiles():
+				rect = surf.get_rect(topleft = (x * TILE_SIZE, y * TILE_SIZE))
+				house_bottom_tiles.append((rect.centery, house_bottom_order, surf, rect))
+				house_bottom_order += 1
+		self.all_sprites.set_house_bottom_tiles(house_bottom_tiles)
 
 		for layer in ['HouseWalls', 'HouseFurnitureMiddle', 'HouseFurnitureTop']:
 			for x, y, surf in tmx_data.get_layer_by_name(layer).tiles():
@@ -566,6 +575,38 @@ class CameraGroup(pygame.sprite.Group):
 		self.display_surface = pygame.display.get_surface()
 		self.offset = pygame.math.Vector2()
 
+		# Static z=house-bottom tiles are kept outside this Sprite group. Their
+		# surfaces and rects still come directly from pytmx, so rendering stays
+		# pixel-identical while the global sort contains ~1400 fewer objects.
+		self.house_bottom_tiles = []
+		self.house_bottom_centers = []
+		self.house_bottom_max_half_height = 0
+
+	def set_house_bottom_tiles(self, tiles):
+		self.house_bottom_tiles = sorted(tiles, key=lambda item: (item[0], item[1]))
+		self.house_bottom_centers = [item[0] for item in self.house_bottom_tiles]
+		self.house_bottom_max_half_height = max(
+			(rect.height + 1) // 2 for _, _, _, rect in self.house_bottom_tiles
+		) if self.house_bottom_tiles else 0
+
+	def _draw_house_bottom(self, view_rect):
+		if not self.house_bottom_tiles:
+			return
+
+		# The tiles are sorted once at setup by the exact same Y key used by
+		# CameraGroup. Bisect narrows the frame work to rows that can intersect
+		# the 1280x720 camera, then the normal Rect test handles X clipping.
+		margin = self.house_bottom_max_half_height
+		start = bisect_left(self.house_bottom_centers, view_rect.top - margin)
+		stop = bisect_right(self.house_bottom_centers, view_rect.bottom + margin)
+		for index in range(start, stop):
+			_, _, surf, rect = self.house_bottom_tiles[index]
+			if not rect.colliderect(view_rect):
+				continue
+			offset_rect = rect.copy()
+			offset_rect.center -= self.offset
+			self.display_surface.blit(surf, offset_rect)
+
 	def custom_draw(self, player):
 		self.offset.x = player.rect.centerx - SCREEN_WIDTH / 2
 		self.offset.y = player.rect.centery - SCREEN_HEIGHT / 2
@@ -580,12 +621,22 @@ class CameraGroup(pygame.sprite.Group):
 			SCREEN_WIDTH,
 			SCREEN_HEIGHT
 		)
+		house_bottom_drawn = False
 		for sprite in sorted(self.sprites(), key=lambda sprite: (sprite.z, sprite.rect.centery)):
+			# There are no other z=house-bottom sprites in the current project.
+			# Draw the extracted static layer at the same point in the z stack.
+			if not house_bottom_drawn and sprite.z > LAYERS['house bottom']:
+				self._draw_house_bottom(view_rect)
+				house_bottom_drawn = True
+
 			if not sprite.rect.colliderect(view_rect):
 				continue
 			offset_rect = sprite.rect.copy()
 			offset_rect.center -= self.offset
 			self.display_surface.blit(sprite.image, offset_rect)
+
+		if not house_bottom_drawn:
+			self._draw_house_bottom(view_rect)
 
 
 					# # analytics (só para visualizar melhor)
