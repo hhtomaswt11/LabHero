@@ -79,34 +79,78 @@ SKIN_REGISTRY = [
 
 
 class SkinManager:
-    """Loads every available skin once and serves cached animation frames."""
+    """Discovers available skins eagerly and loads animation frames on demand."""
 
     def __init__(self, registry=None):
         self.registry = list(registry or SKIN_REGISTRY)
         self.skins = []
         self.animations_by_skin = {}
-        self.load_all_skins()
+        self._skins_by_id = {}
+        self._discover_skins()
 
-    def load_all_skins(self):
+    @staticmethod
+    def _state_has_files(state_path):
+        """Cheap structural check used without decoding any image surfaces."""
+        for _, _, filenames in os.walk(state_path):
+            if filenames:
+                return True
+        return False
+
+    def _discover_skins(self):
+        """Register structurally complete skins without loading their images."""
         for skin in self.registry:
             skin_root = get_resource_path(skin.folder)
             if not os.path.isdir(skin_root):
                 # This allows keeping future skin entries here before the art exists.
                 continue
 
-            animations = {}
-            valid = True
-            for state in ANIMATION_STATES:
-                state_path = os.path.join(skin_root, state)
-                frames = import_folder(state_path)
-                if not frames:
-                    valid = False
-                    break
-                animations[state] = frames
+            if not all(
+                self._state_has_files(os.path.join(skin_root, state))
+                for state in ANIMATION_STATES
+            ):
+                continue
 
-            if valid:
-                self.skins.append(skin)
-                self.animations_by_skin[skin.id] = animations
+            self.skins.append(skin)
+            self._skins_by_id[skin.id] = skin
+
+        if not self.skins:
+            raise RuntimeError('No valid character skins were found.')
+
+    def _discard_skin(self, skin_id):
+        """Remove a skin if its files disappear between discovery and first use."""
+        self.animations_by_skin.pop(skin_id, None)
+        self._skins_by_id.pop(skin_id, None)
+        self.skins = [skin for skin in self.skins if skin.id != skin_id]
+
+    def _load_skin(self, skin_id):
+        """Load one skin exactly once and return its cached animation mapping."""
+        cached = self.animations_by_skin.get(skin_id)
+        if cached is not None:
+            return cached
+
+        skin = self._skins_by_id.get(skin_id)
+        if skin is None:
+            return None
+
+        skin_root = get_resource_path(skin.folder)
+        animations = {}
+        for state in ANIMATION_STATES:
+            state_path = os.path.join(skin_root, state)
+            frames = import_folder(state_path)
+            if not frames:
+                # The eager implementation excluded incomplete skins. Preserve
+                # that behaviour if files vanish after the lightweight scan.
+                self._discard_skin(skin_id)
+                return None
+            animations[state] = frames
+
+        self.animations_by_skin[skin_id] = animations
+        return animations
+
+    def load_all_skins(self):
+        """Compatibility helper for callers that explicitly want eager loading."""
+        for skin_id in list(self.skin_ids()):
+            self._load_skin(skin_id)
 
         if not self.skins:
             raise RuntimeError('No valid character skins were found.')
@@ -122,13 +166,12 @@ class SkinManager:
         ]
 
     def get_skin(self, skin_id):
-        for skin in self.skins:
-            if skin.id == skin_id:
-                return skin
-        return self.skins[0]
+        return self._skins_by_id.get(skin_id, self.skins[0])
 
     def is_valid_skin(self, skin_id):
-        return skin_id in self.animations_by_skin
+        # Validity describes an available registry entry, not whether its
+        # animation surfaces happen to have been loaded already.
+        return skin_id in self._skins_by_id
 
     def is_unlocked(self, skin_id, missions_completed=None):
         skin = self.get_skin(skin_id)
@@ -137,9 +180,21 @@ class SkinManager:
         return mission_requirement_met(skin.unlock_after_mission, missions_completed)
 
     def get_animations(self, skin_id):
-        if skin_id not in self.animations_by_skin:
-            skin_id = self.skins[0].id
-        return self.animations_by_skin[skin_id]
+        target_id = skin_id if self.is_valid_skin(skin_id) else self.default_skin_id
+        animations = self._load_skin(target_id)
+        if animations is not None:
+            return animations
+
+        # A skin may have disappeared between discovery and first use. Fall
+        # back exactly as the old manager did for an unavailable skin.
+        if not self.skins:
+            raise RuntimeError('No valid character skins were found.')
+
+        fallback_id = self.default_skin_id
+        animations = self._load_skin(fallback_id)
+        if animations is None:
+            raise RuntimeError('No valid character skins were found.')
+        return animations
 
     def get_preview_surface(self, skin_id, state='down_idle'):
         animations = self.get_animations(skin_id)

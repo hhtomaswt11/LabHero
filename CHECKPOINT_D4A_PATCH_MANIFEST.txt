@@ -1,0 +1,19 @@
+Checkpoint D.4A — Lazy Skin Loading
+
+Runtime changed:
+- code/skins.py
+  * Skin registry/assets are discovered structurally at SkinManager startup.
+  * Character animation images are no longer decoded eagerly for every skin.
+  * get_animations() loads only the requested skin and caches it thereafter.
+  * is_valid_skin(), unlocked_skins(), get_skin(), default_skin_id and Golden
+    unlock checks continue to operate from discovered metadata without forcing
+    image loads.
+  * Explicit load_all_skins() remains available as a compatibility helper but
+    is no longer called by SkinManager.__init__().
+
+Regression coverage added:
+- tests/test_checkpoint_d4a_lazy_skin_loading.py
+
+No intended changes to player movement, collisions, map/TMX, world rendering,
+mission logic/science, simulation/solver, backend, deploy configuration, or
+previous D.1-D.3E optimizations.
