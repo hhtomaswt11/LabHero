@@ -104,18 +104,16 @@ class Mission27:
         pygame.draw.rect(self.screen, (255, 215, 0), [0, 500, 1280, 220], width=5)
         pygame.draw.rect(self.screen, (186, 214, 177), [5, 505, 1270, 210])
 
-        image = pygame.image.load(get_resource_path('graphics/dialogues/ribeiro.jpg')).convert()
-        if image.get_size() != (150, 150):
-            image = pygame.transform.smoothscale(image, (150, 150))
+        image = get_dialogue_portrait(get_resource_path('graphics/dialogues/ribeiro.jpg'), (150, 150))
         self.screen.blit(image, (25, 520))
 
         pygame.draw.rect(self.screen, 'white', [25, 675, 150, 25])
-        name = self.font_name.render('Dr. Ribeiro', True, 'black')
+        name = get_dialogue_text_surface(self.font_name, 'Dr. Ribeiro')
         self.screen.blit(name, (38, 677))
 
         for line, message_line in enumerate(message):
             message_line = prepare_dialogue_text(message_line, self.player.player_name)
-            surface = self.font.render(message_line, True, 'black')
+            surface = get_dialogue_text_surface(self.font, message_line)
             self.screen.blit(surface, (200, 525 + (line * 20) + (15 * line)))
 
         if buttons:

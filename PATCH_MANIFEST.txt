@@ -189,7 +189,7 @@ Implementation:
 - The backend no longer mutates one global simulator/objective. Cached model templates are copied per request before objective, environmental or GPR-derived constraints are applied, preventing cross-user state leakage in the future web deployment.
 - FBA and pFBA are the methods currently exposed for iMM904. The backend remains model-aware for lMOMA/ROOM, but those heavier methods are deliberately hidden from the yeast UI until benchmarked on the 1577-reaction model; E. coli Mission 19/33 behaviour is unchanged.
 - Yeast gene selection uses a validated text field (systematic gene id or unique common name) instead of instantiating 905 toggles. The yeast objective uses a validated exact reaction-id field instead of a 1577-entry drop-down.
-- At this infrastructure-patch stage, yeast environmental conditions used the complete 164-exchange catalogue and production tracking used a compact curated yeast panel; Bound Sweep was still hidden pending a later mission-specific preset. Mission 36 subsequently superseded this state with the controlled model-aware glucose sweep documented below.
+- Yeast environmental conditions use the complete 164-exchange catalogue; production tracking uses a compact curated yeast panel. Bound Sweep stays hidden for yeast until later missions define scientifically controlled presets.
 - Existing Mission 1-35 automatic evidence recording is explicitly E. coli-only, so exploratory yeast runs cannot alter completed/active E. coli mission evidence.
 - Added regression tests for Tiled wiring, unlock gating, metadata/model integrity, request `model_id`, old-save compatibility, backend request isolation and an independent SciPy FBA smoke test of the bundled iMM904 model.
 
@@ -235,31 +235,4 @@ Implementation:
 - code/window.py: the yeast Genes and Environmental Conditions screens now show a persistent registered-selection preview, refreshable with Enter or an explicit Validate / Preview button. Running a simulation also refreshes the preview so the visible confirmation matches the exact payload being validated.
 - tests/test_multimodel_yeast.py: adds regression coverage for ADH1 -> YOL086C canonicalisation, wild-type clearing, invalid gene rejection, O2 lower-bound closure preview, conflicting bound rejection, unknown-exchange rejection and UI preview wiring.
 - YEAST_SIMULATOR_TEST_PLAN.txt: records the four completed manual environment tests and adds the new preview checks.
-- At this preview-UX patch stage, no Mission 36 logic, no Tiled change, no E. coli UI redesign and no backend contract change were introduced. Mission 36 was added later and is covered by the current checkpoint notes.
-
-2026-08-10 Mission 1-36 checkpoint cleanup before Mission 37:
-- code/simulation.py: restores the historical Mission 06 visible-result validator path by removing an accidental reference to an undefined web `payload`; Mission 06 again reads the current Production Flux selection directly and remains E. coli-only through the existing Window routing.
-- tests/test_mission06.py: adds a solver-independent regression proving the Mission 06 builder does not depend on a request payload and records a valid synthetic baseline without raising NameError.
-- MISSION_PROGRESS_OVERVIEW.md / YEAST_SIMULATOR_TEST_PLAN.txt: document that Mission 36 is implemented and the yeast Bound Sweep is now model-aware with the controlled D-glucose preset.
-- deploy/README.md: documents that browser Bound Sweeps reuse repeated `POST /simulate` calls; remaining web work is asynchronous transport, persistence and production hardening rather than a separate scientific sweep endpoint.
-- The historical notes above describing Bound Sweep as hidden/no Mission 36 logic refer to earlier patch stages and are superseded by this checkpoint.
-
-
-2026-08-10 Mission 37 — Fermentation Redundancy Cut Set (Voss):
-- Adds code/mission37.py, data/missions/mission37.md and tests/test_mission37.py.
-- Reuses the existing Tiled `Voss` object and `graphics/dialogues/voss.jpg`; no Tiled map edit is required. Level/Player wiring now makes Voss interactable and gates Mission 37 behind Mission 36 completion.
-- Uses only the existing `yeast_iMM904` simulator and normal visible pFBA runs; no new solver endpoint, hidden optimisation or mission-specific backend route is introduced.
-- Controlled series: WT, PDC1, PDC1+PDC5, PDC1+PDC6, PDC5+PDC6 and PDC1+PDC5+PDC6, with model-default medium and Production Flux exactly EX_etoh_e + EX_succ_e.
-- The validator accumulates runs in any order, preserves prior valid evidence after invalid attempts, verifies the visible GPR-disabled reaction set and derives WT-normalised growth/ethanol retention from the recorded runs.
-- The final interpretation is derived from visible evidence: smallest tested genotype disabling both PYRDC/PYRDC2 while retaining >=50% WT growth and <=1% WT ethanol. The player-facing report does not print the answer.
-- Independent SciPy/SBML regression reproduces the bundled-model WT and complete-PDC-cut-set phenotype and separately verifies that PYRDC/PYRDC2 are controlled by the three PDC genes in the bundled GPR.
-- Browser parity remains `UI -> explicit model_id -> POST /simulate -> structured visible result -> mission validator`; Mission 37 adds no new web-only scientific contract.
-
-2026-08-11 Mission 39 — Pathway Bypass Rescue (Morbus):
-- Adds code/mission39.py, data/missions/mission39.md and tests/test_mission39.py.
-- Reuses the existing Tiled `Morbus` object and `graphics/dialogues/morbus.jpg`; no map edit is required. Level/Player wiring makes Morbus interactable and gates Mission 39 behind Mission 38 completion.
-- Keeps the vulnerable PDC1+PDC5+PDC6+FRD1 genotype fixed and compares four normal pFBA environments: default, EX_pyr_e uptake allowed, EX_etoh_e uptake allowed and EX_acald_e uptake allowed. Bound Sweep remains OFF and no hidden solver is launched by the validator.
-- Adds EX_acald_e to the compact yeast Exchange Flux Report so actual acetaldehyde uptake is visible on desktop and browser from the same `/simulate` flux vector.
-- Derives the final interpretation from recorded visible evidence only: actual supplement uptake, growth fold versus the default-medium reference and ethanol recovery. The player-facing report never hardcodes the answer.
-- Browser parity remains the existing `model_id -> POST /simulate -> structured visible result -> mission validator` contract; no Mission-39-specific backend endpoint is added.
-- Final-game positioning: Mission 39 remains compact/penultimate; Morbus's completion dialogue now hands off to Mortis for Mission 40's final robustness certification. Mission 40 itself is not implemented by this patch.
+- No Mission 36 logic, no Tiled change, no E. coli UI redesign and no backend contract change were introduced.

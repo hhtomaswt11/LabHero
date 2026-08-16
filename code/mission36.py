@@ -82,15 +82,13 @@ class Mission36:
     def menu_message(self, message, buttons=True, menu_to_open=None):
         pygame.draw.rect(self.screen, (255, 215, 0), [0, 500, 1280, 220], width=5)
         pygame.draw.rect(self.screen, (186, 214, 177), [5, 505, 1270, 210])
-        image = pygame.image.load(get_resource_path('graphics/dialogues/vale.jpg')).convert()
-        if image.get_size() != (150, 150):
-            image = pygame.transform.smoothscale(image, (150, 150))
+        image = get_dialogue_portrait(get_resource_path('graphics/dialogues/vale.jpg'), (150, 150))
         self.screen.blit(image, (25, 520))
         pygame.draw.rect(self.screen, 'white', [25, 675, 150, 25])
-        self.screen.blit(self.font_name.render('Vale', True, 'black'), (70, 677))
+        self.screen.blit(get_dialogue_text_surface(self.font_name, 'Vale'), (70, 677))
         for line, text in enumerate(message):
             text = prepare_dialogue_text(text, self.player.player_name)
-            self.screen.blit(self.font.render(text, True, 'black'), (200, 525 + line * 35))
+            self.screen.blit(get_dialogue_text_surface(self.font, text), (200, 525 + line * 35))
         if buttons:
             def click_yes():
                 self.pending = (menu_to_open or self.menu36).update

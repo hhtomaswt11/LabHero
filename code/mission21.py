@@ -111,18 +111,16 @@ class Mission21:
         pygame.draw.rect(self.screen, (186, 214, 177), [5, 505, 1270, 210])
 
         imagem_path = get_resource_path('graphics/dialogues/vega.jpg')
-        imagem = pygame.image.load(imagem_path).convert()
-        if imagem.get_size() != (150, 150):
-            imagem = pygame.transform.smoothscale(imagem, (150, 150))
+        imagem = get_dialogue_portrait(imagem_path, (150, 150))
         self.screen.blit(imagem, (25, 520))
 
         pygame.draw.rect(self.screen, 'white', [25, 675, 150, 25])
-        nome = self.font_nome.render('Dr. Vega', True, 'black')
+        nome = get_dialogue_text_surface(self.font_nome, 'Dr. Vega')
         self.screen.blit(nome, (52, 677))
 
         for line, msg in enumerate(message):
             msg = prepare_dialogue_text(msg, self.player.player_name)
-            surf = self.font.render(msg, True, 'black')
+            surf = get_dialogue_text_surface(self.font, msg)
             self.screen.blit(surf, (200, 525 + (line * 20) + (15 * line)))
 
         if buttons:

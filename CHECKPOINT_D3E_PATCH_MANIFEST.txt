@@ -1,0 +1,41 @@
+Checkpoint D.3E — Immutable Button Visual Cache
+
+Goal
+----
+Stop rebuilding identical dialogue-button visual resources every rendered frame
+without changing button interaction state, callbacks, mission flow or dialogue
+lifecycle behaviour.
+
+Runtime change
+--------------
+- code/button.py caches immutable resources shared by identical Button styles:
+  * LycheeSoda pygame.font.Font objects
+  * rasterized button text
+  * precomposed normal / hover / pressed button surfaces
+- Button instances themselves are NOT cached or made persistent.
+- alreadyPressed remains initialized per Button instance exactly as before.
+- onclickFunction / onePress handling remains per instance and follows the same
+  branch conditions as before.
+- Dialogue mission files are untouched; their existing per-frame Button(...)
+  construction and callback closures remain unchanged.
+
+Why this is conservative
+------------------------
+The previous implementation rebuilt pygame.font.Font, Font.render and a fresh
+button Surface for every Button construction. Dialogue renderers construct the
+same "Yes" and "Not now" buttons each frame. D.3E moves only immutable pixels
+into a cache while leaving all input/click state outside it.
+
+Not changed
+-----------
+- mission01.py ... mission40.py
+- dialogues.py
+- mission evidence/validation/science
+- simulation/solver/backend
+- player movement/collisions/map
+- dialogue text/coordinates/buttons/callback targets
+- web deployment/cache configuration
+
+Regression suite
+----------------
+- tests/test_checkpoint_d3e_button_visual_cache.py

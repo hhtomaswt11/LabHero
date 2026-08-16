@@ -20,7 +20,7 @@ from simulation import (
     normalise_mission03_answer,
 )
 from timers import Timer
-from utils import get_resource_path, prepare_dialogue_text
+from utils import get_dialogue_portrait, get_dialogue_text_surface, get_resource_path, prepare_dialogue_text
 from mission04 import Mission04_info
 from mission05 import Mission05_info
 
@@ -112,16 +112,16 @@ class Mission03:
         pygame.draw.rect(self.screen, (186, 214, 177), [5, 505, 1270, 210])
 
         image_path = get_resource_path('graphics/dialogues/silva.jpg')
-        image = pygame.image.load(image_path).convert()
+        image = get_dialogue_portrait(image_path)
         self.screen.blit(image, (25, 520))
 
         pygame.draw.rect(self.screen, 'white', [25, 675, 150, 25])
-        name = self.font_nome.render('Dr. Silva', True, 'black')
+        name = get_dialogue_text_surface(self.font_nome, 'Dr. Silva')
         self.screen.blit(name, (55, 677))
 
         for line, msg in enumerate(message):
             msg = prepare_dialogue_text(msg, self.player.player_name)
-            surf = self.font.render(msg, True, 'black')
+            surf = get_dialogue_text_surface(self.font, msg)
             self.screen.blit(surf, (200, 525 + (line * 20) + (15 * line)))
 
         if buttons:

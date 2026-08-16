@@ -113,7 +113,7 @@ class Mission01:
 
         # pygame.display.set_caption('Cientista')
         imagem_path = get_resource_path('graphics/dialogues/martinez.jpg')
-        imagem = pygame.image.load(imagem_path).convert()
+        imagem = get_dialogue_portrait(imagem_path)
         
         x = 25; # x coordnate of image
         y = 520; # y coordinate of image
@@ -121,12 +121,12 @@ class Mission01:
 
         cientista_rect = pygame.draw.rect(self.screen, 'white', [25,675,150,25])
 
-        nome = self.font_nome.render('Dr. Martinez', True, 'black')
+        nome = get_dialogue_text_surface(self.font_nome, 'Dr. Martinez')
         self.screen.blit(nome,(40,677))
 
         for line, msg in enumerate(message):
             msg = prepare_dialogue_text(msg, self.player.player_name)
-            surf = self.font.render(msg, True, 'black')
+            surf = get_dialogue_text_surface(self.font, msg)
             self.screen.blit(surf,(200,525+(line*20)+(15*line)))
 
         if buttons:

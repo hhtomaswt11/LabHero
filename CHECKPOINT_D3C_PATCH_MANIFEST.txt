@@ -1,0 +1,27 @@
+Checkpoint D.3C — Dialogue Portrait Cache
+
+Goal
+----
+Avoid reopening/converting the same 150x150 NPC portrait on every rendered
+frame while a dialogue is open, especially in the browser/Pygbag runtime.
+
+Runtime change
+--------------
+- code/utils.py: shared lazy portrait cache keyed by resource path, with an
+  optional cached scaled variant.
+- Dialogue renderers now request portraits through get_dialogue_portrait().
+- No portrait is preloaded at game startup; the first dialogue use loads it,
+  then subsequent frames/dialogues reuse the converted pygame.Surface.
+- pygame remains a lazy/local import inside the cache helper so importing utils
+  alone does not introduce a new pygame dependency.
+
+Scope
+-----
+UI portrait-rendering lines only in dialogues.py and the mission dialogue
+controllers that previously called pygame.image.load() from menu_message().
+No mission evidence/validation/science logic, solver, backend, player physics,
+map geometry, rendering layers, or web transport logic is changed.
+
+Regression tests
+----------------
+- tests/test_checkpoint_d3c_dialogue_portrait_cache.py

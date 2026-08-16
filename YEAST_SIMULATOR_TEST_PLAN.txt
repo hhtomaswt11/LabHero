@@ -3,8 +3,8 @@ LabHero — Yeast iMM904 Simulator Validation Plan
 
 Purpose
 -------
-Validate the post-Mission-35 multi-model infrastructure and the Mission 36 yeast workflow before starting Mission 37.
-Mission 36 is now implemented and uses the model-aware Bound Sweep with a controlled glucose lower-bound preset.
+Validate the new post-Mission-35 multi-model infrastructure before designing Mission 36.
+No Mission 36 logic is included yet.
 
 A. Regression: original E. coli computer
 ----------------------------------------
@@ -27,7 +27,7 @@ B. Golden Lab interaction and model identity
 5. Open Genes. It must show one scalable knockout text field rather than hundreds of toggles.
 6. Open Environmental Conditions. Yeast exchange reactions such as EX_glc__D_e and EX_o2_e must be present.
 7. The yeast method selector should currently expose only FBA and pFBA; lMOMA/ROOM are intentionally held back until benchmarked on iMM904.
-8. Bound Sweep Setup should be offered in the yeast menu and expose only D-Glucose lower bound (EX_glc__D_e) with the Mission 36 preset -0.5, -1, -2, -10.
+8. Bound Sweep Setup should not be offered in the yeast menu yet.
 
 C. Default yeast wild-type pFBA smoke test
 ------------------------------------------
@@ -78,7 +78,6 @@ Automated commands
 ------------------
 python3 -m compileall code backend/app tests main.py LabHero.py
 python3 tests/test_multimodel_yeast.py
-python3 tests/test_mission36.py
 python3 tests/test_mission35.py
 python3 tests/test_mission34.py
 python3 tests/test_mission33.py
@@ -212,144 +211,3 @@ C. Environment: put EX_o2_e in lower-close and press Enter. Confirm the preview 
 D. Environment conflict: put EX_o2_e in both lower-open and lower-close and press Enter. Confirm "Changes not registered" and the conflict explanation appear before running.
 E. Clear all four environment fields, press Validate / Preview Environment, and confirm "none (model defaults)".
 F. Finally run one default FBA WT biomass simulation and confirm ~0.288 to prove the preview layer did not change solver behaviour.
-
-Mission 37 — Voss / Fermentation Redundancy Cut Set manual validation
-
-Prerequisite
-- Mission 36 completed. Voss is the existing Tiled object; no map edit is required.
-
-A. NPC / activation
-1. Press ENTER near Voss.
-2. Confirm Voss portrait/name and Mission 37 dialogue appear.
-3. Activate Mission 37. Before activation the landing report does not repeat the title; after activation, returning to Voss shows the persistent report beginning with "Mission 37 Fermentation Redundancy Cut Set".
-
-B. Controlled simulator setup
-For every valid run use:
-- Yeast iMM904 Simulator
-- pFBA
-- BIOMASS_SC5_notrace
-- completely model-default environment
-- Production Flux exactly EX_etoh_e and EX_succ_e
-- Bound Sweep is not used for Mission 37; leave Execute this sweep OFF
-
-Record these six genotypes in any order:
-- WT
-- PDC1
-- PDC1 + PDC5
-- PDC1 + PDC6
-- PDC5 + PDC6
-- PDC1 + PDC5 + PDC6
-
-Independent bundled-model reference points:
-- WT: growth ~0.287866, ethanol ~15.815, succinate ~0.000, PYRDC/PYRDC2 not disabled.
-- The listed single/pair controls remain close to the WT optimum and do not disable PYRDC/PYRDC2.
-- Complete PDC cut set: growth ~0.176148, ethanol ~0.009, succinate ~6.386; visible GPR-disabled reactions include 3MOBDC, ACALDCD, PYRDC and PYRDC2.
-
-C. Evidence behaviour
-- Six valid runs -> Evidence complete.
-- Invalid method, environment, Production Flux panel or outside genotype -> Latest run was not recorded; prior valid evidence remains.
-- Repeating an already valid genotype updates that row rather than increasing the required run count.
-- Report must not print the final answer.
-
-D. Delivery / persistence
-- A smaller tested set such as PDC1 + PDC5 must be rejected.
-- The interpretation supported by the visible table should complete the mission when entered by common gene names or systematic ids.
-- ENTER in the answer field and the Deliver Interpretation button must use the same validation.
-- Close/reopen after completion and confirm Mission 37 remains completed.
-
-Mission 39 — Morbus / Pathway Bypass Rescue manual validation
-
-Prerequisite
-- Mission 38 completed. Morbus is the existing Tiled object; no map edit should be required.
-
-A. NPC / activation
-1. Press ENTER near Morbus.
-2. Confirm Morbus portrait/name and Mission 39 dialogue appear without clipped text.
-3. Activate Mission 39. The landing report should not repeat the title before activation; after activation, Morbus/New Results should show "Mission 39 Pathway Bypass Rescue".
-
-B. Controlled setup for every run
-- Yeast iMM904
-- pFBA
-- BIOMASS_SC5_notrace
-- Genes exactly PDC1 + PDC5 + PDC6 + FRD1
-- Production Flux exactly EX_etoh_e + EX_succ_e + EX_pyr_e
-- Bound Sweep OFF
-- No upper-bound changes
-
-Record four environments in any order:
-1. model-default medium
-2. lower bounds to open: EX_pyr_e
-3. lower bounds to open: EX_etoh_e
-4. lower bounds to open: EX_acald_e
-
-Independent bundled-model pFBA reference points:
-- Default: growth ~0.095425; ethanol 0; pyruvate ~3.126665; succinate ~0.010554.
-- EX_pyr_e open: growth ~0.095425; pyruvate remains net-secreted, so supplement uptake is 0 and there is no rescue.
-- EX_etoh_e open: growth ~0.095546; ethanol uptake is only ~0.038 and there is no meaningful growth rescue.
-- EX_acald_e open: growth ~0.222940; acetaldehyde uptake ~10; ethanol secretion ~9.910; pyruvate ~12.045; succinate ~0.0247. Growth is ~2.34x the default reference.
-
-C. Evidence behaviour
-- Four valid runs -> Evidence complete.
-- Opening multiple candidate lower bounds, changing any upper bound, wrong genotype/method/objective/Production Flux, or Bound Sweep ON -> Latest run was not recorded; previous evidence remains.
-- Repeating a valid environment updates that row rather than increasing 4/4.
-- Report must not print the final answer.
-
-D. Delivery / persistence
-- A wrong candidate such as pyruvate or ethanol must be rejected.
-- The candidate supported by visible uptake + growth + ethanol evidence should complete the mission by common metabolite name or exchange id.
-- ENTER and Deliver Interpretation must share the same validator.
-- Close/reopen after completion and confirm Mission 39 remains completed.
-- After completion, Morbus should explicitly point the player toward Mortis and the final robustness test; the dialogue must remain inside the fixed panel.
-
-Mission 40 — Mortis / Final Rescue Robustness Certification manual validation
-
-Prerequisite
-- Mission 39 completed. Mortis is the existing Tiled object; no map edit is required.
-
-A. NPC / activation
-1. Press ENTER near Mortis.
-2. Confirm Mortis portrait/name and Mission 40 dialogue appear without clipped text.
-3. Activate Mission 40. Before activation the landing report should not repeat the report title; after activation, Mortis/New Results should show "Mission 40 Final Rescue Robustness Certification".
-
-B. Fixed setup for both curves
-- Yeast iMM904
-- pFBA
-- BIOMASS_SC5_notrace
-- Genes exactly PDC1 + PDC5 + PDC6 + FRD1
-- Production Flux exactly EX_etoh_e + EX_succ_e + EX_pyr_e
-- Bound Sweep ON
-- Sweep variable EX_glc__D_e lower bound
-- yeast glucose preset -0.5, -1, -2, -10
-
-Record two curves in any order:
-1. No-rescue curve: base environment completely model-default.
-2. Rescue curve: Lower bounds to open contains only EX_acald_e; all other environmental changes empty.
-
-Independent bundled-model pFBA reference points:
-No rescue:
-- -0.5: growth ~0.043236; ethanol 0; pyruvate 0.
-- -1: growth ~0.072577; ethanol 0; pyruvate ~0.494.
-- -2: growth ~0.091725; ethanol 0; pyruvate ~2.655.
-- -10: growth ~0.095425; ethanol 0; pyruvate ~3.127; succinate ~0.011.
-
-Acetaldehyde rescue:
-- -0.5: growth ~0.057991 (1.34x matched); acald uptake ~2.147; ethanol 0.
-- -1: growth ~0.077321 (1.07x); acald uptake ~2.541; ethanol ~2.506.
-- -2: growth ~0.113210 (1.23x); acald uptake ~10; ethanol ~9.949.
-- -10: growth ~0.222940 (2.34x); acald uptake ~10; ethanol ~9.910; pyruvate ~12.045.
-
-C. Evidence behaviour
-- Two valid curves -> Evidence complete.
-- Wrong genotype/method/objective/Production Flux, wrong sweep, additional effective environment changes or Bound Sweep OFF -> latest curve request is not recorded and the four-row sweep is not launched when pre-flight fails.
-- Repeating a valid curve replaces it rather than increasing 2/2.
-- Curves may be recorded in either order.
-- A no-op restatement of an already-default open upper bound remains scientifically default and must not create a fake extra perturbation.
-- Report must not print the final qualifying bounds.
-
-D. Delivery / persistence
-- Certification criteria: acetaldehyde uptake >=1.0, rescue growth >=1.20x matched no-rescue growth, rescue ethanol >=5.0.
-- The bundled model should make exactly -2 and -10 qualify.
-- A partial answer such as -10 must be rejected; `-2 and -10` (either order) must be accepted.
-- ENTER and Deliver Final Interpretation must share the same validator.
-- Close/reopen after completion and confirm Mission 40 remains completed.
-- Return to Mortis and confirm the final dialogue states that LabHero metabolic-model training is complete.

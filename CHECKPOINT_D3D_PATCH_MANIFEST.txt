@@ -1,0 +1,19 @@
+Checkpoint D.3D — Dialogue Text Surface Cache
+
+Goal
+- Stop re-rasterizing identical scientist names and dialogue lines on every rendered dialogue frame.
+- Preserve all dialogue text, layout, progression and mission/scientific behaviour.
+
+Runtime changes
+- code/utils.py: add get_dialogue_text_surface() + clear_dialogue_text_cache().
+- code/dialogues.py and mission dialogue renderers: replace per-frame Font.render() calls inside menu_message() with the cache helper.
+- Generic scientist names that are already rendered once during Dialogues.__init__ remain unchanged.
+
+Not changed
+- Simulation/scientific logic and mission validators.
+- Player movement/collision/map.
+- Backend, nginx/Docker or web transport.
+- Dialogue wording, coordinates, font objects, colours or antialiasing.
+
+Regression suite
+- tests/test_checkpoint_d3d_dialogue_text_cache.py

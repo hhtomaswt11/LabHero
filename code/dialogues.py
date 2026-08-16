@@ -145,7 +145,7 @@ class Dialogues:
         menu_border = pygame.draw.rect(self.screen, (255,215,0), [0,500,1280,220], width=5)
         menu_bg = pygame.draw.rect(self.screen, (186,214,177), [5,505,1270,210])
 
-        imagem = pygame.image.load(self.imagem_path).convert()
+        imagem = get_dialogue_portrait(self.imagem_path)
         
         x = 25; # x coordnate of image
         y = 520; # y coordinate of image
@@ -157,7 +157,7 @@ class Dialogues:
         self.screen.blit(self.nome,(40,677))
 
         for line, msg in enumerate(message):
-            surf = self.font.render(msg, True, 'black')
+            surf = get_dialogue_text_surface(self.font, msg)
             self.screen.blit(surf,(200,525+(line*20)+(15*line)))
 
         if buttons:
