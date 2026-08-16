@@ -175,7 +175,7 @@ curl http://localhost/api/health     # {"status":"ok"}
 curl -I http://localhost/            # Content-Type: text/html
 ```
 
-For local validation, open `http://localhost/` in Firefox or Chrome. On the final server, open the configured public URL instead. The first page load takes 30-60 s as the browser bootstraps pyodide and installs the game's Python dependencies. This is one-time per browser (cached afterwards by the service worker).
+For local validation, open `http://localhost/` in Firefox or Chrome. On the final server, open the configured public URL instead. The first page load is the expensive one because the browser must bootstrap Pygbag's CPython/WebAssembly runtime and download the game archive. Repeat visits reuse the content-addressed game archive from the browser cache.
 
 ---
 
@@ -202,7 +202,7 @@ docker compose build --no-cache    # force rebuild so latest game code is bundle
 docker compose up -d
 ```
 
-After a deploy, **players will keep loading the cached bundle from their browser's service worker until it expires**. To make rollout immediate, they need to clear site data (DevTools → Application → Storage → Clear site data) or open in an incognito window. The included nginx config sets `Cache-Control: no-cache` on `index.html` to nudge browsers to revalidate.
+The frontend build fingerprints the Pygbag archive as `src.<sha256>.tar.gz`. nginx keeps `index.html` on `Cache-Control: no-cache`, so clients revalidate the entry point after a deploy; if the game bytes changed, that fresh index references a new archive URL. The fingerprinted archive itself is served with a long `immutable` cache lifetime, so repeat visits avoid re-downloading the ~12 MB bundle without risking an old fixed-name archive after an update.
 
 ### Stop / uninstall
 
@@ -240,7 +240,7 @@ docker compose exec frontend nginx -s reload
 | Browser shows the title screen but the simulation menu hangs | Frontend reached but backend unreachable from frontend | `docker compose exec frontend wget -qO- http://backend:8000/health` should return `{"status":"ok"}` |
 | Audio doesn't play | Browser audio is gated behind user interaction | Click anywhere on the page first |
 | Audio works but stutters when opening menus | Single-threaded wasm running heavy menu construction (137 gene toggles, 40 reaction toggles) | Expected. The build is broken into chunks that yield to the audio mixer between batches, but on low-end CPUs the gaps can still be audible |
-| Mission is still activated after "Back to Title" | Player loaded a stale bundle from the browser's service worker cache | DevTools → Application → Storage → Clear site data, or use an incognito window |
+| Browser appears to run an older build after a deploy | Confirm the served `index.html` references the newest `src.<sha256>.tar.gz`; a hard refresh should revalidate the no-cache entry point | Rebuild/restart the frontend and verify the fingerprinted archive name changed when game bytes changed |
 | "Quit Game" does nothing on web | Expected | The game replaces "Quit Game" with "Back to Title" on the web because browsers don't let JavaScript close their own tab |
 
 ---

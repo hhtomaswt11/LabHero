@@ -1,0 +1,32 @@
+Checkpoint D.3B — Versioned HTTP Cache
+
+Goal
+----
+Make repeat browser loads faster without allowing a stale fixed-name Pygbag
+archive to survive across LabHero deployments.
+
+Runtime/build changes
+---------------------
+- deploy/fingerprint_web_bundle.py
+  Build-time helper that renames Pygbag's src.tar.gz to
+  src.<16-char-sha256>.tar.gz and updates index.html to reference it.
+- deploy/Dockerfile.frontend
+  Runs the fingerprint helper after the Pygbag build and before nginx stage.
+- deploy/nginx.conf
+  * / and /index.html remain Cache-Control: no-cache.
+  * content-hashed src.<hash>.tar.gz receives
+    Cache-Control: public, max-age=31536000, immutable.
+  * other non-fingerprinted static resources remain conservative/no-cache.
+  * /api proxy is unchanged.
+
+Safety rationale
+----------------
+A fixed src.tar.gz must not receive a long max-age because a new deployment
+could otherwise leave students on old game code. Content-addressing makes the
+cache key change whenever the bundle bytes change, while the always-revalidated
+index.html immediately advertises the new archive URL.
+
+Science/gameplay
+----------------
+No mission, simulation, model, map, collision, player movement, sprite update,
+or backend science file is changed by this checkpoint.
