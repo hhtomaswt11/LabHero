@@ -1,0 +1,21 @@
+Checkpoint D.3A — Web bundle hygiene
+
+Runtime behaviour changed: none.
+
+Changed:
+- pygbag.ini
+  - exclude test/development-only directories from the browser archive
+  - exclude obsolete iML1515 model files and root development notes/manifests
+
+Added:
+- tests/test_checkpoint_d3a_web_bundle.py
+- CHECKPOINT_D3A_PATCH_MANIFEST.txt
+
+Explicitly untouched:
+- code/ runtime files
+- mission01.py ... mission40.py
+- player movement/collisions
+- map_lb.tmx and ground_lb.png
+- simulation/scientific validation
+- backend
+- nginx/Docker deployment behaviour
