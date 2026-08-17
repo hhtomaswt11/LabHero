@@ -1,0 +1,44 @@
+Checkpoint D.5B — Intro Static Surface Cache
+
+Goal
+----
+Avoid rebuilding/rasterizing the Intro screen's immutable title/instruction text on every frame.
+
+Runtime changes
+---------------
+- code/intro.py
+  - Build the static title/instruction surfaces and their rects once in Intro.__init__().
+  - Intro.run() now only fills/blits those cached surfaces.
+  - Preserve the existing desktop/web text, colors, positions and platform split.
+  - Preserve per-frame Button creation/process behavior for Controls and Story.
+
+Regression coverage
+-------------------
+- tests/test_checkpoint_d5b_intro_static_surface_cache.py
+  - Intro.run() contains no Font/render/get_rect work.
+  - Desktop builds exactly the original three labels once.
+  - Web builds exactly the original two labels once.
+  - Repeated frames reuse the cached surfaces.
+  - Original text geometry is preserved.
+  - Controls/Story buttons are still created and processed every frame.
+
+Validation performed
+--------------------
+- python3 -m compileall -q code backend/app tests main.py LabHero.py: OK
+- D.1 -> D.5B checkpoint regression suites: OK
+- Checkpoint B: 6/6 OK
+- Checkpoint C: 6/6 OK
+- Multi-model yeast: 29/29 OK
+- Mission 35: 28/28 OK
+- Mission 36: 21/21 OK
+- Mission 37: 22/22 OK
+- Mission 38: 22/22 OK
+- Mission 39: 25/25 OK
+- Mission 40: 26/26 OK
+- Project test_* method count: 1154
+- Global discovery in this environment: Ran 502, 29 errors, 3 skipped.
+  All 29 errors are the known ModuleNotFoundError: No module named 'pygame' limitation.
+
+Scope
+-----
+No mission, map, collision, player, simulation, save, solver, backend or deploy runtime file was changed.

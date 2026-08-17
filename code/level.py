@@ -11,25 +11,6 @@ from menu_2 import *
 from window import Window
 from books import Books
 from ecoli import Ecoli
-from mission01 import Mission01
-from mission02 import Mission02
-from mission03 import Mission03
-from mission06 import Mission06
-from mission07 import Mission07
-from mission11 import Mission11
-from mission16 import Mission16
-from mission21 import Mission21
-from mission23 import Mission23
-from mission25 import Mission25
-from mission27 import Mission27
-from mission29 import Mission29
-from mission32 import Mission32
-from mission35 import Mission35
-from mission36 import Mission36
-from mission37 import Mission37
-from mission38 import Mission38
-from mission39 import Mission39
-from mission40 import Mission40
 from dialogues import Dialogues
 from save_load import save_file
 from functions import *
@@ -70,41 +51,41 @@ class Level:
 		self.books_active = False
 		self.ecoli_active = False
 		self.talk_1_active = False
-		self.talk_1 = Mission01(self.toggle_talk_1, self.player)
+		self.talk_1 = None
 		self.talk_2_active = False
-		self.talk_2 = Mission03(self.toggle_talk_2, self.player)
+		self.talk_2 = None
 		self.talk_3_active = False
-		self.talk_3 = Mission06(self.toggle_talk_3, self.player)
+		self.talk_3 = None
 		self.talk_7_active = False
-		self.talk_7 = Mission07(self.toggle_talk_7, self.player)
+		self.talk_7 = None
 		self.talk_11_active = False
-		self.talk_11 = Mission11(self.toggle_talk_11, self.player)
+		self.talk_11 = None
 		self.talk_16_active = False
-		self.talk_16 = Mission16(self.toggle_talk_16, self.player)
+		self.talk_16 = None
 		self.talk_21_active = False
-		self.talk_21 = Mission21(self.toggle_talk_21, self.player)
+		self.talk_21 = None
 		self.talk_23_active = False
-		self.talk_23 = Mission23(self.toggle_talk_23, self.player)
+		self.talk_23 = None
 		self.talk_25_active = False
-		self.talk_25 = Mission25(self.toggle_talk_25, self.player)
+		self.talk_25 = None
 		self.talk_27_active = False
-		self.talk_27 = Mission27(self.toggle_talk_27, self.player)
+		self.talk_27 = None
 		self.talk_29_active = False
-		self.talk_29 = Mission29(self.toggle_talk_29, self.player)
+		self.talk_29 = None
 		self.talk_32_active = False
-		self.talk_32 = Mission32(self.toggle_talk_32, self.player)
+		self.talk_32 = None
 		self.talk_35_active = False
-		self.talk_35 = Mission35(self.toggle_talk_35, self.player)
+		self.talk_35 = None
 		self.talk_36_active = False
-		self.talk_36 = Mission36(self.toggle_talk_36, self.player)
+		self.talk_36 = None
 		self.talk_37_active = False
-		self.talk_37 = Mission37(self.toggle_talk_37, self.player)
+		self.talk_37 = None
 		self.talk_38_active = False
-		self.talk_38 = Mission38(self.toggle_talk_38, self.player)
+		self.talk_38 = None
 		self.talk_39_active = False
-		self.talk_39 = Mission39(self.toggle_talk_39, self.player)
+		self.talk_39 = None
 		self.talk_40_active = False
-		self.talk_40 = Mission40(self.toggle_talk_40, self.player)
+		self.talk_40 = None
 		self.menu = Menu(self.player, self.toggle_shop)
 		self.window = Window(self.desk_menu, self.player, model_id='ecoli_core')
 		# The large iMM904 UI is created only when the unlocked computer is
@@ -326,57 +307,111 @@ class Level:
 		self.menu_active = not self.menu_active
 
 	def toggle_talk_1(self):
+		if not self.talk_1_active and self.talk_1 is None:
+			from mission01 import Mission01
+			self.talk_1 = Mission01(self.toggle_talk_1, self.player)
 		self.talk_1_active = not self.talk_1_active
 
 	def toggle_talk_2(self):
+		if not self.talk_2_active and self.talk_2 is None:
+			from mission03 import Mission03
+			self.talk_2 = Mission03(self.toggle_talk_2, self.player)
 		self.talk_2_active = not self.talk_2_active
 	
 	def toggle_talk_3(self):
+		if not self.talk_3_active and self.talk_3 is None:
+			from mission06 import Mission06
+			self.talk_3 = Mission06(self.toggle_talk_3, self.player)
 		self.talk_3_active = not self.talk_3_active
 
 	def toggle_talk_7(self):
+		if not self.talk_7_active and self.talk_7 is None:
+			from mission07 import Mission07
+			self.talk_7 = Mission07(self.toggle_talk_7, self.player)
 		self.talk_7_active = not self.talk_7_active
 
 	def toggle_talk_11(self):
+		if not self.talk_11_active and self.talk_11 is None:
+			from mission11 import Mission11
+			self.talk_11 = Mission11(self.toggle_talk_11, self.player)
 		self.talk_11_active = not self.talk_11_active
 
 	def toggle_talk_16(self):
+		if not self.talk_16_active and self.talk_16 is None:
+			from mission16 import Mission16
+			self.talk_16 = Mission16(self.toggle_talk_16, self.player)
 		self.talk_16_active = not self.talk_16_active
 
 	def toggle_talk_21(self):
+		if not self.talk_21_active and self.talk_21 is None:
+			from mission21 import Mission21
+			self.talk_21 = Mission21(self.toggle_talk_21, self.player)
 		self.talk_21_active = not self.talk_21_active
 
 	def toggle_talk_23(self):
+		if not self.talk_23_active and self.talk_23 is None:
+			from mission23 import Mission23
+			self.talk_23 = Mission23(self.toggle_talk_23, self.player)
 		self.talk_23_active = not self.talk_23_active
 
 	def toggle_talk_25(self):
+		if not self.talk_25_active and self.talk_25 is None:
+			from mission25 import Mission25
+			self.talk_25 = Mission25(self.toggle_talk_25, self.player)
 		self.talk_25_active = not self.talk_25_active
 
 	def toggle_talk_27(self):
+		if not self.talk_27_active and self.talk_27 is None:
+			from mission27 import Mission27
+			self.talk_27 = Mission27(self.toggle_talk_27, self.player)
 		self.talk_27_active = not self.talk_27_active
 
 	def toggle_talk_29(self):
+		if not self.talk_29_active and self.talk_29 is None:
+			from mission29 import Mission29
+			self.talk_29 = Mission29(self.toggle_talk_29, self.player)
 		self.talk_29_active = not self.talk_29_active
 
 	def toggle_talk_32(self):
+		if not self.talk_32_active and self.talk_32 is None:
+			from mission32 import Mission32
+			self.talk_32 = Mission32(self.toggle_talk_32, self.player)
 		self.talk_32_active = not self.talk_32_active
 
 	def toggle_talk_35(self):
+		if not self.talk_35_active and self.talk_35 is None:
+			from mission35 import Mission35
+			self.talk_35 = Mission35(self.toggle_talk_35, self.player)
 		self.talk_35_active = not self.talk_35_active
 
 	def toggle_talk_36(self):
+		if not self.talk_36_active and self.talk_36 is None:
+			from mission36 import Mission36
+			self.talk_36 = Mission36(self.toggle_talk_36, self.player)
 		self.talk_36_active = not self.talk_36_active
 
 	def toggle_talk_37(self):
+		if not self.talk_37_active and self.talk_37 is None:
+			from mission37 import Mission37
+			self.talk_37 = Mission37(self.toggle_talk_37, self.player)
 		self.talk_37_active = not self.talk_37_active
 
 	def toggle_talk_38(self):
+		if not self.talk_38_active and self.talk_38 is None:
+			from mission38 import Mission38
+			self.talk_38 = Mission38(self.toggle_talk_38, self.player)
 		self.talk_38_active = not self.talk_38_active
 
 	def toggle_talk_39(self):
+		if not self.talk_39_active and self.talk_39 is None:
+			from mission39 import Mission39
+			self.talk_39 = Mission39(self.toggle_talk_39, self.player)
 		self.talk_39_active = not self.talk_39_active
 
 	def toggle_talk_40(self):
+		if not self.talk_40_active and self.talk_40 is None:
+			from mission40 import Mission40
+			self.talk_40 = Mission40(self.toggle_talk_40, self.player)
 		self.talk_40_active = not self.talk_40_active
 
 	def toggle_dialogue(self):

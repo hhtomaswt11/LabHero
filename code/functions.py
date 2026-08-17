@@ -50,16 +50,23 @@ async def _play_animation(text, time, fullscreen):
     if fullscreen:
         time = 1000
         display_surface.fill('gold')
-        title = pygame.font.Font(font_path,100).render('Lab Hero', False, 'black')
+        title_font = pygame.font.Font(font_path, 100)
+        title = title_font.render('Lab Hero', False, 'black')
         title_rect = title.get_rect(center = (SCREEN_WIDTH/2, SCREEN_HEIGHT/2))
         display_surface.blit(title, title_rect)
+
+    # The overlay text is immutable for the lifetime of one queued animation.
+    # Build its font/surface/rect once instead of decoding the font and
+    # rasterising the same string again on every ~60 FPS animation frame.
+    text_font = pygame.font.Font(font_path, 30)
+    text_surf = text_font.render(text, False, 'black')
+    text_rect = text_surf.get_rect(midbottom = (SCREEN_WIDTH/2, SCREEN_HEIGHT-20))
+    text_backdrop_rect = text_rect.inflate(10, 10)
 
     clock = pygame.time.Clock()
     elapsed = 0
     while elapsed < time:
-        text_surf = pygame.font.Font(font_path, 30).render(text,False,'black')
-        text_rect = text_surf.get_rect(midbottom = (SCREEN_WIDTH/2, SCREEN_HEIGHT-20))
-        pygame.draw.rect(display_surface, 'white', text_rect.inflate(10,10),0,2)
+        pygame.draw.rect(display_surface, 'white', text_backdrop_rect, 0, 2)
         display_surface.blit(text_surf, text_rect)
         pygame.display.update()
         passed = clock.tick(60)

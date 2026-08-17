@@ -1,0 +1,22 @@
+Checkpoint D.4C - Lazy Mission Controllers
+
+Runtime change:
+- code/level.py
+  * The 18 scientist mission/dialogue controllers now start as None.
+  * Each controller is created only on the first opening of its scientist interaction.
+  * Closing and reopening reuses the same controller instance, preserving existing mission/menu state.
+  * Player callbacks, active flags and Level.run() update paths are unchanged.
+  * Mission modules remain imported normally; this checkpoint defers expensive constructor work only.
+
+Regression coverage:
+- tests/test_checkpoint_d4c_lazy_mission_controllers.py
+  * 8 tests covering unloaded startup, first-use construction, close/reopen reuse,
+    all 18 controller mappings, Player callback wiring and run-loop update paths.
+
+Intentionally untouched:
+- mission01.py ... mission40.py
+- player.py
+- simulation.py / solver logic
+- map_lb.tmx / ground_lb.png
+- backend / deploy configuration
+- collisions / camera / rendering architecture

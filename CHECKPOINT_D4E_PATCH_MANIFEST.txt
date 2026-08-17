@@ -1,0 +1,19 @@
+Checkpoint D.4E - Generic Dialogue State Cache
+
+Runtime change:
+- code/dialogues.py
+  - Generic NPC dialogue state is prepared only when the selected character changes.
+  - A dedicated _prepared_character sentinel preserves the previous first-call fallback behaviour.
+  - Generic NPC name surfaces now reuse get_dialogue_text_surface() from checkpoint D.3D.
+
+Regression coverage:
+- tests/test_checkpoint_d4e_generic_dialogue_cache.py
+
+Intentionally unchanged:
+- code/level.py
+- code/player.py
+- code/mission01.py through code/mission40.py
+- code/simulation.py
+- data/map_lb.tmx
+- graphics/world/ground_lb.png
+- backend and deploy configuration

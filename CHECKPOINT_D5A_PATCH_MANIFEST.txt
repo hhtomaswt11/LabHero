@@ -1,0 +1,19 @@
+Checkpoint D.5A — Cached Animation-Text Rendering
+
+Runtime change:
+- code/functions.py
+  - _play_animation now creates the immutable text Font, rendered Surface,
+    text Rect and backdrop Rect once per queued animation, before its frame loop.
+  - fullscreen title behaviour, animation duration, draw/update cadence and
+    asyncio yielding are preserved.
+
+Regression coverage:
+- tests/test_checkpoint_d5a_animation_text_cache.py
+  - verifies one font/render for a normal multi-frame animation;
+  - verifies fullscreen title/text are each created once;
+  - forbids Font/render/get_rect/inflate work inside the animation frame loop;
+  - verifies geometry is prepared before the loop;
+  - preserves display.update(), Clock.tick(60) and asyncio.sleep(0);
+  - preserves animation_text_save queue payload contract.
+
+No mission, solver, map, collision, save, backend, deploy or science logic is changed.

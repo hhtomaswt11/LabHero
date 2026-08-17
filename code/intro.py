@@ -22,29 +22,36 @@ class Intro:
         self.story = Story()
         self.pending = None
 
-    def run(self):
-
-        self.display_surface.fill('gold')
+        # These labels never change while an Intro instance is alive. Build
+        # their surfaces/geometry once instead of rasterizing the same text
+        # on every frame of the intro loop.
         self.title = self.font.render('Lab Hero', False, 'black')
         self.title_rect = self.title.get_rect(
             center=(SCREEN_WIDTH/2, (SCREEN_HEIGHT/2)-100))
-        self.display_surface.blit(self.title, self.title_rect)
+
         if sys.platform == 'emscripten':
             self.text = self.font_text.render(
                 'press ENTER to play', False, 'red')
             self.text_rect = self.text.get_rect(
                 center=(SCREEN_WIDTH/2, (SCREEN_HEIGHT/2)))
-            self.display_surface.blit(self.text, self.text_rect)
+            self.text2 = None
+            self.text_rect2 = None
         else:
             self.text = self.font_text.render(
-                'press ENTER to continue', False, 'red')  # render(string, AA, color)
+                'press ENTER to continue', False, 'red')
             self.text2 = self.font_text.render(
-                'or press SPACE to new game', False, (60, 150, 140))  # render(string, AA, color)
+                'or press SPACE to new game', False, (60, 150, 140))
             self.text_rect = self.text.get_rect(
                 center=(SCREEN_WIDTH/2, (SCREEN_HEIGHT/2)))
             self.text_rect2 = self.text2.get_rect(
                 center=(SCREEN_WIDTH/2, (SCREEN_HEIGHT/2)+40))
-            self.display_surface.blit(self.text, self.text_rect)
+
+    def run(self):
+
+        self.display_surface.fill('gold')
+        self.display_surface.blit(self.title, self.title_rect)
+        self.display_surface.blit(self.text, self.text_rect)
+        if self.text2 is not None:
             self.display_surface.blit(self.text2, self.text_rect2)
         # botao_continue = Button(
         #     240, 450, 250, 50, self.display_surface, 'Continue Game', self.continue_game)

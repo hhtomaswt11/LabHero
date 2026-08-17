@@ -12,6 +12,10 @@ class Dialogues:
         #general setup 
         self.player = player
         self.character = None
+        # Track which generic NPC has already had its static dialogue state prepared.
+        # A dedicated sentinel preserves the old fallback behaviour even if the first
+        # call unexpectedly passes None.
+        self._prepared_character = object()
 
         self.toggle_menu = toggle_menu
 
@@ -26,6 +30,9 @@ class Dialogues:
 
 
     def choosing_character(self, character):
+        if character == self._prepared_character:
+            return
+
         self.character = character
         if self.character == 'Sequeira':    
             self.message = [
@@ -36,7 +43,7 @@ class Dialogues:
             "Now go on, and be the best pokemon master you can be! Gotta catchem' all!"
         ]
             self.imagem_path = get_resource_path('graphics/dialogues/Sequeira.jpg')
-            self.nome = self.font_nome.render('Dr. Sequeira', True, 'black')
+            self.nome = get_dialogue_text_surface(self.font_nome, 'Dr. Sequeira')
             
         elif self.character == 'Nuno':    
             self.message = [
@@ -46,7 +53,7 @@ class Dialogues:
             "to find novel antibiotics for Mycobacterium tuberculosis."
         ]
             self.imagem_path = get_resource_path('graphics/dialogues/Nuno.jpg')
-            self.nome = self.font_nome.render('Dr. Alves', True, 'black')
+            self.nome = get_dialogue_text_surface(self.font_nome, 'Dr. Alves')
         elif self.character == 'Pacheco':
             self.message = [
             "Oh hello, fellow student! My name is Dr. Miguel Pacheco and I'm trying to improve the",
@@ -55,7 +62,7 @@ class Dialogues:
             "in my quest! Let's both try our best!"
             ]
             self.imagem_path = get_resource_path('graphics/dialogues/Pacheco.jpg')
-            self.nome = self.font_nome.render('Dr. Pacheco', True, 'black')
+            self.nome = get_dialogue_text_surface(self.font_nome, 'Dr. Pacheco')
 
         elif self.character == 'Marta':
             self.message = [
@@ -64,7 +71,7 @@ class Dialogues:
             "This was really a grape achievement!"
             ]
             self.imagem_path = get_resource_path('graphics/dialogues/Marta.jpg')
-            self.nome = self.font_nome.render('Dra. Sampaio', True, 'black')
+            self.nome = get_dialogue_text_surface(self.font_nome, 'Dra. Sampaio')
         
         elif self.character == 'Capela':
             self.message = [
@@ -74,7 +81,7 @@ class Dialogues:
             "plant specialized metabolism!"
             ]
             self.imagem_path = get_resource_path('graphics/dialogues/Capela.jpg')
-            self.nome = self.font_nome.render('Dr. Capela', True, 'black')
+            self.nome = get_dialogue_text_surface(self.font_nome, 'Dr. Capela')
 
         elif self.character == 'Fernanda':
             self.message = [
@@ -84,7 +91,7 @@ class Dialogues:
             "Interesting, right?"
             ]
             self.imagem_path = get_resource_path('graphics/dialogues/Fernanda.jpg')
-            self.nome = self.font_nome.render('Dra. Vieira', True, 'black')
+            self.nome = get_dialogue_text_surface(self.font_nome, 'Dra. Vieira')
 
         elif self.character == 'Alexandre':
             self.message = [
@@ -94,7 +101,7 @@ class Dialogues:
             "SARS-COV-2 is a strain of coronavirus that causes COVID-19!"
             ]
             self.imagem_path = get_resource_path('graphics/dialogues/Alexandre.jpg')
-            self.nome = self.font_nome.render('Dr. Oliveira', True, 'black')
+            self.nome = get_dialogue_text_surface(self.font_nome, 'Dr. Oliveira')
 
         elif self.character == 'Emanuel':
             self.message = [
@@ -104,7 +111,7 @@ class Dialogues:
             "Do you already know what GEMs are?"
             ]
             self.imagem_path = get_resource_path('graphics/dialogues/Emanuel.jpg')
-            self.nome = self.font_nome.render('Dr. Cunha', True, 'black')
+            self.nome = get_dialogue_text_surface(self.font_nome, 'Dr. Cunha')
         elif self.character == 'Oscar':
             self.message = [
             "Hello there my young padawan! I’m Oscar Dias, and I study how living things",
@@ -112,7 +119,7 @@ class Dialogues:
             "In our lab, we use the data side of the Force to unlock life's mysteries! ",
             ]
             self.imagem_path = get_resource_path('graphics/dialogues/Oscar.jpg') 
-            self.nome = self.font_nome.render('Dr. Dias', True, 'black')
+            self.nome = get_dialogue_text_surface(self.font_nome, 'Dr. Dias')
         elif self.character == 'Miguel':
             self.message = [
             "Hi there! I’m Miguel Rocha, and I study how computers can help us understand ",
@@ -120,12 +127,15 @@ class Dialogues:
             "We’re not just solving problems, we’re debugging the code of life!"
             ]
             self.imagem_path = get_resource_path('graphics/dialogues/Miguel.jpg') 
-            self.nome = self.font_nome.render('Dr. Rocha', True, 'black')
+            self.nome = get_dialogue_text_surface(self.font_nome, 'Dr. Rocha')
 
         else:
             self.message = ['Hello there! Are you enjoying LabHero so far?']
             self.imagem_path = get_resource_path('graphics/dialogues/carter.jpg')
-            self.nome = self.font_nome.render('Dr.', True, 'black')
+            self.nome = get_dialogue_text_surface(self.font_nome, 'Dr.')
+
+        # Mark the character as prepared only after its complete static state exists.
+        self._prepared_character = character
 
 
     def input(self):

@@ -1,0 +1,20 @@
+Checkpoint D.4D — Lazy Mission Module Imports
+
+Runtime change:
+- code/level.py
+  - Removes eager missionXX imports from module scope.
+  - Imports each mission controller only inside its existing first-open lazy guard.
+  - Preserves the D.4C controller lifecycle: construct once, retain on close, reuse on reopen.
+
+Regression compatibility update:
+- tests/test_checkpoint_d4c_lazy_mission_controllers.py
+  - Its isolated AST lifecycle harness strips the new local mission imports from the compiled test copy so it can continue injecting stub mission classes.
+  - Runtime source is not altered by this test helper.
+
+New regression suite:
+- tests/test_checkpoint_d4d_lazy_mission_imports.py
+
+Intentionally untouched:
+- mission01.py ... mission40.py
+- player.py, simulation.py, sprites.py, dialogues.py
+- map/TMX, ground image, collisions, physics, save/progression, backend/deploy
