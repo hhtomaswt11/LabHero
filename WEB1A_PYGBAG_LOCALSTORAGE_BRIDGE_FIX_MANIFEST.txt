@@ -1,0 +1,14 @@
+WEB.1A — Pygbag localStorage bridge fix
+
+Purpose:
+- Use Pygbag's documented browser bridge: platform.window.localStorage.
+- Keep a defensive js.window/localStorage fallback for alternate Emscripten environments.
+- Preserve all WEB.1 durable-save semantics (namespace, autosave, Back to Title, New Game clear).
+
+Runtime changed:
+- code/save_load.py
+
+Tests updated:
+- tests/test_web1_persistent_browser_save.py
+
+No mission, hint, score, inventory, map, solver, backend, or deployment runtime files changed.

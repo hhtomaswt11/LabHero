@@ -298,7 +298,8 @@ class Mission40RegressionTests(unittest.TestCase):
     def test_save_load_contract_exists_for_desktop_and_web(self):
         source = (ROOT / 'code' / 'save_load.py').read_text()
         self.assertIn('save_mission40_final_certification', source)
-        self.assertIn("_MEMSTORE['mission40_final_certification']", source)
+        self.assertIn("_web_store_set('mission40_final_certification'", source)
+        self.assertIn("_web_store_get('mission40_final_certification'", source)
         self.assertIn('mission40_final_certification.txt', source)
 
     def test_mortis_tiled_object_and_dialogue_asset_are_reused(self):

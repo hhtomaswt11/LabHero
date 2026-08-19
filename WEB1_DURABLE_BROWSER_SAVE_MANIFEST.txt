@@ -1,0 +1,32 @@
+WEB.1 — Durable Browser Save (localStorage)
+
+Goal
+- Preserve LabHero browser progress across page refreshes, closed/reopened tabs,
+  and frontend/backend container restarts on the same browser + origin.
+
+Runtime changes
+- code/save_load.py
+  - versioned localStorage namespace: labhero:v1:
+  - RAM _MEMSTORE retained as hot cache/fallback
+  - main save and all mission evidence artifacts mirrored to localStorage
+  - artifact clears remove both RAM and localStorage copies
+  - Back-to-title RAM clear no longer deletes durable storage
+  - explicit clear_web_persistent_storage() removes only LabHero namespaced keys
+- LabHero.py
+  - explicit Web New Game clears durable LabHero storage
+  - Web main save autosaves every 5 seconds
+- code/menu_2.py
+  - Web Back to Title saves first, then clears only RAM cache
+
+Documentation
+- deploy/README.md updated with durable-save behavior and origin caveat.
+
+Tests
+- tests/test_web1_persistent_browser_save.py (10 tests)
+- tests/test_mission40.py updated from old direct _MEMSTORE source assertion to
+  the new durable storage helper contract.
+
+Non-goals
+- No server accounts or cross-device sync.
+- No changes to missions, scientific validators, score, hints, inventory, map,
+  backend simulation contract, or solver logic.

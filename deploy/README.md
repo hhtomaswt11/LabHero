@@ -249,7 +249,11 @@ docker compose exec frontend nginx -s reload
 
 ### Browser save persistence
 
-The current pygbag build keeps player and mission state in an in-memory web store. It survives navigation inside the running game, but a full page refresh or closed tab can discard progress. Before a public classroom release, replace this with either browser `localStorage`/IndexedDB or a backend save API with user/session identifiers. Mission evidence is already JSON-serialisable, so this is a storage-layer task rather than a mission-logic rewrite.
+The pygbag build now mirrors the main player save and all mission evidence artifacts to browser `localStorage` under the versioned `labhero:v1:` namespace. The in-memory store remains only as a hot session cache/fallback. A page refresh or closed/reopened tab can therefore restore progress from the same browser + origin, and a five-second web autosave keeps player position/profile/reward state reasonably current. Mission evidence is persisted immediately when its existing save helper is called.
+
+`Back to Title` preserves durable progress. Starting an explicit `New Game` clears only keys in the `labhero:v1:` namespace, leaving unrelated localStorage data untouched. Browser storage is origin-scoped: changing the production hostname/protocol/port creates a different storage origin, so deployment should keep a stable public URL once students begin using it. If localStorage is unavailable because of browser policy/privacy/quota, LabHero falls back to the in-memory store for that session and writes a warning to the browser console.
+
+Before classroom rollout, manually validate refresh persistence in each supported browser and verify the intended production hostname. Server-side accounts/sync are still optional future work; they are not required for per-browser persistence.
 
 ### Browser-only simulation paths
 

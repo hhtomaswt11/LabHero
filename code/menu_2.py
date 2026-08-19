@@ -197,6 +197,9 @@ class Menu:
 
         if sys.platform == 'emscripten':
             def back_to_title():
+                # Preserve durable browser progress when returning to the title.
+                # Only the hot RAM cache is cleared; Continue reloads localStorage.
+                save_file(self.player.get_save_data())
                 clear_memstore()
                 self.player.restart_to_intro = True
                 self.toggle_menu()

@@ -29,22 +29,17 @@ class Intro:
         self.title_rect = self.title.get_rect(
             center=(SCREEN_WIDTH/2, (SCREEN_HEIGHT/2)-100))
 
-        if sys.platform == 'emscripten':
-            self.text = self.font_text.render(
-                'press ENTER to play', False, 'red')
-            self.text_rect = self.text.get_rect(
-                center=(SCREEN_WIDTH/2, (SCREEN_HEIGHT/2)))
-            self.text2 = None
-            self.text_rect2 = None
-        else:
-            self.text = self.font_text.render(
-                'press ENTER to continue', False, 'red')
-            self.text2 = self.font_text.render(
-                'or press SPACE to new game', False, (60, 150, 140))
-            self.text_rect = self.text.get_rect(
-                center=(SCREEN_WIDTH/2, (SCREEN_HEIGHT/2)))
-            self.text_rect2 = self.text2.get_rect(
-                center=(SCREEN_WIDTH/2, (SCREEN_HEIGHT/2)+40))
+        # Desktop and Web expose the same two title-screen actions.  In the
+        # browser ENTER resumes the durable localStorage save while SPACE
+        # explicitly starts a fresh campaign, so both choices must be visible.
+        self.text = self.font_text.render(
+            'press ENTER to continue', False, 'red')
+        self.text2 = self.font_text.render(
+            'or press SPACE to new game', False, (60, 150, 140))
+        self.text_rect = self.text.get_rect(
+            center=(SCREEN_WIDTH/2, (SCREEN_HEIGHT/2)))
+        self.text_rect2 = self.text2.get_rect(
+            center=(SCREEN_WIDTH/2, (SCREEN_HEIGHT/2)+40))
 
     def run(self):
 

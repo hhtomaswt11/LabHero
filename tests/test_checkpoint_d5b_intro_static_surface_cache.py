@@ -150,10 +150,11 @@ class IntroStaticSurfaceCacheTests(unittest.TestCase):
         intro = Intro()
         self.assertEqual(fake.render_calls, [
             (130, 'Lab Hero', False, 'black'),
-            (30, 'press ENTER to play', False, 'red'),
+            (30, 'press ENTER to continue', False, 'red'),
+            (30, 'or press SPACE to new game', False, (60, 150, 140)),
         ])
-        self.assertIsNone(intro.text2)
-        self.assertIsNone(intro.text_rect2)
+        self.assertIsNotNone(intro.text2)
+        self.assertEqual(intro.text_rect2.center, (640, 400))
 
     def test_repeated_desktop_frames_reuse_cached_surfaces(self):
         Intro, fake = _load_intro('linux')
@@ -174,7 +175,7 @@ class IntroStaticSurfaceCacheTests(unittest.TestCase):
         intro.run()
         intro.run()
         self.assertEqual(len(fake.render_calls), render_count)
-        self.assertEqual(len(fake.display.surface.blit_calls), 4)
+        self.assertEqual(len(fake.display.surface.blit_calls), 6)
 
     def test_cached_geometry_preserves_original_positions(self):
         Intro, _ = _load_intro('linux')

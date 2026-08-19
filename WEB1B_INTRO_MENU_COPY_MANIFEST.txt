@@ -1,0 +1,17 @@
+WEB.1B — Web title-screen copy consistency
+
+Changed runtime:
+- code/intro.py
+
+Changed regression:
+- tests/test_checkpoint_d5b_intro_static_surface_cache.py
+
+Added regression:
+- tests/test_web1b_intro_new_game_hint.py
+
+Behavior:
+- Desktop and Web both display:
+  press ENTER to continue
+  or press SPACE to new game
+- Input behavior is unchanged.
+- Durable browser save logic is unchanged.
