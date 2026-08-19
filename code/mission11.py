@@ -9,6 +9,7 @@ from functions import animation_text_save
 from button import Button
 from async_menu import run_menu
 from utils import *
+from hint_ui import MissionHintAccess
 from simulation import (
     MISSION11_CHECK_VERSION,
     MISSION11_EXPECTED_DOMINANT_FLUX,
@@ -225,6 +226,7 @@ class Mission11_info:
         self.font = pygame.font.Font(get_resource_path('font/LycheeSoda.ttf'), 30)
         self.timer = Timer(200)
         self.mission11 = '11' in self.missions_activated
+        self.hint_access = MissionHintAccess(self.player, '11', self.missions_completed, mytheme)
 
         self.success = pygame.mixer.Sound(get_resource_path('audio/success_3.ogg'))
         self.success.set_volume(1.2)
@@ -260,7 +262,7 @@ class Mission11_info:
             'Experimental hint: keep the strain, objective and default carbon supply fixed. Introduce only the anaerobic constraint, then make sure every requested exchange flux is numerically present in the visible result.',
             wordwrap=True, align=pygame_menu.locals.ALIGN_LEFT, padding=(20, 20, 20, 20),
         )
-        hint2.add.button('Reveal technical hint', hint3, background_color=(255, 215, 0), font_color='black')
+        hint2.add.button('Reveal technical hint (Gold Key if locked)', self.hint_access.request, 3, hint2, hint3, background_color=(255, 215, 0), font_color='black')
         hint2.add.button('Back', pygame_menu.events.BACK, background_color=(70, 70, 70))
 
         hint1 = pygame_menu.Menu(height=720, center_content=False, onclose=pygame_menu.events.BACK, theme=mytheme, title='Mission 11 Hint 1', width=1280)
@@ -268,7 +270,7 @@ class Mission11_info:
             'Conceptual hint: the biomass objective tells you about the predicted growth optimum. Exchange fluxes answer a separate question: which compounds this particular solution predicts are secreted.',
             wordwrap=True, align=pygame_menu.locals.ALIGN_LEFT, padding=(20, 20, 20, 20),
         )
-        hint1.add.button('Reveal next hint', hint2, background_color=(255, 215, 0), font_color='black')
+        hint1.add.button('Reveal next hint (Silver Key if locked)', self.hint_access.request, 2, hint1, hint2, background_color=(255, 215, 0), font_color='black')
         hint1.add.button('Back', pygame_menu.events.BACK, background_color=(70, 70, 70))
 
         briefing = pygame_menu.Menu(height=720, center_content=False, onclose=pygame_menu.events.BACK, theme=mytheme, title='Mission 11 Briefing', width=1280)
@@ -282,7 +284,7 @@ class Mission11_info:
             """,
             max_char=-1, wordwrap=True, align=pygame_menu.locals.ALIGN_LEFT, padding=(20, 20, 20, 20),
         )
-        briefing.add.button('Optional Hints', hint1, background_color=(230, 230, 180), font_color='black')
+        briefing.add.button('Optional Hints (Bronze Key if locked)', self.hint_access.request, 1, briefing, hint1, background_color=(230, 230, 180), font_color='black')
         briefing.add.button('Back', pygame_menu.events.BACK, background_color=(70, 70, 70))
 
         panel_text = '   '.join(
@@ -301,7 +303,7 @@ class Mission11_info:
             padding=(5, 0, 0, 40),
         )
         menu.add.button('Mission 11 Briefing', briefing, font_color='black', background_color=(255, 215, 0))
-        menu.add.button('Optional Hints', hint1, font_color='black', background_color=(230, 230, 180))
+        menu.add.button('Optional Hints (Bronze Key if locked)', self.hint_access.request, 1, menu, hint1, font_color='black', background_color=(230, 230, 180))
         menu.add.vertical_margin(25)
 
         if self.mission11:

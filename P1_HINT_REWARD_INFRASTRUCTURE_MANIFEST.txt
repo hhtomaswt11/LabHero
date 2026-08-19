@@ -1,0 +1,57 @@
+P.1 — Keys + Hints + Score Infrastructure
+===========================================
+
+Scope
+-----
+Infrastructure only. No mission hint UI or mission content is integrated yet.
+
+Runtime changes
+---------------
+- code/hint_system.py (NEW)
+  - Initial keys: 15 bronze / 10 silver / 5 gold
+  - Per-mission hint level (0..3)
+  - Hint 1/2/3 preferred keys: bronze/silver/gold
+  - Stronger-key fallback only, with explicit confirmation requirement
+  - No weaker-key substitution
+  - Reopening an unlocked hint is free
+  - Completed missions cannot buy new hints
+  - Score mapping: 0/1/2/3 hints -> 5/3/2/1 points
+  - Mission scores freeze once finalized
+  - Staged rollout guard: no mission scores until its hint UI is explicitly integrated
+  - Pre-integration completions become legacy_unscored instead of false 5/5 scores
+  - Total score is derived, not stored
+  - Legacy completed missions can remain unscored
+
+- code/settings.py
+  - DEFAULT_INVENTORY_2 now includes a sixth reward_state field
+
+- code/player.py
+  - Owns one HintSystem
+  - Reads old/new save formats
+  - Pre-P.1 completed missions become legacy_unscored
+  - get_save_data() finalizes newly completed mission scores centrally
+  - get_save_data() returns the six-field save schema
+
+- code/save_load.py
+  - Normalizes to six-field save schema
+  - Migrates 4/5-field saves safely
+  - Preserves existing reward_state if an obsolete 4/5-field save caller survives
+  - Supports Web _MEMSTORE with the same schema
+
+Tests
+-----
+- tests/test_p1_hint_system.py (20 tests)
+- tests/test_p1_reward_persistence.py (10 tests)
+
+Explicitly not changed
+----------------------
+- mission01.py ... mission40.py
+- Hint menus/content
+- Inventory UI / E key
+- Map / collisions / physics
+- Simulation/scientific validators
+- Backend/deploy
+
+Next checkpoint
+---------------
+P.2A — Mission 2 pilot integration.

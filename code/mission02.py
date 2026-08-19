@@ -136,6 +136,198 @@ class Mission02_info:
         self.failed = pygame.mixer.Sound(failed_path)
         self.failed.set_volume(1.2)
 
+    @staticmethod
+    def _key_label(key_type):
+        return str(key_type).capitalize()
+
+    def _mission02_completed(self):
+        return '02' in self.missions_completed
+
+    def _save_reward_progress(self):
+        # HintSystem mutates the Player-owned reward state in place. Persist
+        # immediately so a purchased hint can never be charged twice after a
+        # reload/crash between the hint purchase and mission completion.
+        self.player.reward_state = self.player.hint_system.state
+        save_file(self.player.get_save_data())
+
+    def _open_hint_menu(self, source_menu, target_menu):
+        # pygame-menu 4.4.3 implements submenu buttons through Menu._open().
+        # We use the same transition here because access must be decided at
+        # click time before the protected submenu is opened.
+        source_menu._open(target_menu)
+
+    def _notify_hint_access_failure(self, status, hint_level):
+        if status == 'previous_hint_locked':
+            animation_text_save(
+                f'Unlock Mission 02 Hint {hint_level - 1} first.',
+                time=2600,
+            )
+            return
+
+        if status == 'mission_completed':
+            animation_text_save(
+                'Mission 02 is complete. New hints can no longer be unlocked.',
+                time=3000,
+            )
+            return
+
+        if status == 'no_key_available':
+            candidates = {
+                1: 'Bronze, Silver or Gold',
+                2: 'Silver or Gold',
+                3: 'Gold',
+            }[hint_level]
+            animation_text_save(
+                f'No {candidates} Key is available for Mission 02 Hint {hint_level}.',
+                time=3200,
+            )
+            return
+
+        animation_text_save('That hint cannot be unlocked right now.', time=2600)
+
+    def _unlock_hint_and_open(
+        self,
+        hint_level,
+        source_menu,
+        target_menu,
+        allow_fallback=False,
+    ):
+        result = self.player.hint_system.unlock_hint(
+            '02',
+            hint_level,
+            mission_completed=self._mission02_completed(),
+            allow_fallback=allow_fallback,
+        )
+
+        if result['status'] == 'already_unlocked':
+            self._open_hint_menu(source_menu, target_menu)
+            return result
+
+        if result['status'] != 'unlocked':
+            self._notify_hint_access_failure(result['status'], hint_level)
+            return result
+
+        self._save_reward_progress()
+        charged_key = self._key_label(result['charged_key'])
+        animation_text_save(
+            f'Mission 02 Hint {hint_level} unlocked with 1 {charged_key} Key.',
+            time=2600,
+        )
+        self._open_hint_menu(source_menu, target_menu)
+        return result
+
+    def _confirm_fallback_hint(
+        self,
+        hint_level,
+        source_menu,
+        confirmation_menu,
+        target_menu,
+    ):
+        result = self.player.hint_system.unlock_hint(
+            '02',
+            hint_level,
+            mission_completed=self._mission02_completed(),
+            allow_fallback=True,
+        )
+
+        if result['status'] == 'unlocked':
+            self._save_reward_progress()
+            charged_key = self._key_label(result['charged_key'])
+            animation_text_save(
+                f'Mission 02 Hint {hint_level} unlocked with 1 {charged_key} Key.',
+                time=2600,
+            )
+            # Remove the confirmation screen from history so Back from the hint
+            # returns to the screen where the player requested it.
+            confirmation_menu.reset(1)
+            self._open_hint_menu(source_menu, target_menu)
+            return result
+
+        if result['status'] == 'already_unlocked':
+            confirmation_menu.reset(1)
+            self._open_hint_menu(source_menu, target_menu)
+            return result
+
+        self._notify_hint_access_failure(result['status'], hint_level)
+        return result
+
+    def _build_fallback_confirmation(
+        self,
+        hint_level,
+        source_menu,
+        target_menu,
+        offer,
+    ):
+        required = self._key_label(offer['required_key'])
+        fallback = self._key_label(offer['key_to_spend'])
+        confirmation = pygame_menu.Menu(
+            height=720,
+            center_content=False,
+            onclose=pygame_menu.events.BACK,
+            theme=mytheme,
+            title=f'Mission 02 Hint {hint_level} - Key Substitution',
+            width=1280,
+        )
+        confirmation.add.vertical_margin(45)
+        confirmation.add.label(
+            f'No {required} Keys are available.\n\nUse 1 {fallback} Key instead?',
+            max_char=-1,
+            wordwrap=True,
+            align=pygame_menu.locals.ALIGN_CENTER,
+            padding=(25, 25, 25, 25),
+            background_color='white',
+            font_size=30,
+        )
+        confirmation.add.button(
+            f'Use 1 {fallback} Key',
+            self._confirm_fallback_hint,
+            hint_level,
+            source_menu,
+            confirmation,
+            target_menu,
+            background_color=(255, 215, 0, 255),
+            font_color='black',
+        )
+        confirmation.add.button(
+            'Cancel',
+            pygame_menu.events.BACK,
+            background_color=(70, 70, 70),
+        )
+        return confirmation
+
+    def _request_hint_access(self, hint_level, source_menu, target_menu):
+        offer = self.player.hint_system.get_unlock_offer(
+            '02',
+            hint_level,
+            mission_completed=self._mission02_completed(),
+        )
+        status = offer['status']
+
+        if status == 'already_unlocked':
+            self._open_hint_menu(source_menu, target_menu)
+            return offer
+
+        if status == 'ready':
+            return self._unlock_hint_and_open(
+                hint_level,
+                source_menu,
+                target_menu,
+                allow_fallback=False,
+            )
+
+        if status == 'confirmation_required':
+            confirmation = self._build_fallback_confirmation(
+                hint_level,
+                source_menu,
+                target_menu,
+                offer,
+            )
+            self._open_hint_menu(source_menu, confirmation)
+            return offer
+
+        self._notify_hint_access_failure(status, hint_level)
+        return offer
+
     async def setup(self):
         menu = pygame_menu.Menu(
             height=720,
@@ -208,7 +400,10 @@ class Mission02_info:
             padding=(20, 20, 20, 20),
         )
         hint_2.add.button(
-            'Reveal technical hint',
+            'Reveal technical hint (Gold Key if locked)',
+            self._request_hint_access,
+            3,
+            hint_2,
             hint_3,
             background_color=(255, 215, 0, 255),
             font_color='black',
@@ -233,7 +428,10 @@ class Mission02_info:
             padding=(20, 20, 20, 20),
         )
         hint_1.add.button(
-            'Reveal next hint',
+            'Reveal next hint (Silver Key if locked)',
+            self._request_hint_access,
+            2,
+            hint_1,
             hint_2,
             background_color=(255, 215, 0, 255),
             font_color='black',
@@ -282,7 +480,10 @@ class Mission02_info:
             margin=(0, 0),
         )
         menu_text.add.button(
-            'Optional Hints',
+            'Optional Hints (Bronze Key if locked)',
+            self._request_hint_access,
+            1,
+            menu_text,
             hint_1,
             background_color=(255, 215, 0, 255),
             font_color='black',
@@ -322,7 +523,10 @@ class Mission02_info:
             background_color=(255, 215, 0, 255),
         )
         menu.add.button(
-            'Optional Hints',
+            'Optional Hints (Bronze Key if locked)',
+            self._request_hint_access,
+            1,
+            menu,
             hint_1,
             font_color='black',
             background_color=(230, 230, 180),

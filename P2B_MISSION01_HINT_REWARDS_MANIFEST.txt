@@ -1,0 +1,20 @@
+P.2B — Mission 01 progressive hint/reward integration
+
+Runtime changes:
+- code/hint_system.py
+  - Mission 01 joins Mission 02 in TRACKED_HINT_MISSIONS.
+- code/mission01.py
+  - adds three progressive hint levels (Conceptual / Experimental / Technical)
+  - Hint 1 costs Bronze, Hint 2 Silver, Hint 3 Gold through the shared HintSystem
+  - stronger-key fallback requires explicit confirmation
+  - purchased hints persist immediately and reopen without a second charge
+  - completed Mission 01 cannot purchase new hints
+  - briefing/main description no longer reveal the paid technical steps for free
+  - activation, evidence validation, delivery and completion logic remain unchanged
+
+Test changes:
+- tests/test_p1_hint_system.py (rollout expectation updated for M01+M02)
+- tests/test_p2a_mission02_hint_rewards.py (P.2A preserved under expanded rollout)
+- tests/test_p2b_mission01_hint_rewards.py (new P.2B regression suite)
+
+No Mission 03–40 runtime files are modified by this checkpoint.

@@ -4,6 +4,7 @@ import pygame_menu
 from async_menu import run_menu
 from button import Button
 from functions import animation_text_save
+from hint_ui import MissionHintAccess
 from options_values import mytheme
 from save_load import clear_challenge_score, load_challenge_score, save_file
 from settings import *
@@ -122,6 +123,7 @@ class Mission06_info:
         self.display_surface = pygame.display.get_surface()
         self.timer = Timer(200)
         self.mission06 = '06' in self.missions_activated
+        self.hint_access = MissionHintAccess(self.player, '06', self.missions_completed, mytheme)
 
         success_path = get_resource_path('audio/success_3.ogg')
         self.success = pygame.mixer.Sound(success_path)
@@ -172,7 +174,7 @@ class Mission06_info:
             'Experimental hint: first record an all-genes-active reference. Then compare single knockouts with two-gene combinations and verify that the second change genuinely improves the balance index.',
             wordwrap=True, align=pygame_menu.locals.ALIGN_LEFT, padding=(20, 20, 20, 20),
         )
-        hint2.add.button('Reveal technical hint', hint3, background_color=(255, 215, 0), font_color='black')
+        hint2.add.button('Reveal technical hint (Gold Key if locked)', self.hint_access.request, 3, hint2, hint3, background_color=(255, 215, 0), font_color='black')
         hint2.add.button('Back', pygame_menu.events.BACK, background_color=(70, 70, 70))
 
         hint1 = pygame_menu.Menu(
@@ -183,7 +185,7 @@ class Mission06_info:
             'Conceptual hint: one knockout may create ethanol secretion while a second changes energy distribution, but every additional restriction can also reduce growth.',
             wordwrap=True, align=pygame_menu.locals.ALIGN_LEFT, padding=(20, 20, 20, 20),
         )
-        hint1.add.button('Reveal next hint', hint2, background_color=(255, 215, 0), font_color='black')
+        hint1.add.button('Reveal next hint (Silver Key if locked)', self.hint_access.request, 2, hint1, hint2, background_color=(255, 215, 0), font_color='black')
         hint1.add.button('Back', pygame_menu.events.BACK, background_color=(70, 70, 70))
 
         briefing = pygame_menu.Menu(
@@ -207,7 +209,7 @@ class Mission06_info:
             align=pygame_menu.locals.ALIGN_LEFT,
             padding=(20, 20, 20, 20),
         )
-        briefing.add.button('Optional Hints', hint1, background_color=(230, 230, 180), font_color='black')
+        briefing.add.button('Optional Hints (Bronze Key if locked)', self.hint_access.request, 1, briefing, hint1, background_color=(230, 230, 180), font_color='black')
         briefing.add.button('Back', pygame_menu.events.BACK, background_color=(70, 70, 70))
 
         candidate_text = '   '.join(
@@ -237,7 +239,7 @@ class Mission06_info:
             font_size=29,
         )
         menu.add.button('Mission 06 Briefing', briefing, font_color='black', background_color=(255, 215, 0))
-        menu.add.button('Optional Hints', hint1, font_color='black', background_color=(230, 230, 180))
+        menu.add.button('Optional Hints (Bronze Key if locked)', self.hint_access.request, 1, menu, hint1, font_color='black', background_color=(230, 230, 180))
         menu.add.vertical_margin(25)
 
         if self.mission06:

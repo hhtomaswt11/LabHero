@@ -9,6 +9,7 @@ from functions import animation_text_save
 from button import Button
 from async_menu import run_menu
 from utils import *
+from hint_ui import MissionHintAccess
 from simulation import (
     MISSION40_CHECK_VERSION,
     MISSION40_METHOD,
@@ -110,6 +111,7 @@ class Mission40_info:
         self.display_surface = pygame.display.get_surface()
         self.timer = Timer(200)
         self.mission40 = '40' in self.missions_activated
+        self.hint_access = MissionHintAccess(self.player, '40', self.missions_completed, mytheme)
         self.success = pygame.mixer.Sound(get_resource_path('audio/success_3.ogg'))
         self.success.set_volume(1.2)
         self.failed = pygame.mixer.Sound(get_resource_path('audio/failed.ogg'))
@@ -155,15 +157,37 @@ The glucose sweep must be identical between the two curves. Compare acetaldehyde
         )
         briefing.add.button('Back', pygame_menu.events.BACK, background_color=(70,70,70))
 
-        hint = pygame_menu.Menu(
+        hint3 = pygame_menu.Menu(
             height=720, center_content=False, onclose=pygame_menu.events.BACK,
-            theme=mytheme, title='Mission 40 Hint', width=1280,
+            theme=mytheme, title='Mission 40 Hint 3', width=1280,
         )
-        hint.add.label(
-            f'Compare rows horizontally between the two curves. A qualifying rescue row needs acetaldehyde uptake >= {MISSION40_MIN_ACETALDEHYDE_UPTAKE:.1f}, rescue growth >= {MISSION40_MIN_MATCHED_GROWTH_FOLD:.2f}x the matched no-rescue growth, and ethanol secretion >= {MISSION40_MIN_RESCUE_ETHANOL:.1f}. Not every glucose context needs to qualify.',
+        hint3.add.label(
+            f'Technical hint:\n\nCompare rows horizontally between the two curves. A qualifying rescue row needs acetaldehyde uptake >= {MISSION40_MIN_ACETALDEHYDE_UPTAKE:.1f}, rescue growth >= {MISSION40_MIN_MATCHED_GROWTH_FOLD:.2f}x the matched no-rescue growth, and ethanol secretion >= {MISSION40_MIN_RESCUE_ETHANOL:.1f}. Not every glucose context needs to qualify.',
             wordwrap=True, padding=(20,20,20,20), font_size=25,
         )
-        hint.add.button('Back', pygame_menu.events.BACK, background_color=(70,70,70))
+        hint3.add.button('Back', pygame_menu.events.BACK, background_color=(70,70,70))
+
+        hint2 = pygame_menu.Menu(
+            height=720, center_content=False, onclose=pygame_menu.events.BACK,
+            theme=mytheme, title='Mission 40 Hint 2', width=1280,
+        )
+        hint2.add.label(
+            'Experimental hint:\n\nPair the two curves row-by-row using the exact same glucose lower bound. For each pair, first confirm that the rescue row actually takes up acetaldehyde; then compare rescue growth with the matched no-rescue growth and inspect rescue ethanol secretion.',
+            wordwrap=True, padding=(20,20,20,20), font_size=26,
+        )
+        hint2.add.button('Reveal technical hint (Gold Key if locked)', self.hint_access.request, 3, hint2, hint3, background_color=(255,215,0), font_color='black')
+        hint2.add.button('Back', pygame_menu.events.BACK, background_color=(70,70,70))
+
+        hint1 = pygame_menu.Menu(
+            height=720, center_content=False, onclose=pygame_menu.events.BACK,
+            theme=mytheme, title='Mission 40 Hint 1', width=1280,
+        )
+        hint1.add.label(
+            'Conceptual hint:\n\nThis is a matched robustness test, not a search for the single best rescue row. Compare the rescue and no-rescue curves at the same glucose context so that acetaldehyde availability is the only intended difference between each pair.',
+            wordwrap=True, padding=(20,20,20,20), font_size=26,
+        )
+        hint1.add.button('Reveal next hint (Silver Key if locked)', self.hint_access.request, 2, hint1, hint2, background_color=(255,215,0), font_color='black')
+        hint1.add.button('Back', pygame_menu.events.BACK, background_color=(70,70,70))
 
         menu.add.label(
             'Mission 40: Final Rescue Robustness Certification',
@@ -174,7 +198,7 @@ The glucose sweep must be identical between the two curves. Compare acetaldehyde
             wordwrap=True, align=pygame_menu.locals.ALIGN_CENTER, font_size=28,
         )
         menu.add.button('Mission Briefing', briefing, background_color=(255,215,0), font_color='black')
-        menu.add.button('Optional Hint', hint, background_color=(230,230,180), font_color='black')
+        menu.add.button('Optional Hints (Bronze Key if locked)', self.hint_access.request, 1, menu, hint1, background_color=(230,230,180), font_color='black')
 
         report = load_mission40_final_certification()
         report_include_title = bool(

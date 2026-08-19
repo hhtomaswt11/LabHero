@@ -1,0 +1,436 @@
+"""Central key, hint and mission-score state for LabHero.
+
+This module deliberately has no pygame dependency.  Mission UIs should ask the
+HintSystem for permission to reveal a hint instead of modifying key counters
+directly.  The same state is serialized as the sixth field of the main save.
+"""
+
+from copy import deepcopy
+
+
+REWARD_STATE_VERSION = 1
+
+INITIAL_KEYS = {
+    'bronze': 15,
+    'silver': 10,
+    'gold': 5,
+}
+
+SCORE_BY_HINT_LEVEL = {
+    0: 5,
+    1: 3,
+    2: 2,
+    3: 1,
+}
+
+KEY_FOR_HINT_LEVEL = {
+    1: 'bronze',
+    2: 'silver',
+    3: 'gold',
+}
+
+# A stronger key may replace a weaker one, never the reverse.
+KEY_CANDIDATES_BY_HINT_LEVEL = {
+    1: ('bronze', 'silver', 'gold'),
+    2: ('silver', 'gold'),
+    3: ('gold',),
+}
+
+KEY_TYPES = tuple(INITIAL_KEYS)
+VALID_HINT_LEVELS = tuple(SCORE_BY_HINT_LEVEL)
+
+# All 40 mission UIs are now integrated with HintSystem. Historical saves
+# still keep any pre-integration completions in legacy_unscored_missions, while
+# new/current mission completions receive their frozen score from hint usage.
+TRACKED_HINT_MISSIONS = frozenset(f'{mission:02d}' for mission in range(1, 41))
+
+
+def normalize_mission_id(mission_id):
+    """Return the canonical mission id used by the existing save (01..40)."""
+    if isinstance(mission_id, bool):
+        raise ValueError('mission_id must identify a mission')
+
+    value = str(mission_id).strip()
+    if not value:
+        raise ValueError('mission_id must identify a mission')
+
+    try:
+        number = int(value)
+    except (TypeError, ValueError):
+        raise ValueError('mission_id must be a positive integer') from None
+
+    if number <= 0:
+        raise ValueError('mission_id must be a positive integer')
+
+    return f'{number:02d}' if number < 100 else str(number)
+
+
+def _safe_key_count(value, default):
+    if isinstance(value, bool):
+        return default
+    try:
+        count = int(value)
+    except (TypeError, ValueError):
+        return default
+    return max(0, count)
+
+
+def _safe_hint_level(value):
+    if isinstance(value, bool):
+        return None
+    try:
+        level = int(value)
+    except (TypeError, ValueError):
+        return None
+    return level if level in VALID_HINT_LEVELS else None
+
+
+def _safe_score(value):
+    if isinstance(value, bool):
+        return None
+    try:
+        score = int(value)
+    except (TypeError, ValueError):
+        return None
+    return score if score in set(SCORE_BY_HINT_LEVEL.values()) else None
+
+
+def _normalize_mission_mapping(raw_mapping, value_normalizer, omit_zero=False):
+    normalized = {}
+    if not isinstance(raw_mapping, dict):
+        return normalized
+
+    for raw_id, raw_value in raw_mapping.items():
+        try:
+            mission_id = normalize_mission_id(raw_id)
+        except ValueError:
+            continue
+        value = value_normalizer(raw_value)
+        if value is None or (omit_zero and value == 0):
+            continue
+        normalized[mission_id] = value
+    return normalized
+
+
+def _normalize_mission_list(raw_ids):
+    normalized = []
+    seen = set()
+    if not isinstance(raw_ids, (list, tuple, set)):
+        return normalized
+
+    for raw_id in raw_ids:
+        try:
+            mission_id = normalize_mission_id(raw_id)
+        except ValueError:
+            continue
+        if mission_id not in seen:
+            seen.add(mission_id)
+            normalized.append(mission_id)
+    return normalized
+
+
+def create_reward_state(legacy_completed=None):
+    """Create a fresh reward state.
+
+    ``legacy_completed`` is used only when migrating a save that predates the
+    reward system.  Those missions remain completed but are not awarded a score
+    that we cannot reconstruct faithfully.
+    """
+    return {
+        'version': REWARD_STATE_VERSION,
+        'keys': dict(INITIAL_KEYS),
+        'mission_hints': {},
+        'mission_scores': {},
+        'legacy_unscored_missions': _normalize_mission_list(legacy_completed or []),
+    }
+
+
+def normalize_reward_state(state, legacy_completed=None):
+    """Return a sanitized reward-state dictionary.
+
+    Missing/invalid states are treated as legacy saves.  Existing reward states
+    are repaired field-by-field without retroactively marking their completed
+    missions as legacy.
+    """
+    if not isinstance(state, dict):
+        return create_reward_state(legacy_completed=legacy_completed)
+
+    normalized = create_reward_state()
+
+    raw_keys = state.get('keys')
+    if isinstance(raw_keys, dict):
+        normalized['keys'] = {
+            key: _safe_key_count(raw_keys.get(key), INITIAL_KEYS[key])
+            for key in KEY_TYPES
+        }
+
+    normalized['mission_hints'] = _normalize_mission_mapping(
+        state.get('mission_hints'),
+        _safe_hint_level,
+        omit_zero=True,
+    )
+    normalized['mission_scores'] = _normalize_mission_mapping(
+        state.get('mission_scores'),
+        _safe_score,
+    )
+    normalized['legacy_unscored_missions'] = _normalize_mission_list(
+        state.get('legacy_unscored_missions', [])
+    )
+
+    # A scored mission is no longer "legacy unscored", even if a malformed save
+    # listed it in both places.
+    scored = set(normalized['mission_scores'])
+    normalized['legacy_unscored_missions'] = [
+        mission_id
+        for mission_id in normalized['legacy_unscored_missions']
+        if mission_id not in scored
+    ]
+
+    return normalized
+
+
+class HintSystem:
+    """Own the mutable key/hint/score state for one player save."""
+
+    def __init__(self, state=None, legacy_completed=None):
+        self.state = normalize_reward_state(state, legacy_completed=legacy_completed)
+
+    def to_dict(self):
+        return deepcopy(self.state)
+
+    def get_key_count(self, key_type):
+        if key_type not in KEY_TYPES:
+            raise ValueError(f'unknown key type: {key_type}')
+        return self.state['keys'][key_type]
+
+    def get_hint_level(self, mission_id):
+        mission_id = normalize_mission_id(mission_id)
+        return self.state['mission_hints'].get(mission_id, 0)
+
+    def get_required_key(self, hint_level):
+        if hint_level not in KEY_FOR_HINT_LEVEL:
+            raise ValueError('hint_level must be 1, 2 or 3')
+        return KEY_FOR_HINT_LEVEL[hint_level]
+
+    def find_fallback_key(self, hint_level):
+        """Return a stronger available substitute, or None.
+
+        This never returns the preferred key itself and never allows weaker
+        keys to substitute for stronger ones.
+        """
+        required = self.get_required_key(hint_level)
+        candidates = KEY_CANDIDATES_BY_HINT_LEVEL[hint_level]
+        required_index = candidates.index(required)
+        for key_type in candidates[required_index + 1:]:
+            if self.get_key_count(key_type) > 0:
+                return key_type
+        return None
+
+    def get_unlock_offer(self, mission_id, hint_level, mission_completed=False):
+        """Describe what would happen without mutating state.
+
+        ``confirmation_required`` is returned whenever a stronger fallback key
+        would be needed.  UI code can show that exact key to the player and call
+        ``unlock_hint(..., allow_fallback=True)`` only after confirmation.
+        """
+        mission_id = normalize_mission_id(mission_id)
+        if hint_level not in KEY_FOR_HINT_LEVEL:
+            raise ValueError('hint_level must be 1, 2 or 3')
+
+        current_level = self.get_hint_level(mission_id)
+        required_key = self.get_required_key(hint_level)
+
+        base = {
+            'mission_id': mission_id,
+            'hint_level': hint_level,
+            'current_level': current_level,
+            'required_key': required_key,
+            'key_to_spend': None,
+            'fallback': False,
+        }
+
+        if hint_level <= current_level:
+            return {**base, 'status': 'already_unlocked'}
+
+        if mission_completed:
+            return {**base, 'status': 'mission_completed'}
+
+        if hint_level != current_level + 1:
+            return {**base, 'status': 'previous_hint_locked'}
+
+        if self.get_key_count(required_key) > 0:
+            return {
+                **base,
+                'status': 'ready',
+                'key_to_spend': required_key,
+            }
+
+        fallback_key = self.find_fallback_key(hint_level)
+        if fallback_key is not None:
+            return {
+                **base,
+                'status': 'confirmation_required',
+                'key_to_spend': fallback_key,
+                'fallback': True,
+            }
+
+        return {**base, 'status': 'no_key_available'}
+
+    def can_unlock_hint(
+        self,
+        mission_id,
+        hint_level,
+        mission_completed=False,
+        allow_fallback=False,
+    ):
+        offer = self.get_unlock_offer(
+            mission_id,
+            hint_level,
+            mission_completed=mission_completed,
+        )
+        if offer['status'] in ('ready', 'already_unlocked'):
+            return True
+        return allow_fallback and offer['status'] == 'confirmation_required'
+
+    def unlock_hint(
+        self,
+        mission_id,
+        hint_level,
+        mission_completed=False,
+        allow_fallback=False,
+    ):
+        """Unlock one sequential hint and charge at most one key.
+
+        Reopening an already unlocked hint is free.  Fallback consumption is
+        impossible unless the caller explicitly passes ``allow_fallback=True``.
+        """
+        offer = self.get_unlock_offer(
+            mission_id,
+            hint_level,
+            mission_completed=mission_completed,
+        )
+        status = offer['status']
+
+        if status == 'already_unlocked':
+            return {
+                **offer,
+                'charged_key': None,
+                'new_level': offer['current_level'],
+            }
+
+        if status == 'confirmation_required' and not allow_fallback:
+            return {
+                **offer,
+                'charged_key': None,
+                'new_level': offer['current_level'],
+            }
+
+        if status not in ('ready', 'confirmation_required'):
+            return {
+                **offer,
+                'charged_key': None,
+                'new_level': offer['current_level'],
+            }
+
+        key_to_spend = offer['key_to_spend']
+        if self.state['keys'][key_to_spend] <= 0:
+            # Defensive re-check in case state was modified between offer and
+            # confirmation.
+            refreshed = self.get_unlock_offer(
+                mission_id,
+                hint_level,
+                mission_completed=mission_completed,
+            )
+            return {
+                **refreshed,
+                'charged_key': None,
+                'new_level': refreshed['current_level'],
+            }
+
+        self.state['keys'][key_to_spend] -= 1
+        self.state['mission_hints'][offer['mission_id']] = hint_level
+
+        return {
+            **offer,
+            'status': 'unlocked',
+            'charged_key': key_to_spend,
+            'new_level': hint_level,
+        }
+
+    def score_for_hint_level(self, hint_level):
+        if hint_level not in SCORE_BY_HINT_LEVEL:
+            raise ValueError('hint_level must be between 0 and 3')
+        return SCORE_BY_HINT_LEVEL[hint_level]
+
+    def finalize_mission_score(self, mission_id):
+        """Freeze one mission score and return it, or None for legacy missions."""
+        mission_id = normalize_mission_id(mission_id)
+
+        if mission_id in self.state['mission_scores']:
+            return self.state['mission_scores'][mission_id]
+
+        if mission_id in self.state['legacy_unscored_missions']:
+            return None
+
+        score = self.score_for_hint_level(self.get_hint_level(mission_id))
+        self.state['mission_scores'][mission_id] = score
+        return score
+
+    def finalize_completed_missions(self, completed_missions):
+        """Freeze scores for all completed non-legacy missions."""
+        finalized = {}
+        for raw_id in completed_missions or []:
+            mission_id = normalize_mission_id(raw_id)
+            score = self.finalize_mission_score(mission_id)
+            if score is not None:
+                finalized[mission_id] = score
+        return finalized
+
+    def sync_completed_missions(self, completed_missions, tracked_missions=None):
+        """Synchronize completion with the staged reward-system rollout.
+
+        Only missions whose hint UI is already integrated may receive a score.
+        Any mission completed before its integration is marked legacy-unscored,
+        because its historic hint usage cannot be reconstructed faithfully.
+
+        ``tracked_missions`` is injectable for tests and staged rollouts; runtime
+        defaults to TRACKED_HINT_MISSIONS.
+        """
+        tracked_raw = TRACKED_HINT_MISSIONS if tracked_missions is None else tracked_missions
+        tracked = {normalize_mission_id(mission_id) for mission_id in tracked_raw}
+        legacy = self.state['legacy_unscored_missions']
+        legacy_set = set(legacy)
+        finalized = {}
+
+        for raw_id in completed_missions or []:
+            mission_id = normalize_mission_id(raw_id)
+            if mission_id in tracked:
+                score = self.finalize_mission_score(mission_id)
+                if score is not None:
+                    finalized[mission_id] = score
+                continue
+
+            if (
+                mission_id not in self.state['mission_scores']
+                and mission_id not in legacy_set
+            ):
+                legacy.append(mission_id)
+                legacy_set.add(mission_id)
+
+        return finalized
+
+    def get_mission_score(self, mission_id):
+        mission_id = normalize_mission_id(mission_id)
+        return self.state['mission_scores'].get(mission_id)
+
+    def get_total_score(self):
+        return sum(self.state['mission_scores'].values())
+
+    def get_max_score(self, total_missions=40):
+        try:
+            total_missions = int(total_missions)
+        except (TypeError, ValueError):
+            raise ValueError('total_missions must be a non-negative integer') from None
+        if total_missions < 0:
+            raise ValueError('total_missions must be a non-negative integer')
+        return total_missions * SCORE_BY_HINT_LEVEL[0]

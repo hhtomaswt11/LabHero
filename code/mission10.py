@@ -3,6 +3,7 @@ import pygame_menu
 
 from async_menu import run_menu
 from functions import animation_text_save
+from hint_ui import MissionHintAccess
 from options_values import mytheme
 from save_load import clear_mission10_robust_design_check, load_mission10_robust_design_check, save_file
 from settings import *
@@ -36,6 +37,7 @@ class Mission10_info:
         self.display_surface = pygame.display.get_surface()
         self.timer = Timer(200)
         self.mission10 = '10' in self.missions_activated
+        self.hint_access = MissionHintAccess(self.player, '10', self.missions_completed, mytheme)
 
         self.success = pygame.mixer.Sound(get_resource_path('audio/success_3.ogg'))
         self.success.set_volume(1.2)
@@ -71,7 +73,7 @@ class Mission10_info:
             'Experimental hint: keep the objective, environment and tracked fluxes identical. Reset all genes between runs, then disable exactly two highlighted candidates so each pair is isolated.',
             wordwrap=True, align=pygame_menu.locals.ALIGN_LEFT, padding=(20, 20, 20, 20),
         )
-        hint2.add.button('Reveal technical hint', hint3, background_color=(255, 215, 0), font_color='black')
+        hint2.add.button('Reveal technical hint (Gold Key if locked)', self.hint_access.request, 3, hint2, hint3, background_color=(255, 215, 0), font_color='black')
         hint2.add.button('Back', pygame_menu.events.BACK, background_color=(70, 70, 70))
 
         hint1 = pygame_menu.Menu(height=720, center_content=False, onclose=pygame_menu.events.BACK, theme=mytheme, title='Mission 10 Hint 1', width=1280)
@@ -79,7 +81,7 @@ class Mission10_info:
             'Conceptual hint: in an OR-type GPR, eliminating one gene may leave the reaction functional through an alternative gene. A carefully chosen pair can reveal a phenotype that neither single knockout would produce.',
             wordwrap=True, align=pygame_menu.locals.ALIGN_LEFT, padding=(20, 20, 20, 20),
         )
-        hint1.add.button('Reveal next hint', hint2, background_color=(255, 215, 0), font_color='black')
+        hint1.add.button('Reveal next hint (Silver Key if locked)', self.hint_access.request, 2, hint1, hint2, background_color=(255, 215, 0), font_color='black')
         hint1.add.button('Back', pygame_menu.events.BACK, background_color=(70, 70, 70))
 
         briefing = pygame_menu.Menu(height=720, center_content=False, onclose=pygame_menu.events.BACK, theme=mytheme, title='Mission 10 Briefing', width=1280)
@@ -91,7 +93,7 @@ class Mission10_info:
             """,
             max_char=-1, wordwrap=True, align=pygame_menu.locals.ALIGN_LEFT, padding=(20, 20, 20, 20),
         )
-        briefing.add.button('Optional Hints', hint1, background_color=(230, 230, 180), font_color='black')
+        briefing.add.button('Optional Hints (Bronze Key if locked)', self.hint_access.request, 1, briefing, hint1, background_color=(230, 230, 180), font_color='black')
         briefing.add.button('Back', pygame_menu.events.BACK, background_color=(70, 70, 70))
 
         candidate_text = '   '.join(
@@ -113,7 +115,7 @@ class Mission10_info:
             padding=(5, 0, 0, 40),
         )
         menu.add.button('Mission 10 Briefing', briefing, font_color='black', background_color=(255, 215, 0))
-        menu.add.button('Optional Hints', hint1, font_color='black', background_color=(230, 230, 180))
+        menu.add.button('Optional Hints (Bronze Key if locked)', self.hint_access.request, 1, menu, hint1, font_color='black', background_color=(230, 230, 180))
         menu.add.vertical_margin(25)
 
         if self.mission10:

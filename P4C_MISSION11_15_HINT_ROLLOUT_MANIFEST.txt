@@ -1,0 +1,29 @@
+P.4C — Mission 11–15 hint/key/score rollout
+
+Scope
+- Integrate Missions 11, 12, 13, 14 and 15 with the shared MissionHintAccess UI gate.
+- Extend TRACKED_HINT_MISSIONS from 01–10 to 01–15.
+- Preserve all existing Conceptual / Experimental / Technical hint content.
+- Preserve all scientific mission logic, validators, evidence rules and completion behavior.
+
+Runtime files changed
+- code/hint_system.py
+- code/mission11.py
+- code/mission12.py
+- code/mission13.py
+- code/mission14.py
+- code/mission15.py
+
+Tests updated for the new rollout boundary
+- tests/test_p1_hint_system.py
+- tests/test_p2a_mission02_hint_rewards.py
+- tests/test_p2b_mission01_hint_rewards.py
+- tests/test_p4a_mission03_05_hint_rollout.py
+- tests/test_p4b_mission06_10_hint_rollout.py
+
+Test added
+- tests/test_p4c_mission11_15_hint_rollout.py
+
+Rollout state after P.4C
+- Missions 01–15: tracked for hint usage and score.
+- Mission 16 onward: still untracked and therefore legacy-unscored if completed before integration.

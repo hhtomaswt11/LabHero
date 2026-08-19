@@ -6,6 +6,7 @@ from save_load import *
 from timers import Timer
 from options_values import *
 from functions import animation_text_save
+from hint_ui import MissionHintAccess
 from button import Button
 from async_menu import run_menu
 from mission08 import Mission08_info
@@ -170,6 +171,7 @@ class Mission07_info:
         self.display_surface = pygame.display.get_surface()
         self.timer = Timer(200)
         self.mission07 = '07' in self.missions_activated
+        self.hint_access = MissionHintAccess(self.player, '07', self.missions_completed, mytheme)
 
         success_path = get_resource_path('audio/success_3.ogg')
         self.success = pygame.mixer.Sound(success_path)
@@ -220,7 +222,7 @@ class Mission07_info:
             'Experimental hint: record one run that asks the model to maximise growth and another that asks it to maximise ethanol. Method, genes, medium and tracked fluxes must remain identical.',
             wordwrap=True, align=pygame_menu.locals.ALIGN_LEFT, padding=(20, 20, 20, 20),
         )
-        hint2.add.button('Reveal technical hint', hint3, background_color=(255, 215, 0), font_color='black')
+        hint2.add.button('Reveal technical hint (Gold Key if locked)', self.hint_access.request, 3, hint2, hint3, background_color=(255, 215, 0), font_color='black')
         hint2.add.button('Back', pygame_menu.events.BACK, background_color=(70, 70, 70))
 
         hint1 = pygame_menu.Menu(
@@ -231,7 +233,7 @@ class Mission07_info:
             'Conceptual hint: an objective function is a modelling assumption that selects which feasible solution the algorithm seeks. It is not itself a biological intervention.',
             wordwrap=True, align=pygame_menu.locals.ALIGN_LEFT, padding=(20, 20, 20, 20),
         )
-        hint1.add.button('Reveal next hint', hint2, background_color=(255, 215, 0), font_color='black')
+        hint1.add.button('Reveal next hint (Silver Key if locked)', self.hint_access.request, 2, hint1, hint2, background_color=(255, 215, 0), font_color='black')
         hint1.add.button('Back', pygame_menu.events.BACK, background_color=(70, 70, 70))
 
         briefing = pygame_menu.Menu(
@@ -255,7 +257,7 @@ class Mission07_info:
             align=pygame_menu.locals.ALIGN_LEFT,
             padding=(20, 20, 20, 20),
         )
-        briefing.add.button('Optional Hints', hint1, background_color=(230, 230, 180), font_color='black')
+        briefing.add.button('Optional Hints (Bronze Key if locked)', self.hint_access.request, 1, briefing, hint1, background_color=(230, 230, 180), font_color='black')
         briefing.add.button('Back', pygame_menu.events.BACK, background_color=(70, 70, 70))
 
         menu.add.vertical_margin(20)

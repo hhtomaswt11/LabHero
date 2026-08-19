@@ -202,8 +202,8 @@ class Mission38RegressionTests(unittest.TestCase):
         source = (ROOT / 'code' / 'mission38.py').read_text()
         briefing_start = source.index('briefing = pygame_menu.Menu')
         briefing_end = source.index("briefing.add.button('Back'", briefing_start)
-        hint_start = source.index('hint = pygame_menu.Menu', briefing_end)
-        hint_end = source.index("hint.add.button('Back'", hint_start)
+        hint_start = source.index('hint3 = pygame_menu.Menu', briefing_end)
+        hint_end = source.index("hint1.add.button('Back'", hint_start)
         self.assertNotIn("background_color='white'", source[briefing_start:briefing_end])
         self.assertNotIn("background_color='white'", source[hint_start:hint_end])
 

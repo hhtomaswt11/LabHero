@@ -1,0 +1,11 @@
+P.4D — Mission 16–30 hint/key/score rollout.
+
+Runtime changes:
+- code/hint_system.py: TRACKED_HINT_MISSIONS expanded from 01–15 to 01–30.
+- code/mission16.py through code/mission30.py: existing three hint menus are gated through MissionHintAccess.
+
+No hint text, scientific validator, mission activation, evidence criteria, solver configuration, thresholds or completion logic is intentionally changed.
+
+Tests:
+- tests/test_p4d_mission16_30_hint_rollout.py
+- prior rollout-boundary tests updated so Mission 31 is the first untracked mission.

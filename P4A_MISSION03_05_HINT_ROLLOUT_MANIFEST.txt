@@ -1,0 +1,30 @@
+P.4A — Remove C inventory shortcut + expand key/hint/score rollout to Missions 03–05.
+
+Runtime changes:
+- code/hint_system.py
+  - TRACKED_HINT_MISSIONS now contains 01–05.
+- code/hint_ui.py (new)
+  - Reusable pygame-menu access gate for mission hints.
+  - Preferred-key charging, explicit stronger-key fallback confirmation,
+    immediate persistence, free review of already unlocked hints, and
+    post-completion purchase blocking.
+- code/mission03.py
+- code/mission04.py
+- code/mission05.py
+  - Existing Conceptual / Experimental / Technical hint content preserved.
+  - Hint menu entry points now route through MissionHintAccess.
+- code/skin_menu.py
+- code/level.py
+  - pygame.K_c removed completely from inventory open/close logic.
+  - E is the only inventory shortcut.
+
+Tests updated/added:
+- tests/test_p1_hint_system.py
+- tests/test_p2a_mission02_hint_rewards.py
+- tests/test_p2b_mission01_hint_rewards.py
+- tests/test_p3_inventory_menu.py
+- tests/test_p4a_mission03_05_hint_rollout.py (new)
+
+Rollout state after P.4A:
+- M01–M05: tracked by key/hint/score system.
+- M06–M40: not yet tracked.

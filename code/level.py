@@ -465,11 +465,11 @@ class Level:
 
 	def handle_skin_menu_shortcut(self):
 		keys = pygame.key.get_pressed()
-		c_pressed = keys[pygame.K_c]
-		if c_pressed and not self.skin_open_key_locked and not self.any_modal_active():
+		e_pressed = keys[pygame.K_e]
+		if e_pressed and not self.skin_open_key_locked and not self.any_modal_active() and not self.skin_menu_active:
 			self.skin_menu.open()
 			self.skin_menu_active = True
-		self.skin_open_key_locked = c_pressed
+		self.skin_open_key_locked = e_pressed
 
 	def plant_collision(self):
 		if self.soil_layer.plant_sprites: # se houver plantas

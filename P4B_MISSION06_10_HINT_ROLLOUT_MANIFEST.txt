@@ -1,0 +1,23 @@
+P.4B — Hint/key/score rollout for Missions 06–10.
+
+Runtime changes:
+- code/hint_system.py
+- code/mission06.py
+- code/mission07.py
+- code/mission08.py
+- code/mission09.py
+- code/mission10.py
+
+Test updates/additions:
+- tests/test_p1_hint_system.py
+- tests/test_p2a_mission02_hint_rewards.py
+- tests/test_p2b_mission01_hint_rewards.py
+- tests/test_p4a_mission03_05_hint_rollout.py
+- tests/test_p4b_mission06_10_hint_rollout.py
+
+Behavior:
+- Missions 01–10 are now tracked by the central HintSystem.
+- Mission 06–10 Hint 1 costs Bronze, Hint 2 Silver, Hint 3 Gold.
+- Stronger-key fallback remains confirmation-only via MissionHintAccess.
+- Existing hint text and scientific mission logic are unchanged.
+- Mission 11 is the first currently untracked mission.

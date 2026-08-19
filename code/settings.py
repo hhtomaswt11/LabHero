@@ -1,5 +1,6 @@
 from pygame import Vector2
 from utils import *
+from hint_system import create_reward_state
 
 # screen
 SCREEN_WIDTH = 1280
@@ -84,5 +85,6 @@ DEFAULT_INVENTORY_2 = [
     [], #'List of Results'
     [], #'List of activated missions'
     [], #'List of completed missions'
-    DEFAULT_PLAYER_STATE #'Player position/orientation/scene'
+    DEFAULT_PLAYER_STATE, #'Player position/orientation/scene'
+    create_reward_state() #'Keys / hints / mission scores'
     ]

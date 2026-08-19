@@ -9,6 +9,7 @@ from functions import animation_text_save
 from button import Button
 from async_menu import run_menu
 from utils import *
+from hint_ui import MissionHintAccess
 from simulation import (
     MISSION36_CHECK_VERSION,
     MISSION36_METHOD,
@@ -106,6 +107,7 @@ class Mission36_info:
         self.display_surface = pygame.display.get_surface()
         self.timer = Timer(200)
         self.mission36 = '36' in self.missions_activated
+        self.hint_access = MissionHintAccess(self.player, '36', self.missions_completed, mytheme)
         self.success = pygame.mixer.Sound(get_resource_path('audio/success_3.ogg'))
         self.success.set_volume(1.2)
         self.failed = pygame.mixer.Sound(get_resource_path('audio/failed.ogg'))
@@ -128,17 +130,42 @@ class Mission36_info:
         )
         briefing.add.button('Back', pygame_menu.events.BACK, background_color=(70,70,70))
 
-        hint = pygame_menu.Menu(height=720, center_content=False, onclose=pygame_menu.events.BACK, theme=mytheme, title='Mission 36 Hint', width=1280)
-        hint.add.label(
-            'A configured bound is not automatically active. Compare the realised O2 uptake in each row with the fixed O2 uptake capacity, then inspect when ethanol changes from zero to positive.',
+        hint3 = pygame_menu.Menu(
+            height=720, center_content=False, onclose=pygame_menu.events.BACK,
+            theme=mytheme, title='Mission 36 Hint 3', width=1280,
+        )
+        hint3.add.label(
+            "Technical hint:\n\nRead the sweep rows in tested order. The qualifying row is the first one where realised O2 uptake reaches the displayed oxygen-capacity limit and ethanol secretion is positive at that same glucose setting. Report that row's glucose lower bound, not the oxygen value or the ethanol flux.",
+            wordwrap=True, padding=(20,20,20,20), font_size=25,
+        )
+        hint3.add.button('Back', pygame_menu.events.BACK, background_color=(70,70,70))
+
+        hint2 = pygame_menu.Menu(
+            height=720, center_content=False, onclose=pygame_menu.events.BACK,
+            theme=mytheme, title='Mission 36 Hint 2', width=1280,
+        )
+        hint2.add.label(
+            'Experimental hint:\n\nA configured bound is not automatically active. Compare the realised O2 uptake in each row with the fixed O2 uptake capacity, then inspect when ethanol changes from zero to positive.',
             wordwrap=True, padding=(20,20,20,20), font_size=26,
         )
-        hint.add.button('Back', pygame_menu.events.BACK, background_color=(70,70,70))
+        hint2.add.button('Reveal technical hint (Gold Key if locked)', self.hint_access.request, 3, hint2, hint3, background_color=(255,215,0), font_color='black')
+        hint2.add.button('Back', pygame_menu.events.BACK, background_color=(70,70,70))
+
+        hint1 = pygame_menu.Menu(
+            height=720, center_content=False, onclose=pygame_menu.events.BACK,
+            theme=mytheme, title='Mission 36 Hint 1', width=1280,
+        )
+        hint1.add.label(
+            'Conceptual hint:\n\nAs glucose availability rises while oxygen capacity stays fixed, respiration cannot scale indefinitely. Look for the transition from spare oxygen capacity to oxygen limitation, and ask whether ethanol appears at that same transition.',
+            wordwrap=True, padding=(20,20,20,20), font_size=26,
+        )
+        hint1.add.button('Reveal next hint (Silver Key if locked)', self.hint_access.request, 2, hint1, hint2, background_color=(255,215,0), font_color='black')
+        hint1.add.button('Back', pygame_menu.events.BACK, background_color=(70,70,70))
 
         menu.add.label('Mission 36: Oxygen-Capped Fermentation Onset', align=pygame_menu.locals.ALIGN_CENTER, font_size=34)
         menu.add.label('Transfer your constraint-based reasoning to the larger yeast model.', wordwrap=True, align=pygame_menu.locals.ALIGN_CENTER, font_size=28)
         menu.add.button('Mission Briefing', briefing, background_color=(255,215,0), font_color='black')
-        menu.add.button('Optional Hint', hint, background_color=(230,230,180), font_color='black')
+        menu.add.button('Optional Hints (Bronze Key if locked)', self.hint_access.request, 1, menu, hint1, background_color=(230,230,180), font_color='black')
         report = load_mission36_fermentation_onset()
         # Keep the landing/activation screen compact because the mission title is
         # already displayed prominently above.  Once Mission 36 is active, the

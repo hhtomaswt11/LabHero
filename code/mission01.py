@@ -178,6 +178,196 @@ class Mission_info:
         self.failed.set_volume(1.2)
 
 
+    @staticmethod
+    def _key_label(key_type):
+        return str(key_type).capitalize()
+
+    def _mission01_completed(self):
+        return '01' in self.missions_completed
+
+    def _save_reward_progress(self):
+        # HintSystem mutates the Player-owned reward state in place. Persist
+        # immediately so a purchased hint can never be charged twice after a
+        # reload/crash between the hint purchase and mission completion.
+        self.player.reward_state = self.player.hint_system.state
+        save_file(self.player.get_save_data())
+
+    def _open_hint_menu(self, source_menu, target_menu):
+        # pygame-menu 4.4.3 implements submenu buttons through Menu._open().
+        # Access is decided at click time before the protected submenu opens.
+        source_menu._open(target_menu)
+
+    def _notify_hint_access_failure(self, status, hint_level):
+        if status == 'previous_hint_locked':
+            animation_text_save(
+                f'Unlock Mission 01 Hint {hint_level - 1} first.',
+                time=2600,
+            )
+            return
+
+        if status == 'mission_completed':
+            animation_text_save(
+                'Mission 01 is complete. New hints can no longer be unlocked.',
+                time=3000,
+            )
+            return
+
+        if status == 'no_key_available':
+            candidates = {
+                1: 'Bronze, Silver or Gold',
+                2: 'Silver or Gold',
+                3: 'Gold',
+            }[hint_level]
+            animation_text_save(
+                f'No {candidates} Key is available for Mission 01 Hint {hint_level}.',
+                time=3200,
+            )
+            return
+
+        animation_text_save('That hint cannot be unlocked right now.', time=2600)
+
+    def _unlock_hint_and_open(
+        self,
+        hint_level,
+        source_menu,
+        target_menu,
+        allow_fallback=False,
+    ):
+        result = self.player.hint_system.unlock_hint(
+            '01',
+            hint_level,
+            mission_completed=self._mission01_completed(),
+            allow_fallback=allow_fallback,
+        )
+
+        if result['status'] == 'already_unlocked':
+            self._open_hint_menu(source_menu, target_menu)
+            return result
+
+        if result['status'] != 'unlocked':
+            self._notify_hint_access_failure(result['status'], hint_level)
+            return result
+
+        self._save_reward_progress()
+        charged_key = self._key_label(result['charged_key'])
+        animation_text_save(
+            f'Mission 01 Hint {hint_level} unlocked with 1 {charged_key} Key.',
+            time=2600,
+        )
+        self._open_hint_menu(source_menu, target_menu)
+        return result
+
+    def _confirm_fallback_hint(
+        self,
+        hint_level,
+        source_menu,
+        confirmation_menu,
+        target_menu,
+    ):
+        result = self.player.hint_system.unlock_hint(
+            '01',
+            hint_level,
+            mission_completed=self._mission01_completed(),
+            allow_fallback=True,
+        )
+
+        if result['status'] == 'unlocked':
+            self._save_reward_progress()
+            charged_key = self._key_label(result['charged_key'])
+            animation_text_save(
+                f'Mission 01 Hint {hint_level} unlocked with 1 {charged_key} Key.',
+                time=2600,
+            )
+            confirmation_menu.reset(1)
+            self._open_hint_menu(source_menu, target_menu)
+            return result
+
+        if result['status'] == 'already_unlocked':
+            confirmation_menu.reset(1)
+            self._open_hint_menu(source_menu, target_menu)
+            return result
+
+        self._notify_hint_access_failure(result['status'], hint_level)
+        return result
+
+    def _build_fallback_confirmation(
+        self,
+        hint_level,
+        source_menu,
+        target_menu,
+        offer,
+    ):
+        required = self._key_label(offer['required_key'])
+        fallback = self._key_label(offer['key_to_spend'])
+        confirmation = pygame_menu.Menu(
+            height=720,
+            center_content=False,
+            onclose=pygame_menu.events.BACK,
+            theme=mytheme,
+            title=f'Mission 01 Hint {hint_level} - Key Substitution',
+            width=1280,
+        )
+        confirmation.add.vertical_margin(45)
+        confirmation.add.label(
+            f'No {required} Keys are available.\n\nUse 1 {fallback} Key instead?',
+            max_char=-1,
+            wordwrap=True,
+            align=pygame_menu.locals.ALIGN_CENTER,
+            padding=(25, 25, 25, 25),
+            background_color='white',
+            font_size=30,
+        )
+        confirmation.add.button(
+            f'Use 1 {fallback} Key',
+            self._confirm_fallback_hint,
+            hint_level,
+            source_menu,
+            confirmation,
+            target_menu,
+            background_color=(255, 215, 0, 255),
+            font_color='black',
+        )
+        confirmation.add.button(
+            'Cancel',
+            pygame_menu.events.BACK,
+            background_color=(70, 70, 70),
+        )
+        return confirmation
+
+    def _request_hint_access(self, hint_level, source_menu, target_menu):
+        offer = self.player.hint_system.get_unlock_offer(
+            '01',
+            hint_level,
+            mission_completed=self._mission01_completed(),
+        )
+        status = offer['status']
+
+        if status == 'already_unlocked':
+            self._open_hint_menu(source_menu, target_menu)
+            return offer
+
+        if status == 'ready':
+            return self._unlock_hint_and_open(
+                hint_level,
+                source_menu,
+                target_menu,
+                allow_fallback=False,
+            )
+
+        if status == 'confirmation_required':
+            confirmation = self._build_fallback_confirmation(
+                hint_level,
+                source_menu,
+                target_menu,
+                offer,
+            )
+            self._open_hint_menu(source_menu, confirmation)
+            return offer
+
+        self._notify_hint_access_failure(status, hint_level)
+        return offer
+
+
     async def setup(self):
 
         menu = pygame_menu.Menu(
@@ -190,52 +380,158 @@ class Mission_info:
 
         menu_text = pygame_menu.Menu(
             height=720,
+            center_content=False,
             onclose=self.toggle_menu,
             theme=mytheme,
             title='Mission 01 Briefing',
-            width=1280
+            width=1280,
         )
 
+        hint_3 = pygame_menu.Menu(
+            height=720,
+            center_content=False,
+            onclose=pygame_menu.events.BACK,
+            theme=mytheme,
+            title='Mission 01 Hint 3',
+            width=1280,
+        )
+        hint_3.add.label(
+            """
+            Technical hint: use FBA with the biomass objective and no gene knockouts. Run the unchanged default environment first as the aerobic reference.
+
+            For the second run, set only the lower bound of EX_o2_e to closed (0). In Compare Runs and the Exchange Flux Report, confirm that oxygen uptake is zero, growth remains positive and the anaerobic growth rate is lower than the aerobic baseline. Remember that uptake is displayed as a positive magnitude even though its raw exchange flux is negative during consumption.
+            """,
+            max_char=-1,
+            wordwrap=True,
+            align=pygame_menu.locals.ALIGN_LEFT,
+            padding=(20, 20, 20, 20),
+        )
+        hint_3.add.button('Back', pygame_menu.events.BACK, background_color=(70, 70, 70))
+
+        hint_2 = pygame_menu.Menu(
+            height=720,
+            center_content=False,
+            onclose=pygame_menu.events.BACK,
+            theme=mytheme,
+            title='Mission 01 Hint 2',
+            width=1280,
+        )
+        hint_2.add.label(
+            """
+            Experimental hint: oxygen availability is controlled through the EX_o2_e exchange reaction. Keep the default run as your reference, then create the oxygen-restricted condition by preventing uptake through its lower bound while leaving every unrelated environmental bound unchanged.
+            """,
+            max_char=-1,
+            wordwrap=True,
+            align=pygame_menu.locals.ALIGN_LEFT,
+            padding=(20, 20, 20, 20),
+        )
+        hint_2.add.button(
+            'Reveal technical hint (Gold Key if locked)',
+            self._request_hint_access,
+            3,
+            hint_2,
+            hint_3,
+            background_color=(255, 215, 0, 255),
+            font_color='black',
+        )
+        hint_2.add.button('Back', pygame_menu.events.BACK, background_color=(70, 70, 70))
+
+        hint_1 = pygame_menu.Menu(
+            height=720,
+            center_content=False,
+            onclose=pygame_menu.events.BACK,
+            theme=mytheme,
+            title='Mission 01 Hint 1',
+            width=1280,
+        )
+        hint_1.add.label(
+            """
+            Conceptual hint: treat this as a controlled experiment. Compare one normal aerobic reference with one oxygen-restricted condition, and keep the simulation method, objective, genotype and every unrelated environmental assumption the same between the two runs.
+
+            Focus on whether the oxygen-restricted condition is still viable and how its predicted growth changes relative to the reference.
+            """,
+            max_char=-1,
+            wordwrap=True,
+            align=pygame_menu.locals.ALIGN_LEFT,
+            padding=(20, 20, 20, 20),
+        )
+        hint_1.add.button(
+            'Reveal next hint (Silver Key if locked)',
+            self._request_hint_access,
+            2,
+            hint_1,
+            hint_2,
+            background_color=(255, 215, 0, 255),
+            font_color='black',
+        )
+        hint_1.add.button('Back', pygame_menu.events.BACK, background_color=(70, 70, 70))
 
         menu_text.add.label(
-            "\n"
-            "Flux Balance Analysis (FBA) predicts feasible metabolic behaviour under a defined objective and a set of reaction bounds.\n\n"
-            "Run a controlled comparison. First, use FBA with the biomass objective, no gene knockouts and the unchanged default environment. This is the aerobic baseline.\n\n"
-            "Then run the same setup again and change only the lower bound of EX_o2_e from open to closed. Do not change any other environmental bound.\n\n"
-            "Open Compare Runs and the Exchange Flux Report. A correct result shows that oxygen uptake becomes zero, E. coli still has positive growth, and anaerobic growth is lower than aerobic growth. Uptake is displayed as a positive magnitude, while its raw exchange flux is negative during consumption.\n\n"
-            "The mission validates this relationship; it does not expect one exact rounded growth value or one unique byproduct profile, because FBA can have alternative optimal flux distributions."
-            ,
-            max_char=33,
-            wordwrap=True
+            """
+            Flux Balance Analysis (FBA) predicts feasible metabolic behaviour under a defined objective and a set of reaction bounds.
+
+            Dr. Martinez wants a controlled comparison between a normal aerobic reference and a condition in which oxygen uptake is unavailable. Change only the environmental factor being investigated; keep the simulation method, objective, genotype and unrelated environmental assumptions comparable.
+
+            Use the growth output together with exchange evidence to determine whether the oxygen-restricted condition remains viable and how its predicted growth changes relative to the aerobic reference. FBA can have alternative optimal flux distributions, so base your conclusion on the requested relationship rather than on one exact rounded growth value or one unique byproduct profile.
+            """,
+            max_char=-1,
+            wordwrap=True,
+            align=pygame_menu.locals.ALIGN_LEFT,
+            margin=(0, 0),
+        )
+        menu_text.add.button(
+            'Optional Hints (Bronze Key if locked)',
+            self._request_hint_access,
+            1,
+            menu_text,
+            hint_1,
+            background_color=(255, 215, 0, 255),
+            font_color='black',
         )
         menu_text.add.button('Back', pygame_menu.events.BACK, background_color=(70, 70, 70))
         menu_text.add.vertical_margin(20)
-        
-        menu.add.label('Welcome, Lab Hero! \nYour journey begins with Mission 01: Into the Microbial World.\n'
-            ,wordwrap=False,
-            align=pygame_menu.locals.ALIGN_CENTER,
-            font_size=34)
-        
+
         menu.add.label(
-            "Dr. Martinez wants a controlled comparison between normal aerobic growth and growth without oxygen.\n"
-            "Run the default FBA/biomass setup first. Then close only the lower bound of EX_o2_e and run it again.\n"
-            "Use Compare Runs to verify that oxygen uptake is zero, growth remains positive, and growth decreases under anaerobic conditions.",
+            'Welcome, Lab Hero! \nYour journey begins with Mission 01: Into the Microbial World.\n',
+            wordwrap=False,
+            align=pygame_menu.locals.ALIGN_CENTER,
+            font_size=34,
+        )
+
+        menu.add.label(
+            "Dr. Martinez wants you to determine how removing oxygen changes predicted E. coli growth.\n"
+            "Build a controlled aerobic-versus-oxygen-restricted comparison, inspect the simulation evidence and deliver the result supported by your runs.",
             wordwrap=True,
             align=pygame_menu.locals.ALIGN_CENTER,
-            font_size=30)
-        menu.add.button('Mission 01 Briefing', menu_text, font_color = 'black',background_color=(255,215,0, 255))
-        menu.add.vertical_margin(50)  
+            font_size=30,
+        )
+        menu.add.button(
+            'Mission 01 Briefing',
+            menu_text,
+            font_color='black',
+            background_color=(255, 215, 0, 255),
+        )
+        menu.add.button(
+            'Optional Hints (Bronze Key if locked)',
+            self._request_hint_access,
+            1,
+            menu,
+            hint_1,
+            font_color='black',
+            background_color=(230, 230, 180),
+        )
+        menu.add.vertical_margin(50)
+
         if self.mission01:
-              menu.add.button('Deliver Results', action=self.deliver_results, background_color=(50,100,100)) ## TASK: ADICIONAR FUNÇÃO ENTREGAR RESULTADOS
-              menu.add.vertical_margin(50)
-              menu.add.label('Mission Activated', font_color=(150, 150, 150))
-              menu.add.vertical_margin(20)
+            menu.add.button('Deliver Results', action=self.deliver_results, background_color=(50,100,100))
+            menu.add.vertical_margin(50)
+            menu.add.label('Mission Activated', font_color=(150, 150, 150))
+            menu.add.vertical_margin(20)
         else:
-            menu.add.button('Activate Mission', action=self.activate_mission01, background_color=(50,100,100))        
+            menu.add.button('Activate Mission', action=self.activate_mission01, background_color=(50,100,100))
         menu.add.vertical_margin(20)
 
         await run_menu(menu, self.display_surface)
-
 
 
     def toggle_menu(self): 

@@ -1,0 +1,20 @@
+P.2A - Mission 02 hint/reward pilot
+
+Runtime changes:
+- code/hint_system.py
+  * Mission 02 is now the only tracked mission in the staged rollout.
+- code/mission02.py
+  * Hint 1/2/3 access is gated through HintSystem.
+  * Hint 1 costs Bronze, Hint 2 Silver, Hint 3 Gold.
+  * Stronger-key fallback requires an explicit confirmation menu.
+  * Already unlocked hints reopen free.
+  * Every successful hint purchase is persisted immediately.
+  * Completed Mission 02 cannot buy new hints.
+  * Original Mission 02 hint wording and scientific validation are unchanged.
+
+Test updates/additions:
+- tests/test_p1_hint_system.py
+  * Rollout expectation updated: only Mission 02 is tracked after P.2A.
+- tests/test_p2a_mission02_hint_rewards.py
+  * Pilot UI/state integration, fallback confirmation, persistence, score freeze,
+    legacy-save behavior, and isolation from all other missions.

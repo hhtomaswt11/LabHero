@@ -1,0 +1,32 @@
+P.4E — Final hint/key/score rollout (M31–M40)
+
+Scope
+- Mission 30 was already integrated and remains byte-for-byte unchanged.
+- Missions 31–35: existing Conceptual / Experimental / Technical hint menus wired to MissionHintAccess.
+- Missions 36–40: expanded from one Optional Hint to three progressive hint levels, then wired to MissionHintAccess.
+- All 40 missions are now TRACKED_HINT_MISSIONS.
+
+Mission 36–40 reuse of pre-existing hint content
+- M36 old hint retained as Hint 2 (Experimental).
+- M37 old hint retained as Hint 1 (Conceptual).
+- M38 old hint retained as Hint 1 (Conceptual).
+- M39 old hint retained as Hint 1 (Conceptual).
+- M40 old hint retained as Hint 3 (Technical).
+
+Economy
+- Hint 1: Bronze Key
+- Hint 2: Silver Key
+- Hint 3: Gold Key
+- Score: 0/1/2/3 hints -> 5/3/2/1 points
+- Maximum score across 40 missions: 200
+- Historical legacy_unscored_missions remain unscored after rollout.
+
+Runtime changed
+- code/hint_system.py
+- code/mission31.py ... code/mission40.py
+
+Tests added
+- tests/test_p4e_mission31_40_final_hint_rollout.py
+
+Historical tests updated only to reflect the final rollout / three-hint structure.
+Scientific validation, simulation logic, thresholds, completion logic and evidence contracts were not changed.

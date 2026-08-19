@@ -6,6 +6,7 @@ from save_load import *
 from timers import Timer
 from options_values import *
 from functions import animation_text_save
+from hint_ui import MissionHintAccess
 from async_menu import run_menu
 from simulation import (
     MISSION08_METHOD,
@@ -29,6 +30,7 @@ class Mission08_info:
         self.display_surface = pygame.display.get_surface()
         self.timer = Timer(200)
         self.mission08 = '08' in self.missions_activated
+        self.hint_access = MissionHintAccess(self.player, '08', self.missions_completed, mytheme)
 
         success_path = get_resource_path('audio/success_3.ogg')
         self.success = pygame.mixer.Sound(success_path)
@@ -72,7 +74,7 @@ class Mission08_info:
             'Experimental hint: observe oxygen uptake before imposing the constraint. Keep the objective, genes, method and all other environmental bounds identical between the two runs.',
             wordwrap=True, align=pygame_menu.locals.ALIGN_LEFT, padding=(20, 20, 20, 20),
         )
-        hint2.add.button('Reveal technical hint', hint3, background_color=(255, 215, 0), font_color='black')
+        hint2.add.button('Reveal technical hint (Gold Key if locked)', self.hint_access.request, 3, hint2, hint3, background_color=(255, 215, 0), font_color='black')
         hint2.add.button('Back', pygame_menu.events.BACK, background_color=(70, 70, 70))
 
         hint1 = pygame_menu.Menu(
@@ -83,7 +85,7 @@ class Mission08_info:
             'Conceptual hint: a new constraint changes the optimum only if it removes or limits something that the previous optimum was able to use.',
             wordwrap=True, align=pygame_menu.locals.ALIGN_LEFT, padding=(20, 20, 20, 20),
         )
-        hint1.add.button('Reveal next hint', hint2, background_color=(255, 215, 0), font_color='black')
+        hint1.add.button('Reveal next hint (Silver Key if locked)', self.hint_access.request, 2, hint1, hint2, background_color=(255, 215, 0), font_color='black')
         hint1.add.button('Back', pygame_menu.events.BACK, background_color=(70, 70, 70))
 
         briefing = pygame_menu.Menu(
@@ -101,7 +103,7 @@ class Mission08_info:
             max_char=-1, wordwrap=True, align=pygame_menu.locals.ALIGN_LEFT,
             padding=(20, 20, 20, 20),
         )
-        briefing.add.button('Optional Hints', hint1, background_color=(230, 230, 180), font_color='black')
+        briefing.add.button('Optional Hints (Bronze Key if locked)', self.hint_access.request, 1, briefing, hint1, background_color=(230, 230, 180), font_color='black')
         briefing.add.button('Back', pygame_menu.events.BACK, background_color=(70, 70, 70))
 
         menu.add.vertical_margin(20)

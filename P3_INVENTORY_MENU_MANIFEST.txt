@@ -1,0 +1,15 @@
+P.3 — Inventory overlay with key counts, score summary and skin selection.
+
+Changed runtime files:
+- code/skin_menu.py
+- code/level.py
+
+Added tests:
+- tests/test_p3_inventory_menu.py
+
+Notes:
+- E now opens the unified inventory overlay.
+- C remains supported as a compatibility shortcut.
+- The inventory displays Bronze/Silver/Gold key counts using assets from graphics/keys.
+- The inventory displays the current total score out of 200.
+- The right column reuses the existing skin-selection workflow.

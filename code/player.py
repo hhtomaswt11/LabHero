@@ -5,6 +5,7 @@ from timers import Timer
 import time
 from math import ceil
 from utils import *
+from hint_system import HintSystem, create_reward_state
 
 
 # Maximum distance advanced before checking collisions again.  Keeping this
@@ -65,8 +66,11 @@ class Player(pygame.sprite.Sprite):
             self.results,
             self.missions_activated,
             self.missions_completed,
-            self.player_state
+            self.player_state,
+            reward_state
         ) = self._unpack_save_data(inventory2)
+        self.hint_system = HintSystem(reward_state)
+        self.reward_state = self.hint_system.state
         self._apply_player_state(self.player_state)
 
         # web-only: when True, the outer LabHero.run() loop breaks back to intro_run()
@@ -122,13 +126,12 @@ class Player(pygame.sprite.Sprite):
 
 
     def _unpack_save_data(self, data):
-        """Read both old and new save formats.
+        """Read historic saves and the current six-field save format.
 
-        Old format:
-        [player_name, results, missions_activated, missions_completed]
-
-        New format:
-        [player_name, results, missions_activated, missions_completed, player_state]
+        Pre-P.1 saves have no reward_state. Existing completed missions in those
+        saves are marked legacy-unscored because their historic hint usage is
+        unknowable. A New Game has no completed missions, so it naturally starts
+        with a fresh 15/10/5 key inventory and no legacy entries.
         """
         data = data or DEFAULT_INVENTORY_2
 
@@ -138,7 +141,19 @@ class Player(pygame.sprite.Sprite):
         missions_completed = data[3] if len(data) > 3 else []
         player_state = data[4] if len(data) > 4 and isinstance(data[4], dict) else DEFAULT_PLAYER_STATE.copy()
 
-        return player_name, results, missions_activated, missions_completed, player_state
+        if len(data) > 5 and isinstance(data[5], dict):
+            reward_state = data[5]
+        else:
+            reward_state = create_reward_state(legacy_completed=missions_completed)
+
+        return (
+            player_name,
+            results,
+            missions_activated,
+            missions_completed,
+            player_state,
+            reward_state,
+        )
 
     def _safe_facing(self, facing):
         facing = str(facing or 'down').split('_')[0]
@@ -201,13 +216,22 @@ class Player(pygame.sprite.Sprite):
         }
 
     def get_save_data(self):
-        """Centralized save payload used by all save_file calls."""
+        """Centralized six-field save payload used by all save_file calls.
+
+        Mission completion already funnels through this method across all 40
+        missions. During the staged rollout, only missions whose hint UI is
+        integrated may score; earlier completions become legacy-unscored rather
+        than receiving an unverifiable 5/5.
+        """
+        self.hint_system.sync_completed_missions(self.missions_completed)
+        self.reward_state = self.hint_system.state
         return [
             self.player_name,
             self.results,
             self.missions_activated,
             self.missions_completed,
-            self.get_player_state()
+            self.get_player_state(),
+            self.hint_system.to_dict()
         ]
 
 

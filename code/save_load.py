@@ -5,6 +5,7 @@ import copy
 
 from utils import *
 from settings import DEFAULT_PLAYER_STATE
+from hint_system import create_reward_state, normalize_reward_state
 
 _IS_WEB = sys.platform == 'emscripten'
 _MEMSTORE = {}
@@ -58,14 +59,36 @@ def _read_existing_player_state():
     return _default_player_state()
 
 
-def normalize_save_data(data):
+def _read_existing_reward_state():
+    """Return reward_state from the current save, when available.
+
+    This protects the new reward data if any older code path still calls
+    save_file with a pre-P.1 payload.
+    """
+    try:
+        if _IS_WEB:
+            existing = _MEMSTORE.get('data')
+        else:
+            with open(get_save_path('data.txt')) as test_file:
+                existing = json.load(test_file)
+
+        if isinstance(existing, list) and len(existing) >= 6 and isinstance(existing[5], dict):
+            return existing[5]
+    except Exception:
+        pass
+    return None
+
+
+def normalize_save_data(data, reward_state_fallback=None):
     """Normalize save data to the current schema.
 
     Current schema:
-    [player_name, results, missions_activated, missions_completed, player_state]
+    [player_name, results, missions_activated, missions_completed,
+     player_state, reward_state]
 
-    Older saves only had the first 4 fields. They still load correctly; in that
-    case the player_state falls back to the default spawn state.
+    Saves predating P.1 may have only 4 or 5 fields. Their existing completed
+    missions are marked as legacy-unscored because historic hint usage cannot
+    be reconstructed honestly.
     """
     if not isinstance(data, list):
         return data
@@ -77,18 +100,36 @@ def normalize_save_data(data):
 
     if len(normalized) < 5 or not isinstance(normalized[4], dict):
         normalized = normalized[:4] + [_read_existing_player_state()]
+    else:
+        normalized = normalized[:5] + normalized[5:]
 
-    return normalized
+    completed = normalized[3] if isinstance(normalized[3], list) else []
+
+    if len(normalized) < 6 or not isinstance(normalized[5], dict):
+        if isinstance(reward_state_fallback, dict):
+            reward_state = normalize_reward_state(reward_state_fallback)
+        else:
+            reward_state = create_reward_state(legacy_completed=completed)
+        normalized = normalized[:5] + [reward_state]
+    else:
+        normalized[5] = normalize_reward_state(normalized[5])
+
+    return normalized[:6]
 
 
 def save_file(data):
-    data = normalize_save_data(data)
+    # All current runtime calls use Player.get_save_data() (6 fields).  The
+    # fallback keeps reward progress safe if an older 4/5-field caller survives.
+    reward_fallback = None
+    if isinstance(data, list) and (len(data) < 6 or not isinstance(data[5], dict)):
+        reward_fallback = _read_existing_reward_state()
+
+    data = normalize_save_data(data, reward_state_fallback=reward_fallback)
     if _IS_WEB:
         _MEMSTORE['data'] = data
         return
     with open(get_save_path('data.txt'), 'w') as test_file:
         json.dump(data, test_file)
-
 
 def load_file(filename):
     if _IS_WEB:

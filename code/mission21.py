@@ -9,6 +9,7 @@ from functions import animation_text_save
 from button import Button
 from async_menu import run_menu
 from utils import *
+from hint_ui import MissionHintAccess
 from mission22 import Mission22_info
 from simulation import (
     MISSION21_CHECK_VERSION,
@@ -148,6 +149,7 @@ class Mission21_info:
         self.font = pygame.font.Font(get_resource_path('font/LycheeSoda.ttf'), 30)
         self.timer = Timer(200)
         self.mission21 = '21' in self.missions_activated
+        self.hint_access = MissionHintAccess(self.player, '21', self.missions_completed, mytheme)
 
         self.success = pygame.mixer.Sound(get_resource_path('audio/success_3.ogg'))
         self.success.set_volume(1.2)
@@ -200,7 +202,7 @@ class Mission21_info:
             align=pygame_menu.locals.ALIGN_LEFT,
             padding=(20, 20, 20, 20),
         )
-        hint2.add.button('Reveal technical hint', hint3, background_color=(255, 215, 0), font_color='black')
+        hint2.add.button('Reveal technical hint (Gold Key if locked)', self.hint_access.request, 3, hint2, hint3, background_color=(255, 215, 0), font_color='black')
         hint2.add.button('Back', pygame_menu.events.BACK, background_color=(70, 70, 70))
 
         hint1 = pygame_menu.Menu(
@@ -213,7 +215,7 @@ class Mission21_info:
             align=pygame_menu.locals.ALIGN_LEFT,
             padding=(20, 20, 20, 20),
         )
-        hint1.add.button('Reveal next hint', hint2, background_color=(255, 215, 0), font_color='black')
+        hint1.add.button('Reveal next hint (Silver Key if locked)', self.hint_access.request, 2, hint1, hint2, background_color=(255, 215, 0), font_color='black')
         hint1.add.button('Back', pygame_menu.events.BACK, background_color=(70, 70, 70))
 
         briefing = pygame_menu.Menu(
@@ -242,7 +244,7 @@ class Mission21_info:
             align=pygame_menu.locals.ALIGN_LEFT,
             padding=(20, 20, 20, 20),
         )
-        briefing.add.button('Optional Hints', hint1, background_color=(230, 230, 180), font_color='black')
+        briefing.add.button('Optional Hints (Bronze Key if locked)', self.hint_access.request, 1, briefing, hint1, background_color=(230, 230, 180), font_color='black')
         briefing.add.button('Back', pygame_menu.events.BACK, background_color=(70, 70, 70))
 
         menu.add.vertical_margin(20)
@@ -265,7 +267,7 @@ class Mission21_info:
             padding=(5, 0, 0, 35),
         )
         menu.add.button('Mission 21 Briefing', briefing, font_color='black', background_color=(255, 215, 0))
-        menu.add.button('Optional Hints', hint1, font_color='black', background_color=(230, 230, 180))
+        menu.add.button('Optional Hints (Bronze Key if locked)', self.hint_access.request, 1, menu, hint1, font_color='black', background_color=(230, 230, 180))
         menu.add.vertical_margin(25)
 
         if self.mission21:
