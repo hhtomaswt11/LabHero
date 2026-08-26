@@ -45,6 +45,15 @@ class Dialogues:
             self.imagem_path = get_resource_path('graphics/dialogues/Sequeira.jpg')
             self.nome = get_dialogue_text_surface(self.font_nome, 'Dr. Sequeira')
             
+        elif self.character == 'Alves':
+            self.message = [
+                f"Your registration is complete, {self.player.player_name}.",
+                "Your name is now linked to this Lab Hero campaign.",
+                "Good luck with your missions!"
+            ]
+            self.imagem_path = get_resource_path('graphics/dialogues/alves.jpg')
+            self.nome = get_dialogue_text_surface(self.font_nome, 'Dr. Alves')
+
         elif self.character == 'Nuno':    
             self.message = [
             "Hello! My name is Dr. Nuno Alves!",

@@ -1,0 +1,17 @@
+GAME.1A — Progression Gates infrastructure
+
+Changed:
+- code/level.py
+- code/sprites.py
+
+New:
+- code/campaign.py
+- tests/test_game1a_progression_gates.py
+
+No TMX/map, mission, science, save, backend, hint or score file is changed.
+
+GAME.1B Tiled contract:
+- Object layer: ProgressionGates
+- Recommended objects: Gate06 and Gate35
+- Custom property: unlock_after
+- Prefer Tile Objects if the barrier should be visible.

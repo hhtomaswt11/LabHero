@@ -19,8 +19,8 @@ class Menu:
         self.toggle_menu = toggle_menu
         self.player = player
         self.display_surface = pygame.display.get_surface()
-        font_path = get_resource_path('font/LycheeSoda.ttf')
-        self.font = pygame.font.Font(font_path, 30)
+        self.font_path = get_resource_path('font/LycheeSoda.ttf')
+        self.font = pygame.font.Font(self.font_path, 30)
 
         # self.setup()
 
@@ -36,8 +36,9 @@ class Menu:
 
 
 
-    def save_game(self, menu):
-        self.player.player_name = menu.get_input_data()['name']
+    def save_game(self, menu=None):
+        # Student identity is registered once through Dr. Alves and is not
+        # editable from Settings during the campaign.
         save_file(self.player.get_save_data())
         animation_text_save('Game saved')
     
@@ -182,10 +183,15 @@ class Menu:
         menu_how_to_play.add.button('Back', pygame_menu.events.BACK, background_color=(70, 70, 70))
         menu_how_to_play.add.vertical_margin(50)
 
-        def change_name(teste):
-            self.player.player_name = teste
-        
-        menu.add.text_input('Name: ', default=self.player.player_name, textinput_id='name', onreturn=change_name)
+        student_label = self.player.player_name if self.player.name_confirmed else 'Not registered'
+        # pygame-menu's bundled Munro font does not contain common accented
+        # Portuguese glyphs (á, ã, ç, ...).  Use the same Unicode-capable
+        # LycheeSoda font already used by LabHero dialogues for this
+        # player-controlled Unicode label.
+        menu.add.label(
+            f'Student: {student_label}',
+            font_name=self.font_path,
+        )
         menu.add.selector('Music: ', [('Hope', 0), ('Serene', 1),  ('Happy', 2), ('Surf', 3)], default=self.music_val, onchange=self.set_music)
         menu.add.range_slider('Volume', self.volume*100, (0, 100), 1, onchange=self.set_volume,
                       rangeslider_id='volume_music',

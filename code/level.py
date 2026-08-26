@@ -18,6 +18,8 @@ from utils import *
 from skins import SkinManager
 from skin_menu import SkinSelectionMenu
 from progression import is_model_unlocked
+from campaign import CampaignContext
+from student_registration import StudentRegistrationMenu
 
 class Level:
 	def __init__(self, load_game):
@@ -27,6 +29,7 @@ class Level:
 
 		# load the game
 		self.load_game = load_game
+		self.campaign_context = CampaignContext(mode='normal')
 
 		# sprite groups
 		self.all_sprites = CameraGroup()
@@ -37,6 +40,7 @@ class Level:
 		self.collision_sprites = pygame.sprite.Group()
 		self.tree_sprites = pygame.sprite.Group()
 		self.interaction_sprites = pygame.sprite.Group()
+		self.progression_gate_sprites = pygame.sprite.Group()
 
 		# Character skin system: load all skin sprite frames once.
 		self.skin_manager = SkinManager()
@@ -97,6 +101,10 @@ class Level:
 		self.ecoli = Ecoli(self.see_ecoli)
 		self.dialogues = Dialogues(self.toggle_dialogue, self.player)
 		self.dialogues_active = False
+		self.student_registration_active = False
+		self.student_registration = StudentRegistrationMenu(
+			self.player, self.toggle_student_registration
+		)
 		self.skin_menu_active = False
 		self.skin_menu = SkinSelectionMenu(self.skin_manager, self.player)
 		self.skin_open_key_locked = False
@@ -110,6 +118,46 @@ class Level:
 		# self.music_bg = pygame.mixer.Sound(MUSIC_NAME)
 		# self.music_bg.set_volume(0.07)
 		# self.music_bg.play(loops = -1)
+
+	@staticmethod
+	def _optional_tmx_layer(tmx_data, name):
+		"""Return an optional Tiled layer; old maps remain valid."""
+		try:
+			return tmx_data.get_layer_by_name(name)
+		except (ValueError, KeyError):
+			return None
+
+	def _setup_progression_gates(self, tmx_data):
+		"""Create gates from optional Tiled object layer ``ProgressionGates``."""
+		layer = self._optional_tmx_layer(tmx_data, 'ProgressionGates')
+		if layer is None:
+			return
+
+		for obj in layer:
+			properties = getattr(obj, 'properties', {}) or {}
+			required_mission = properties.get('unlock_after')
+			if required_mission is None:
+				raise ValueError(
+					f"Progression gate {getattr(obj, 'name', '<unnamed>')!r} "
+					"is missing Tiled property 'unlock_after'"
+				)
+
+			surf = getattr(obj, 'image', None)
+			if surf is None:
+				width = max(1, round(float(getattr(obj, 'width', TILE_SIZE) or TILE_SIZE)))
+				height = max(1, round(float(getattr(obj, 'height', TILE_SIZE) or TILE_SIZE)))
+				surf = pygame.Surface((width, height), pygame.SRCALPHA)
+
+			ProgressionGate(
+				pos=(obj.x, obj.y),
+				surf=surf,
+				groups=[self.all_sprites, self.dynamic_sprites,
+						self.collision_sprites, self.progression_gate_sprites],
+				player=self.player,
+				campaign_context=self.campaign_context,
+				required_mission=required_mission,
+				name=getattr(obj, 'name', None),
+			)
 
 	def setup(self):
 		
@@ -203,6 +251,7 @@ class Level:
 					talk_39 = self.toggle_talk_39,
 					talk_40 = self.toggle_talk_40,
 					dialogues = self.toggle_dialogue,
+					student_registration = self.toggle_student_registration,
 					skin_manager = self.skin_manager
 					# music = self.music_bg
 					)
@@ -277,6 +326,17 @@ class Level:
 			if obj.name in ('Sequeira', 'Pacheco', 'Nuno', 'Fernanda', 'Emanuel', 'Alexandre', 'Capela', 'Marta', 'Oscar', 'Miguel'):
 				Interaction((obj.x, obj.y), (obj.width, obj.height), self.interaction_sprites, obj.name)
 
+			if obj.name == 'Alves':
+				# Start NPC: the Tiled tile object resolves to start.png.
+				if getattr(obj, 'image', None) is not None:
+					Generic(
+						(obj.x, obj.y),
+						obj.image,
+						[self.all_sprites, self.collision_sprites],
+						LAYERS['main'],
+					)
+				Interaction((obj.x, obj.y), (obj.width, obj.height), self.interaction_sprites, obj.name)
+
 			# if obj.name == 'Oscar':
 			# 	Interaction((obj.x, obj.y), (obj.width, obj.height), self.interaction_sprites, obj.name)
 
@@ -286,6 +346,9 @@ class Level:
 			if obj.name == 'Coffee':
 				Interaction((obj.x, obj.y), (obj.width, obj.height), self.interaction_sprites, obj.name)
 			
+
+		# Gates are created after Player has loaded missions_completed from save.
+		self._setup_progression_gates(tmx_data)
 
 		if carter_reveal_pos is not None:
 			CarterRevealSprite(
@@ -417,6 +480,9 @@ class Level:
 	def toggle_dialogue(self):
 		self.dialogues_active = not self.dialogues_active
 
+	def toggle_student_registration(self):
+		self.student_registration_active = not self.student_registration_active
+
 	def desk_menu(self):
 		self.desk_active = not self.desk_active
 
@@ -460,7 +526,8 @@ class Level:
 			self.talk_38_active or
 			self.talk_39_active or
 			self.talk_40_active or
-			self.dialogues_active
+			self.dialogues_active or
+			self.student_registration_active
 		)
 
 	def handle_skin_menu_shortcut(self):
@@ -523,6 +590,9 @@ class Level:
 		if self.menu_active:
 			# self.menu.update()
 			await self.menu.update()
+
+		elif self.student_registration_active:
+			await self.student_registration.update()
 
 		elif self.talk_1_active:
 			await self.talk_1.update()

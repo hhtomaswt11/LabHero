@@ -1,0 +1,18 @@
+STUDENT.1B — Settings accented-name font scope fix
+
+Problem:
+- STUDENT.1A used `font_path` inside Menu.setup().
+- `font_path` had only been defined locally inside Menu.__init__(), so pressing M
+  after registering a student caused NameError.
+
+Fix:
+- Store the existing LycheeSoda path as `self.font_path` in Menu.__init__().
+- Reuse `self.font_path` for both pygame.font.Font and the Student label.
+- Accented names remain supported without changing the global menu theme.
+
+Changed:
+- code/menu_2.py
+- tests/test_student1_start_identity.py
+
+No save, identity semantics, missions, dialogues, gates, score, hints, map,
+backend, simulator, or Web persistence logic changed.

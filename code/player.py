@@ -6,12 +6,21 @@ import time
 from math import ceil
 from utils import *
 from hint_system import HintSystem, create_reward_state
+from student_identity import infer_name_confirmed, validate_student_name
 
 
 # Maximum distance advanced before checking collisions again.  Keeping this
 # below the player hitbox dimensions prevents a low-FPS browser frame from
 # jumping completely across a thin collision region (collision tunnelling).
 MAX_COLLISION_STEP = 16.0
+
+MISSION_START_INTERACTIONS = {
+    'Mission01', 'Mission02', 'Mission03', 'Mission07', 'Mission11',
+    'Mission16', 'Mission21', 'Mission23', 'Mission25', 'Mission27',
+    'Mission29', 'Mission32', 'Final', 'Vale', 'Voss', 'Umbra', 'Morbus',
+    'Mortis',
+}
+
 
 
 def _movement_substep_plan(distance, max_step=MAX_COLLISION_STEP):
@@ -28,7 +37,7 @@ def _movement_substep_plan(distance, max_step=MAX_COLLISION_STEP):
     return steps, distance / steps
 
 class Player(pygame.sprite.Sprite):
-    def __init__(self, pos, group, collision_sprites, tree_sprites, interaction, soil_layer, toggle_shop, desk_menu, yeast_simulator, books, ecoli, inventory2, talk_1, talk_2, talk_3, talk_7, talk_11, talk_16, talk_21, talk_23, talk_25, talk_27, talk_29, talk_32, talk_35, talk_36, talk_37, talk_38, talk_39, talk_40, dialogues, skin_manager=None):
+    def __init__(self, pos, group, collision_sprites, tree_sprites, interaction, soil_layer, toggle_shop, desk_menu, yeast_simulator, books, ecoli, inventory2, talk_1, talk_2, talk_3, talk_7, talk_11, talk_16, talk_21, talk_23, talk_25, talk_27, talk_29, talk_32, talk_35, talk_36, talk_37, talk_38, talk_39, talk_40, dialogues, student_registration, skin_manager=None):
         super().__init__(group)
 
         self.skin_manager = skin_manager
@@ -71,6 +80,13 @@ class Player(pygame.sprite.Sprite):
         ) = self._unpack_save_data(inventory2)
         self.hint_system = HintSystem(reward_state)
         self.reward_state = self.hint_system.state
+        self.name_confirmed = infer_name_confirmed(
+            self.player_name,
+            self.missions_activated,
+            self.missions_completed,
+            self.player_state,
+            DEFAULT_INVENTORY_2[0],
+        )
         self._apply_player_state(self.player_state)
 
         # web-only: when True, the outer LabHero.run() loop breaks back to intro_run()
@@ -101,6 +117,7 @@ class Player(pygame.sprite.Sprite):
         self.books = books
         self.ecoli = ecoli
         self.dialogues = dialogues
+        self.student_registration = student_registration
         self.character = None
         self.tree_sprites = tree_sprites
         self.interaction = interaction
@@ -212,7 +229,8 @@ class Player(pygame.sprite.Sprite):
             'y': float(self.pos.y),
             'facing': facing,
             'status': self.status,
-            'skin_id': self.current_skin_id
+            'skin_id': self.current_skin_id,
+            'name_confirmed': bool(self.name_confirmed)
         }
 
     def get_save_data(self):
@@ -234,6 +252,18 @@ class Player(pygame.sprite.Sprite):
             self.hint_system.to_dict()
         ]
 
+
+
+    def register_student_name(self, value):
+        """Confirm the student identity once for this campaign."""
+        if self.name_confirmed:
+            return False
+        valid, normalized, _error = validate_student_name(value)
+        if not valid:
+            return False
+        self.player_name = normalized
+        self.name_confirmed = True
+        return True
 
     def use_tool(self):
         for tree in self.tree_sprites.sprites():
@@ -352,9 +382,20 @@ class Player(pygame.sprite.Sprite):
 
                 collided_interaction_sprite = pygame.sprite.spritecollide(self, self.interaction, False) # spritecollide(sprite, group, dokill)
                 if collided_interaction_sprite:
-                    if collided_interaction_sprite[0].name == 'Mission01':
+                    interaction_name = collided_interaction_sprite[0].name
+                    if interaction_name in MISSION_START_INTERACTIONS and not self.name_confirmed:
+                        animation_text_save(
+                            'Please register your name with Dr. Alves before starting missions.'
+                        )
+                    elif interaction_name == 'Alves':
+                        if self.name_confirmed:
+                            self.character = 'Alves'
+                            self.dialogues()
+                        else:
+                            self.student_registration()
+                    elif interaction_name == 'Mission01':
                         self.talk_1()
-                    elif collided_interaction_sprite[0].name == 'Mission02':
+                    elif interaction_name == 'Mission02':
                         self.talk_2()
                     elif collided_interaction_sprite[0].name == 'Mission03':
                         self.talk_3()

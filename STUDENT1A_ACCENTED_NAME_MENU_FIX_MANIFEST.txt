@@ -1,0 +1,16 @@
+STUDENT.1A — Accented student-name rendering fix
+
+Problem:
+- The Settings menu theme uses pygame-menu's Munro font.
+- Munro lacks common accented Portuguese glyphs, so names such as "Tomás"
+  rendered as "Tom?s" in the Settings menu.
+- Dialogues already used LycheeSoda.ttf and therefore rendered the same name correctly.
+
+Fix:
+- Only the Settings "Student: <name>" label now uses the existing
+  Unicode-capable LycheeSoda.ttf font.
+- No save format, identity logic, dialogues, missions, score, gates or backend changed.
+
+Changed:
+- code/menu_2.py
+- tests/test_student1_start_identity.py

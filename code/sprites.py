@@ -3,6 +3,7 @@ from settings import *
 from random import randint, choice
 from timers import Timer
 from utils import *
+from campaign import normalize_mission_id
 
 class Generic(pygame.sprite.Sprite):
     def __init__(self, pos, surf, groups, z = LAYERS['main']):
@@ -18,6 +19,37 @@ class Interaction(Generic):
         super().__init__(pos, surf, groups)
         self.name = name
         
+class ProgressionGate(Generic):
+    """Visible/collidable barrier removed when its required mission is complete."""
+
+    def __init__(self, pos, surf, groups, player, campaign_context,
+                 required_mission, name=None):
+        self.player = player
+        self.campaign_context = campaign_context
+        self.required_mission = normalize_mission_id(required_mission)
+        self.name = name or f'Gate{self.required_mission or ""}'
+
+        if self.required_mission is None:
+            raise ValueError(f'Progression gate {self.name!r} has no unlock_after mission')
+
+        super().__init__(pos, surf, groups, LAYERS['main'])
+        # Unlike decorative Generic sprites, a gate is a deliberate wall.
+        self.hitbox = self.rect.copy()
+        self.sync_with_progression()
+
+    def sync_with_progression(self):
+        if self.campaign_context.should_gate_be_open(
+            self.required_mission,
+            self.player.missions_completed,
+        ):
+            self.kill()
+            return True
+        return False
+
+    def update(self, dt):
+        self.sync_with_progression()
+
+
 class Water(Generic):
     def __init__(self, pos, frames, groups):
 
