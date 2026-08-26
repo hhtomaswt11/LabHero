@@ -6,6 +6,35 @@ If you already have Docker installed on a server reachable on the internet, jump
 
 ---
 
+
+## Darwin / Podman production path
+
+The CEB/UMinho production host (Darwin) uses **Podman**, not Docker Compose.
+The repository therefore keeps two explicit deployment paths:
+
+- `deploy/docker-compose.yml` + `deploy/nginx.conf`: local/development Docker workflow.
+- `./deploy.sh` + `deploy/nginx.podman.conf`: Darwin/Podman workflow.
+
+In the Podman deployment, frontend and backend run in the same pod. Containers
+in a Podman pod share a network namespace, so nginx proxies `/api/*` to
+`http://127.0.0.1:8000/`. Only the frontend port is published by the pod; the
+backend remains internal. The default host mapping is `8080:80`, configurable
+with `LABHERO_PORT`.
+
+From the repository root:
+
+```bash
+./deploy.sh
+```
+
+The script builds both images, recreates `labhero-pod`, starts both containers,
+and waits for `http://127.0.0.1:8080/api/health` to return successfully. The
+CEB administrator can then place the institutional reverse proxy/domain/HTTPS
+in front of host port 8080.
+
+The final Podman compatibility test must still be run on a machine with Podman
+(and ultimately on Darwin); the normal Docker Compose workflow remains intact.
+
 ## What you're deploying
 
 LabHero is a serious game (RPG simulation) that teaches non-bioinformaticians about genome-scale metabolic models. Players control a bioinformatician at a university and complete missions involving FBA simulations on E. coli.

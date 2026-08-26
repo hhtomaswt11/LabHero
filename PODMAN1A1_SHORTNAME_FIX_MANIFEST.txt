@@ -1,0 +1,14 @@
+PODMAN.1A.1 — Podman short-name registry fix
+
+Observed on Ubuntu/Podman:
+- Backend image built successfully.
+- Frontend pygbag bundle built successfully.
+- Final nginx stage failed because `nginx:1.27-alpine` was an unqualified image name and the local Podman configuration had no unqualified-search registry for nginx.
+
+Fix:
+- backend/Dockerfile now uses docker.io/library/python:3.10-slim
+- deploy/Dockerfile.frontend now uses docker.io/library/python:3.11-slim
+- deploy/Dockerfile.frontend now uses docker.io/library/nginx:1.27-alpine
+- Added regression coverage that requires fully-qualified base-image names.
+
+No game, mission, save, nginx routing, API, Pod layout, or simulation logic changed.

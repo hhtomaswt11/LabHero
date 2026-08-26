@@ -1,5 +1,5 @@
 # Stage 1: build the pygbag bundle from the LabHero source tree.
-FROM python:3.11-slim AS bundler
+FROM docker.io/library/python:3.11-slim AS bundler
 
 ENV PIP_DISABLE_PIP_VERSION_CHECK=1
 
@@ -19,9 +19,13 @@ RUN python deploy/fingerprint_web_bundle.py build/web
 
 
 # Stage 2: serve the bundle + reverse-proxy /api to the backend.
-FROM nginx:1.27-alpine
+FROM docker.io/library/nginx:1.27-alpine
 
-COPY deploy/nginx.conf /etc/nginx/conf.d/default.conf
+# Local Docker Compose keeps deploy/nginx.conf by default. Darwin/Podman passes
+# --build-arg NGINX_CONF=deploy/nginx.podman.conf so both containers can talk
+# over the shared pod network namespace via 127.0.0.1.
+ARG NGINX_CONF=deploy/nginx.conf
+COPY ${NGINX_CONF} /etc/nginx/conf.d/default.conf
 
 COPY --from=bundler /src/build/web/ /usr/share/nginx/html/
 

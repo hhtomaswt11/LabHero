@@ -1,0 +1,20 @@
+PODMAN.1A — Darwin deployment preparation
+
+Purpose
+- Preserve the validated local Docker Compose workflow.
+- Add an explicit Podman Pod production path for the CEB/UMinho Darwin server.
+
+Runtime/deploy changes
+- deploy/Dockerfile.frontend: nginx config is now a build argument; default remains deploy/nginx.conf.
+- deploy/nginx.podman.conf: same frontend/cache behavior, but /api proxies to 127.0.0.1:8000 inside the shared Podman pod.
+- deploy.sh: builds backend/frontend, recreates one Podman pod, publishes host 8080 -> frontend 80, starts backend/frontend, waits for /api/health.
+- deploy/README.md: documents Docker local vs Podman production paths.
+- tests/test_podman1a_darwin_deploy.py: static deployment contract regressions.
+
+Not changed
+- Gameplay, missions, TMX/map, progression gates, student identity, saves/localStorage, hints/score, simulation logic, backend API, Docker Compose topology.
+
+PODMAN.1B remains required
+- Run actual podman build/run on Ubuntu.
+- Validate http://localhost:8080, /api/health, game startup and at least one simulation.
+- Repeat final deployment validation on Darwin when available.
