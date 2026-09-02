@@ -1,0 +1,19 @@
+CONTENT.2 — Final text/UI consistency audit
+
+Scope
+-----
+- Standardised global product branding to "LabHero" in title/loading/settings UI.
+- Updated the title-screen Story to match the current student registration and
+  Normal/Easy campaign flow.
+- Removed duplicate Mission 22 -> Mission 23 transition wording.
+- Polished secondary-NPC English and removed meme/pop-culture lines that no
+  longer match the final pedagogical tone.
+- Corrected grammar/capitalisation in secondary scientific dialogues
+  (genome-scale metabolic model, laboratory experiments, SARS-CoV-2).
+- Tightened two Easy-route lines to use predicted-growth terminology.
+
+Explicitly unchanged
+--------------------
+Mission validators, thresholds, genes, GPRs, objectives, environmental bounds,
+solver methods, score, hints, save schema, campaign routing, Teacher access,
+backend, deployment and Tiled map data.

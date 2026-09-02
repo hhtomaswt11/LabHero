@@ -1,0 +1,14 @@
+CONTENT.2B — Mission 22→23 dialogue layout fix
+
+Scope:
+- Split the overlong Dr. Luna transition into two short dialogue lines.
+- Update Mission 22 regression expectation to the current wording.
+- Update CONTENT.2 consistency test to guard the new two-line transition.
+
+Runtime logic changed: none.
+Scientific logic changed: none.
+Mission validators/thresholds/objectives/bounds/GPRs changed: none.
+
+Expected result in the user's environment:
+- test_dialogue_layout.py passes the 1040 px safety limit.
+- test_mission22.py accepts the current transition wording.

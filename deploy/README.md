@@ -21,11 +21,36 @@ in a Podman pod share a network namespace, so nginx proxies `/api/*` to
 backend remains internal. The default host mapping is `8080:80`, configurable
 with `LABHERO_PORT`.
 
-From the repository root:
+From the repository root, choose a teacher password at deploy time:
 
 ```bash
-./deploy.sh
+LABHERO_TEACHER_PASSWORD='use-a-strong-password' ./deploy.sh
 ```
+
+The username defaults to `teacher` and can be changed with
+`LABHERO_TEACHER_USER`. The password is **not** written into the repository or
+browser bundle. `deploy.sh` hashes it into
+`~/.config/labhero/teacher.htpasswd` (file mode `0644` inside a host directory kept at `0700`) and mounts that file read-only
+into nginx.
+
+The public student game remains at `/`. Teacher mission-jump access is available
+only below the HTTP-Basic-authenticated `/teacher/` route, for example:
+
+```text
+https://<labhero-domain>/teacher/?mission=17
+```
+
+A public URL such as `/?teacher=1&mission=17` does **not** activate Teacher Mode.
+Do not place teacher credentials in source code, JavaScript, Pygbag files or a
+shared URL.
+
+Only the Teacher HTML entry document is Basic-Auth protected. Pygbag fetches its
+relative `src.<hash>.tar.gz` archive with browser credentials explicitly omitted,
+so `/teacher/` asset requests are rewritten to the identical public root assets
+without requiring Basic Auth. `/teacher/` and `/teacher/index.html` themselves
+remain protected, so this does not create a second unauthenticated Teacher entry
+point. `deploy.sh` verifies both the protected entry and the credential-free
+Pygbag archive fetch after each deployment.
 
 The script builds both images, recreates `labhero-pod`, starts both containers,
 and waits for `http://127.0.0.1:8080/api/health` to return successfully. The

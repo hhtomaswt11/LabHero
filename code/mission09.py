@@ -1,6 +1,8 @@
 import pygame
 import pygame_menu
 
+from answer_penalty import penalize_wrong_answer
+
 from async_menu import run_menu
 from functions import animation_text_save
 from hint_ui import MissionHintAccess
@@ -48,9 +50,10 @@ class Mission09_info:
         menu = pygame_menu.Menu(
             height=720, center_content=False, onclose=self.toggle_menu,
             theme=mytheme, title='Mission 09', width=1280,
+        overflow=(False, True),
         )
 
-        if not is_mission09_unlocked(self.missions_completed):
+        if not self.player.is_mission_unlocked('09'):
             menu.add.vertical_margin(40)
             menu.add.label(
                 'Mission 09 is locked. Complete Mission 08 before combining environmental and genetic design.',
@@ -61,14 +64,14 @@ class Mission09_info:
             await run_menu(menu, self.display_surface)
             return
 
-        hint3 = pygame_menu.Menu(height=720, center_content=False, onclose=pygame_menu.events.BACK, theme=mytheme, title='Mission 09 Hint 3', width=1280)
+        hint3 = pygame_menu.Menu(height=720, center_content=False, onclose=pygame_menu.events.BACK, theme=mytheme, title='Mission 09 Hint 3', width=1280, overflow=(False, True))
         hint3.add.label(
             f'Technical hint: use {MISSION09_METHOD} with {MISSION09_GROWTH_OBJECTIVE}, replace glucose with {MISSION09_REPLACEMENT_CARBON_SOURCE}, keep oxygen available, track {MISSION09_TARGET_FLUX}, record an all-genes-active reference, and then test one highlighted gene per run.',
             wordwrap=True, align=pygame_menu.locals.ALIGN_LEFT, padding=(20, 20, 20, 20),
         )
         hint3.add.button('Back', pygame_menu.events.BACK, background_color=(70, 70, 70))
 
-        hint2 = pygame_menu.Menu(height=720, center_content=False, onclose=pygame_menu.events.BACK, theme=mytheme, title='Mission 09 Hint 2', width=1280)
+        hint2 = pygame_menu.Menu(height=720, center_content=False, onclose=pygame_menu.events.BACK, theme=mytheme, title='Mission 09 Hint 2', width=1280, overflow=(False, True))
         hint2.add.label(
             'Experimental hint: first create a reference in which L-malate truly replaces glucose. Keep every other condition fixed, then isolate one genetic perturbation at a time and compare both growth and formate.',
             wordwrap=True, align=pygame_menu.locals.ALIGN_LEFT, padding=(20, 20, 20, 20),
@@ -76,7 +79,7 @@ class Mission09_info:
         hint2.add.button('Reveal technical hint (Gold Key if locked)', self.hint_access.request, 3, hint2, hint3, background_color=(255, 215, 0), font_color='black')
         hint2.add.button('Back', pygame_menu.events.BACK, background_color=(70, 70, 70))
 
-        hint1 = pygame_menu.Menu(height=720, center_content=False, onclose=pygame_menu.events.BACK, theme=mytheme, title='Mission 09 Hint 1', width=1280)
+        hint1 = pygame_menu.Menu(height=720, center_content=False, onclose=pygame_menu.events.BACK, theme=mytheme, title='Mission 09 Hint 1', width=1280, overflow=(False, True))
         hint1.add.label(
             'Conceptual hint: the highest product value is not automatically the best strain. An integrated design must be evaluated against the same environmental reference and retain sufficient predicted growth.',
             wordwrap=True, align=pygame_menu.locals.ALIGN_LEFT, padding=(20, 20, 20, 20),
@@ -84,7 +87,7 @@ class Mission09_info:
         hint1.add.button('Reveal next hint (Silver Key if locked)', self.hint_access.request, 2, hint1, hint2, background_color=(255, 215, 0), font_color='black')
         hint1.add.button('Back', pygame_menu.events.BACK, background_color=(70, 70, 70))
 
-        briefing = pygame_menu.Menu(height=720, center_content=False, onclose=pygame_menu.events.BACK, theme=mytheme, title='Mission 09 Briefing', width=1280)
+        briefing = pygame_menu.Menu(height=720, center_content=False, onclose=pygame_menu.events.BACK, theme=mytheme, title='Mission 09 Briefing', width=1280, overflow=(False, True))
         briefing.add.label(
             f"""
             Dr. Nova now combines the concepts from the previous missions. The culture must use {MISSION09_REPLACEMENT_SOURCE_NAME} instead of glucose, while a single genetic intervention is evaluated for growth-coupled {MISSION09_TARGET_PRODUCT} secretion.
@@ -128,7 +131,7 @@ class Mission09_info:
         await run_menu(menu, self.display_surface)
 
     def activate_mission09(self):
-        if not is_mission09_unlocked(self.missions_completed):
+        if not self.player.is_mission_unlocked('09'):
             self.failed.play()
             animation_text_save('Complete Mission 08 before starting Mission 09.', time=3000)
             return
@@ -149,7 +152,7 @@ class Mission09_info:
         save_file(self.player.get_save_data())
 
     def deliver_results(self, answer):
-        if not is_mission09_unlocked(self.missions_completed):
+        if not self.player.is_mission_unlocked('09'):
             self.failed.play()
             animation_text_save('Complete Mission 08 first!', time=2500)
             return
@@ -174,10 +177,12 @@ class Mission09_info:
         if normalise_mission09_answer(answer) is None:
             self.failed.play()
             animation_text_save('Enter a candidate gene id or gene name from the mission list.', time=3000)
+            penalize_wrong_answer(self.player, '09')
             return
         if not mission09_answer_matches(answer, report):
             self.failed.play()
             animation_text_save('That conclusion is not supported by the recorded growth and formate evidence.', time=3300)
+            penalize_wrong_answer(self.player, '09')
             return
 
         self.success.play()

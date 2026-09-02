@@ -1,6 +1,8 @@
 import pygame
 import pygame_menu
 
+from answer_penalty import penalize_wrong_answer
+
 from settings import *
 from save_load import *
 from timers import Timer
@@ -142,7 +144,7 @@ class Mission16:
         ]
 
         self.input()
-        if not is_mission16_unlocked(self.missions_completed):
+        if not self.player.is_mission_unlocked('16'):
             self.menu_message(locked_dialogue, buttons=False)
         elif '20' in self.missions_completed:
             self.menu_message(self.m20_step2, buttons=False)
@@ -239,9 +241,10 @@ class Mission16_info:
             theme=mytheme,
             title='Mission 16',
             width=1280,
+        overflow=(False, True),
         )
 
-        if not is_mission16_unlocked(self.missions_completed):
+        if not self.player.is_mission_unlocked('16'):
             menu.add.vertical_margin(40)
             menu.add.label(
                 'Mission 16 is locked. Complete Mission 15 before beginning Dr. Rio medium engineering.',
@@ -258,6 +261,7 @@ class Mission16_info:
         hint3 = pygame_menu.Menu(
             height=720, center_content=False, onclose=pygame_menu.events.BACK,
             theme=mytheme, title='Mission 16 Hint 3', width=1280,
+        overflow=(False, True),
         )
         hint3.add.label(
             f'Technical hint: use {MISSION16_METHOD}, objective {MISSION16_GROWTH_OBJECTIVE}, all genes active, close glucose uptake, and open exactly one of ' + ', '.join(MISSION16_CANDIDATE_CARBON_SOURCES) + f'. Keep oxygen at default for all five trials. Then repeat the highest-growth source after closing the lower bound of {MISSION16_OXYGEN_REACTION}.',
@@ -270,6 +274,7 @@ class Mission16_info:
         hint2 = pygame_menu.Menu(
             height=720, center_content=False, onclose=pygame_menu.events.BACK,
             theme=mytheme, title='Mission 16 Hint 2', width=1280,
+        overflow=(False, True),
         )
         hint2.add.label(
             'Experimental hint: use the same molar uptake protocol for every source. Compare predicted growth first, then change only oxygen availability in the robustness test.',
@@ -283,6 +288,7 @@ class Mission16_info:
         hint1 = pygame_menu.Menu(
             height=720, center_content=False, onclose=pygame_menu.events.BACK,
             theme=mytheme, title='Mission 16 Hint 1', width=1280,
+        overflow=(False, True),
         )
         hint1.add.label(
             'Conceptual hint: a carbon source that supports the strongest growth in one medium may fail when another environmental requirement is removed.',
@@ -296,6 +302,7 @@ class Mission16_info:
         briefing = pygame_menu.Menu(
             height=720, center_content=False, onclose=pygame_menu.events.BACK,
             theme=mytheme, title='Mission 16 Briefing', width=1280,
+        overflow=(False, True),
         )
         briefing.add.label(
             f"""
@@ -383,7 +390,7 @@ class Mission16_info:
         await run_menu(menu, self.display_surface)
 
     def activate_mission16(self):
-        if not is_mission16_unlocked(self.missions_completed):
+        if not self.player.is_mission_unlocked('16'):
             self.failed.play()
             animation_text_save('Complete Mission 15 before starting Mission 16.', time=3000)
             return
@@ -401,7 +408,7 @@ class Mission16_info:
         save_file(self.player.get_save_data())
 
     def deliver_results(self, answer):
-        if not is_mission16_unlocked(self.missions_completed):
+        if not self.player.is_mission_unlocked('16'):
             self.failed.play()
             animation_text_save('Complete Mission 15 first!', time=2500)
             return
@@ -434,10 +441,12 @@ class Mission16_info:
         if normalise_mission16_answer(answer) is None:
             self.failed.play()
             animation_text_save('Enter the environmental factor removed in the final challenge.', time=3000)
+            penalize_wrong_answer(self.player, '16')
             return
         if not mission16_answer_matches(answer, report):
             self.failed.play()
             animation_text_save('That factor is not supported by the recorded robustness test.', time=3000)
+            penalize_wrong_answer(self.player, '16')
             return
 
         self.success.play()

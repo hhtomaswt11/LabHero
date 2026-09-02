@@ -1,0 +1,18 @@
+Mission horizontal scroll lock
+
+Problem
+-------
+In Web/Pygbag, pygame-menu 4.4.x could still translate the mission ScrollArea
+horizontally from mouse/touch dragging even with horizontal overflow disabled.
+That exposed the grey surface outside the fixed-width green mission panel.
+
+Fix
+---
+The shared async menu runner now clamps horizontal scroll to the left edge on
+every frame for menus whose title begins with "Mission ".
+
+Vertical scrolling remains enabled.
+Simulator, Books, Settings and other non-mission menus are unaffected.
+
+No mission logic, scientific values, validators, save data, progression, map,
+backend or deployment behavior changed.

@@ -404,7 +404,7 @@ class Mission22RegressionTests(unittest.TestCase):
 
     def test_vega_ends_at_22_and_luna_mission23_is_connected_to_runtime(self):
         vega = (CODE_DIR / 'mission21.py').read_text()
-        self.assertIn('Dr. Luna will now study', vega)
+        self.assertIn('Dr. Luna will continue in Mission 23.', vega)
         self.assertNotIn('Mission23_info', vega)
         luna = (CODE_DIR / 'mission23.py').read_text()
         self.assertIn('class Mission23:', luna)

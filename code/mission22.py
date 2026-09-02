@@ -1,6 +1,8 @@
 import pygame
 import pygame_menu
 
+from answer_penalty import penalize_wrong_answer
+
 from settings import *
 from save_load import *
 from timers import Timer
@@ -60,9 +62,10 @@ class Mission22_info:
             theme=mytheme,
             title='Mission 22',
             width=1280,
+        overflow=(False, True),
         )
 
-        if not is_mission22_unlocked(self.missions_completed):
+        if not self.player.is_mission_unlocked('22'):
             menu.add.vertical_margin(40)
             menu.add.label(
                 'Mission 22 is locked. Complete Mission 21 before beginning Dr. Vega\'s final audit.',
@@ -79,6 +82,7 @@ class Mission22_info:
         hint3 = pygame_menu.Menu(
             height=720, center_content=False, onclose=pygame_menu.events.BACK,
             theme=mytheme, title='Mission 22 Hint 3', width=1280,
+        overflow=(False, True),
         )
         hint3.add.label(
             f'Technical hint: use {MISSION22_METHOD}, objective {MISSION22_GROWTH_OBJECTIVE}, model-default glucose and close {MISSION22_OXYGEN_REACTION} uptake in both runs. Track ' + ', '.join(MISSION22_REQUIRED_TRACKED_FLUXES) + f'. For the environmental run, keep all genes active and close only the upper bound of {MISSION22_ENVIRONMENTAL_EXPORT}. For the genetic run, restore that upper bound and disable exactly ' + ' + '.join(MISSION22_TARGET_GENES) + '.',
@@ -91,6 +95,7 @@ class Mission22_info:
         hint2 = pygame_menu.Menu(
             height=720, center_content=False, onclose=pygame_menu.events.BACK,
             theme=mytheme, title='Mission 22 Hint 2', width=1280,
+        overflow=(False, True),
         )
         hint2.add.label(
             'Experimental hint: compare genetic minus environmental values for growth, glucose uptake, oxygen uptake and every tracked secretion. Count an output only when the absolute difference exceeds the tolerance shown by the mission report.',
@@ -104,6 +109,7 @@ class Mission22_info:
         hint1 = pygame_menu.Menu(
             height=720, center_content=False, onclose=pygame_menu.events.BACK,
             theme=mytheme, title='Mission 22 Hint 1', width=1280,
+        overflow=(False, True),
         )
         hint1.add.label(
             'Conceptual hint: different interventions can act through different mechanisms yet remain indistinguishable under a limited observed phenotype panel. Matching outputs do not prove matching mechanisms.',
@@ -121,6 +127,7 @@ class Mission22_info:
             theme=mytheme,
             title='Mission 22 Briefing',
             width=1280,
+        overflow=(False, True),
         )
         briefing.add.label(
             f"""
@@ -206,7 +213,7 @@ class Mission22_info:
         await run_menu(menu, self.display_surface)
 
     def activate_mission22(self):
-        if not is_mission22_unlocked(self.missions_completed):
+        if not self.player.is_mission_unlocked('22'):
             self.failed.play()
             animation_text_save('Complete Mission 21 before starting Mission 22.', time=3000)
             return
@@ -225,7 +232,7 @@ class Mission22_info:
         save_file(self.player.get_save_data())
 
     def deliver_results(self, answer):
-        if not is_mission22_unlocked(self.missions_completed):
+        if not self.player.is_mission_unlocked('22'):
             self.failed.play()
             animation_text_save('Complete Mission 21 first!', time=2500)
             return
@@ -258,10 +265,12 @@ class Mission22_info:
         if normalise_mission22_answer(answer) is None:
             self.failed.play()
             animation_text_save('Enter one unambiguous numerical count only.', time=2800)
+            penalize_wrong_answer(self.player, '22')
             return
         if not mission22_answer_matches(answer, report):
             self.failed.play()
             animation_text_save('That count is not supported by the recorded output differences.', time=3000)
+            penalize_wrong_answer(self.player, '22')
             return
 
         self.success.play()

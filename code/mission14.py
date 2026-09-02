@@ -1,6 +1,8 @@
 import pygame
 import pygame_menu
 
+from answer_penalty import penalize_wrong_answer
+
 from settings import *
 from save_load import *
 from timers import Timer
@@ -62,9 +64,10 @@ class Mission14_info:
             theme=mytheme,
             title='Mission 14',
             width=1280,
+        overflow=(False, True),
         )
 
-        if not is_mission14_unlocked(self.missions_completed):
+        if not self.player.is_mission_unlocked('14'):
             menu.add.vertical_margin(40)
             menu.add.label(
                 'Mission 14 is locked. Complete Mission 13 before screening genetic trade-offs.',
@@ -81,6 +84,7 @@ class Mission14_info:
         hint3 = pygame_menu.Menu(
             height=720, center_content=False, onclose=pygame_menu.events.BACK,
             theme=mytheme, title='Mission 14 Hint 3', width=1280,
+        overflow=(False, True),
         )
         hint3.add.label(
             f'Technical hint: use {MISSION14_TARGET_METHOD} with objective {MISSION14_TARGET_OBJECTIVE}; keep default glucose, close only the lower bound of EX_o2_e, and track ' + ', '.join(MISSION14_REQUIRED_TRACKED_FLUXES) + '. Test exactly one of the four candidate genes per run. The Mission 13 pFBA run can supply the no-knockout reference.',
@@ -93,6 +97,7 @@ class Mission14_info:
         hint2 = pygame_menu.Menu(
             height=720, center_content=False, onclose=pygame_menu.events.BACK,
             theme=mytheme, title='Mission 14 Hint 2', width=1280,
+        overflow=(False, True),
         )
         hint2.add.label(
             'Experimental hint: keep method, objective, medium and exchange panel identical. Compare each candidate with the no-knockout reference using target retention, acetate reduction and any newly positive co-products.',
@@ -106,6 +111,7 @@ class Mission14_info:
         hint1 = pygame_menu.Menu(
             height=720, center_content=False, onclose=pygame_menu.events.BACK,
             theme=mytheme, title='Mission 14 Hint 1', width=1280,
+        overflow=(False, True),
         )
         hint1.add.label(
             'Conceptual hint: a lower value for one byproduct is not automatically an improvement. Carbon may move into a different secreted product, and the primary target can decrease.',
@@ -119,6 +125,7 @@ class Mission14_info:
         briefing = pygame_menu.Menu(
             height=720, center_content=False, onclose=pygame_menu.events.BACK,
             theme=mytheme, title='Mission 14 Briefing', width=1280,
+        overflow=(False, True),
         )
         briefing.add.label(
             f"""
@@ -208,7 +215,7 @@ class Mission14_info:
         await run_menu(menu, self.display_surface)
 
     def activate_mission14(self):
-        if not is_mission14_unlocked(self.missions_completed):
+        if not self.player.is_mission_unlocked('14'):
             self.failed.play()
             animation_text_save('Complete Mission 13 before starting Mission 14.', time=3000)
             return
@@ -230,7 +237,7 @@ class Mission14_info:
         save_file(self.player.get_save_data())
 
     def deliver_results(self, answer):
-        if not is_mission14_unlocked(self.missions_completed):
+        if not self.player.is_mission_unlocked('14'):
             self.failed.play()
             animation_text_save('Complete Mission 13 first!', time=2500)
             return
@@ -255,10 +262,12 @@ class Mission14_info:
         if normalise_mission14_answer(answer) is None:
             self.failed.play()
             animation_text_save('Enter the conclusion supported by the completed candidate screen.', time=3400)
+            penalize_wrong_answer(self.player, '14')
             return
         if not mission14_answer_matches(answer, report):
             self.failed.play()
             animation_text_save('That conclusion does not match the complete target-retention and co-product evidence.', time=3400)
+            penalize_wrong_answer(self.player, '14')
             return
 
         self.success.play()

@@ -8,7 +8,7 @@ directly.  The same state is serialized as the sixth field of the main save.
 from copy import deepcopy
 
 
-REWARD_STATE_VERSION = 1
+REWARD_STATE_VERSION = 2
 
 INITIAL_KEYS = {
     'bronze': 15,
@@ -22,6 +22,12 @@ SCORE_BY_HINT_LEVEL = {
     2: 2,
     3: 1,
 }
+
+# Wrong final-answer submissions are cumulative with hint penalties. A mission
+# may therefore finish at 0 points, but never below 0.
+MIN_MISSION_SCORE = 0
+MAX_MISSION_SCORE = SCORE_BY_HINT_LEVEL[0]
+WRONG_ANSWER_PENALTY = 1
 
 KEY_FOR_HINT_LEVEL = {
     1: 'bronze',
@@ -92,7 +98,27 @@ def _safe_score(value):
         score = int(value)
     except (TypeError, ValueError):
         return None
+    return score if MIN_MISSION_SCORE <= score <= MAX_MISSION_SCORE else None
+
+
+def _safe_legacy_score(value):
+    if isinstance(value, bool):
+        return None
+    try:
+        score = int(value)
+    except (TypeError, ValueError):
+        return None
     return score if score in set(SCORE_BY_HINT_LEVEL.values()) else None
+
+
+def _safe_nonnegative_count(value):
+    if isinstance(value, bool):
+        return None
+    try:
+        count = int(value)
+    except (TypeError, ValueError):
+        return None
+    return max(0, count)
 
 
 def _normalize_mission_mapping(raw_mapping, value_normalizer, omit_zero=False):
@@ -141,6 +167,7 @@ def create_reward_state(legacy_completed=None):
         'keys': dict(INITIAL_KEYS),
         'mission_hints': {},
         'mission_scores': {},
+        'mission_wrong_answers': {},
         'legacy_unscored_missions': _normalize_mission_list(legacy_completed or []),
     }
 
@@ -169,9 +196,19 @@ def normalize_reward_state(state, legacy_completed=None):
         _safe_hint_level,
         omit_zero=True,
     )
+    try:
+        raw_version = int(state.get('version', 1))
+    except (TypeError, ValueError):
+        raw_version = 1
+    score_normalizer = _safe_score if raw_version >= 2 else _safe_legacy_score
     normalized['mission_scores'] = _normalize_mission_mapping(
         state.get('mission_scores'),
-        _safe_score,
+        score_normalizer,
+    )
+    normalized['mission_wrong_answers'] = _normalize_mission_mapping(
+        state.get('mission_wrong_answers'),
+        _safe_nonnegative_count,
+        omit_zero=True,
     )
     normalized['legacy_unscored_missions'] = _normalize_mission_list(
         state.get('legacy_unscored_missions', [])
@@ -201,6 +238,25 @@ class HintSystem:
     def get_key_count(self, key_type):
         if key_type not in KEY_TYPES:
             raise ValueError(f'unknown key type: {key_type}')
+        return self.state['keys'][key_type]
+
+    def award_keys(self, key_type, amount):
+        """Add a positive number of keys and return the updated count.
+
+        One-off exploration rewards use this path so they never affect mission
+        hint levels or mission scores.
+        """
+        if key_type not in KEY_TYPES:
+            raise ValueError(f'unknown key type: {key_type}')
+        if isinstance(amount, bool):
+            raise ValueError('amount must be a positive integer')
+        try:
+            amount = int(amount)
+        except (TypeError, ValueError):
+            raise ValueError('amount must be a positive integer') from None
+        if amount <= 0:
+            raise ValueError('amount must be a positive integer')
+        self.state['keys'][key_type] += amount
         return self.state['keys'][key_type]
 
     def get_hint_level(self, mission_id):
@@ -362,6 +418,77 @@ class HintSystem:
             raise ValueError('hint_level must be between 0 and 3')
         return SCORE_BY_HINT_LEVEL[hint_level]
 
+    def get_wrong_answer_count(self, mission_id):
+        mission_id = normalize_mission_id(mission_id)
+        return self.state['mission_wrong_answers'].get(mission_id, 0)
+
+    def get_current_mission_score(self, mission_id):
+        """Return the score currently available before mission completion.
+
+        Hint penalties and wrong-answer penalties are cumulative. The score is
+        clamped at zero so repeated guessing can never create a negative score.
+        """
+        mission_id = normalize_mission_id(mission_id)
+        if mission_id in self.state['mission_scores']:
+            return self.state['mission_scores'][mission_id]
+        base_score = self.score_for_hint_level(self.get_hint_level(mission_id))
+        return max(
+            MIN_MISSION_SCORE,
+            base_score - self.get_wrong_answer_count(mission_id),
+        )
+
+    def record_wrong_answer(self, mission_id, amount=WRONG_ANSWER_PENALTY):
+        """Record one or more rejected final-answer submissions.
+
+        A finalized mission is immutable. For an active mission every rejected
+        final-answer submission costs one point, including malformed/typo
+        answers, because the final-answer field is itself part of the assessed
+        interpretation.
+        """
+        mission_id = normalize_mission_id(mission_id)
+        if isinstance(amount, bool):
+            raise ValueError('amount must be a positive integer')
+        try:
+            amount = int(amount)
+        except (TypeError, ValueError):
+            raise ValueError('amount must be a positive integer') from None
+        if amount <= 0:
+            raise ValueError('amount must be a positive integer')
+
+        if mission_id in self.state['mission_scores']:
+            frozen_score = self.state['mission_scores'][mission_id]
+            return {
+                'mission_id': mission_id,
+                'applied': 0,
+                'wrong_answers': self.get_wrong_answer_count(mission_id),
+                'score_before': frozen_score,
+                'current_score': frozen_score,
+                'score_loss': 0,
+                'finalized': True,
+            }
+
+        score_before = self.get_current_mission_score(mission_id)
+        new_count = self.get_wrong_answer_count(mission_id) + amount
+        self.state['mission_wrong_answers'][mission_id] = new_count
+        score_after = self.get_current_mission_score(mission_id)
+        return {
+            'mission_id': mission_id,
+            'applied': amount,
+            'wrong_answers': new_count,
+            'score_before': score_before,
+            'current_score': score_after,
+            'score_loss': score_before - score_after,
+            'finalized': False,
+        }
+
+    def get_total_wrong_answers(self, mission_ids=None):
+        if mission_ids is None:
+            return sum(self.state['mission_wrong_answers'].values())
+        total = 0
+        for mission_id in mission_ids:
+            total += self.get_wrong_answer_count(mission_id)
+        return total
+
     def finalize_mission_score(self, mission_id):
         """Freeze one mission score and return it, or None for legacy missions."""
         mission_id = normalize_mission_id(mission_id)
@@ -372,7 +499,7 @@ class HintSystem:
         if mission_id in self.state['legacy_unscored_missions']:
             return None
 
-        score = self.score_for_hint_level(self.get_hint_level(mission_id))
+        score = self.get_current_mission_score(mission_id)
         self.state['mission_scores'][mission_id] = score
         return score
 

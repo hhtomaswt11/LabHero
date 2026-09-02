@@ -1,0 +1,13 @@
+EASY.2B — dialogue layout test mock fix
+
+Runtime files changed: NONE.
+
+The layout test evaluates dialogue list expressions with a SimpleNamespace mock.
+After EASY.2B, Dr. Alves dialogue also reads player.campaign_mode.
+The real Player always has this attribute; the test mock did not.
+
+Fix:
+- add campaign_mode='easy' to the fake player used by test_dialogue_layout.py.
+
+No game logic, dialogue runtime, save format, campaign progression, missions,
+backend, map, or deployment code changed.

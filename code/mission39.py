@@ -1,6 +1,8 @@
 import pygame
 import pygame_menu
 
+from answer_penalty import penalize_wrong_answer
+
 from settings import *
 from save_load import *
 from timers import Timer
@@ -76,7 +78,7 @@ class Mission39:
             self.menu_message(completed, buttons=False)
         elif '39' in self.missions_activated:
             self.menu_message(active, menu_to_open=self.menu39)
-        elif is_mission39_unlocked(self.missions_completed):
+        elif self.player.is_mission_unlocked('39'):
             self.menu_message(intro, menu_to_open=self.menu39)
         else:
             self.menu_message(locked, buttons=False)
@@ -122,8 +124,9 @@ class Mission39_info:
         menu = pygame_menu.Menu(
             height=720, center_content=False, onclose=self.toggle_menu,
             theme=mytheme, title='Mission 39', width=1280,
+        overflow=(False, True),
         )
-        if not is_mission39_unlocked(self.missions_completed):
+        if not self.player.is_mission_unlocked('39'):
             menu.add.label(
                 'Mission 39 is locked. Complete Mission 38 first.',
                 wordwrap=True, padding=(25,25,25,25), background_color='white', font_size=30,
@@ -139,6 +142,7 @@ class Mission39_info:
         briefing = pygame_menu.Menu(
             height=720, center_content=False, onclose=pygame_menu.events.BACK,
             theme=mytheme, title='Mission 39 Briefing', width=1280,
+        overflow=(False, True),
         )
         briefing.add.label(
             f"""Controlled yeast bypass screen
@@ -159,6 +163,7 @@ For the three supplement runs, use Lower bounds to open and enter only the state
         hint3 = pygame_menu.Menu(
             height=720, center_content=False, onclose=pygame_menu.events.BACK,
             theme=mytheme, title='Mission 39 Hint 3', width=1280,
+        overflow=(False, True),
         )
         hint3.add.label(
             'Technical hint:\n\nA qualifying supplement must show at least 1.0 uptake, produce at least a 2.0x growth increase over the default-medium reference, and restore ethanol secretion to at least 5.0. Identify the tested opening that satisfies all criteria in the same run.',
@@ -169,6 +174,7 @@ For the three supplement runs, use Lower bounds to open and enter only the state
         hint2 = pygame_menu.Menu(
             height=720, center_content=False, onclose=pygame_menu.events.BACK,
             theme=mytheme, title='Mission 39 Hint 2', width=1280,
+        overflow=(False, True),
         )
         hint2.add.label(
             'Experimental hint:\n\nCompare each one-at-a-time supplement with the default-medium reference. First verify that the opened supplement is actually taken up; then compare growth recovery and ethanol secretion. Availability without uptake is not evidence of rescue.',
@@ -180,6 +186,7 @@ For the three supplement runs, use Lower bounds to open and enter only the state
         hint1 = pygame_menu.Menu(
             height=720, center_content=False, onclose=pygame_menu.events.BACK,
             theme=mytheme, title='Mission 39 Hint 1', width=1280,
+        overflow=(False, True),
         )
         hint1.add.label(
             'Conceptual hint:\n\nThink about pathway order. Pyruvate lies before the blocked decarboxylase step, acetaldehyde is its immediate product, and ethanol lies further downstream. A useful bypass should change the phenotype, not merely make an exchange available.',
@@ -241,7 +248,7 @@ For the three supplement runs, use Lower bounds to open and enter only the state
         await run_menu(menu, self.display_surface)
 
     def activate_mission39(self):
-        if not is_mission39_unlocked(self.missions_completed):
+        if not self.player.is_mission_unlocked('39'):
             self.failed.play()
             animation_text_save('Complete Mission 38 first!', time=2500)
             return
@@ -258,7 +265,7 @@ For the three supplement runs, use Lower bounds to open and enter only the state
         animation_text_save('Mission 39 Activated')
 
     def deliver_results(self, answer):
-        if not is_mission39_unlocked(self.missions_completed):
+        if not self.player.is_mission_unlocked('39'):
             self.failed.play()
             animation_text_save('Complete Mission 38 first!', time=2500)
             return
@@ -278,6 +285,7 @@ For the three supplement runs, use Lower bounds to open and enter only the state
         if not mission39_answer_matches(answer, report):
             self.failed.play()
             animation_text_save('Recheck which tested opening gives a strong growth and ethanol rescue.', time=3000)
+            penalize_wrong_answer(self.player, '39')
             return
         self.success.play()
         if '39' not in self.missions_completed:

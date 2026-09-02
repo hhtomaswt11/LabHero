@@ -51,7 +51,7 @@ async def _play_animation(text, time, fullscreen):
         time = 1000
         display_surface.fill('gold')
         title_font = pygame.font.Font(font_path, 100)
-        title = title_font.render('Lab Hero', False, 'black')
+        title = title_font.render('LabHero', False, 'black')
         title_rect = title.get_rect(center = (SCREEN_WIDTH/2, SCREEN_HEIGHT/2))
         display_surface.blit(title, title_rect)
 

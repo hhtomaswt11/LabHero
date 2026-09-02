@@ -92,7 +92,10 @@ class DialogueLayoutTests(unittest.TestCase):
     @staticmethod
     def _evaluate_list(module, list_node):
         fake_self = SimpleNamespace(
-            player=SimpleNamespace(player_name=LONG_PLAYER_NAME)
+            player=SimpleNamespace(
+                player_name=LONG_PLAYER_NAME,
+                campaign_mode='easy',
+            )
         )
         expression = ast.Expression(body=list_node)
         ast.fix_missing_locations(expression)
@@ -201,11 +204,14 @@ class DialogueLayoutTests(unittest.TestCase):
                     f'> {MAX_LINES_WITHOUT_BUTTONS}'
                 )
             for index, message in enumerate(messages, start=1):
-                width = self.font.size(str(message))[0]
+                # Generic dialogues pass every line through prepare_dialogue_text()
+                # before rendering, so long student names are compacted at runtime.
+                rendered_message = prepare_dialogue_text(message, LONG_PLAYER_NAME)
+                width = self.font.size(str(rendered_message))[0]
                 if width > MAX_SAFE_LINE_WIDTH:
                     violations.append(
                         f'dialogues.py line {node.lineno}, message {index}: '
-                        f'{width}px > {MAX_SAFE_LINE_WIDTH}px: {message!r}'
+                        f'{width}px > {MAX_SAFE_LINE_WIDTH}px: {rendered_message!r}'
                     )
 
         self.assertEqual([], violations, '\n'.join(violations))

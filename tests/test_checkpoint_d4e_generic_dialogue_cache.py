@@ -8,7 +8,7 @@ DIALOGUES_PATH = ROOT / 'code' / 'dialogues.py'
 PLAYER_PATH = ROOT / 'code' / 'player.py'
 
 GENERIC_CHARACTERS = (
-    'Sequeira', 'Pacheco', 'Nuno', 'Fernanda', 'Emanuel',
+    'Sequeira', 'Alves', 'Pacheco', 'Nuno', 'Fernanda', 'Emanuel',
     'Alexandre', 'Capela', 'Marta', 'Oscar', 'Miguel',
 )
 
@@ -144,8 +144,8 @@ class TestCheckpointD4EGenericDialogueCache(unittest.TestCase):
             and isinstance(node.func, ast.Name)
             and node.func.id == 'get_dialogue_text_surface'
         ]
-        # Ten named generic NPCs plus the legacy fallback label.
-        self.assertEqual(len(helper_calls), 11)
+        # Eleven named generic NPCs (including Alves) plus the legacy fallback label.
+        self.assertEqual(len(helper_calls), 12)
 
     def test_generic_npc_set_in_player_interaction_is_unchanged(self):
         source = PLAYER_PATH.read_text(encoding='utf-8')

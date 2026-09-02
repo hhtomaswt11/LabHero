@@ -1,0 +1,21 @@
+Web viewport horizontal lock
+
+Root cause
+----------
+The grey area seen during Mission 01 was the Pygbag HTML page background, not
+the pygame-menu mission background. Browser horizontal page panning moved the
+entire canvas left and exposed that grey page area.
+
+Fix
+---
+deploy/fingerprint_web_bundle.py now injects a small build-time viewport guard
+into the generated Pygbag index.html:
+- html/body overflow-x is hidden
+- horizontal overscroll is disabled
+- touch interaction is restricted to vertical page panning
+- any non-zero window.scrollX is immediately reset to 0
+
+The fix affects the browser page only. Internal pygame-menu vertical scrolling
+and mission rendering are unchanged.
+
+The guard is idempotent and is included in every frontend image build.

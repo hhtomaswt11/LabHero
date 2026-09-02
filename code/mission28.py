@@ -1,6 +1,8 @@
 import pygame
 import pygame_menu
 
+from answer_penalty import penalize_wrong_answer
+
 from settings import *
 from save_load import *
 from timers import Timer
@@ -55,9 +57,10 @@ class Mission28_info:
             theme=mytheme,
             title='Mission 28',
             width=1280,
+        overflow=(False, True),
         )
 
-        if not is_mission28_unlocked(self.missions_completed):
+        if not self.player.is_mission_unlocked('28'):
             menu.add.vertical_margin(40)
             menu.add.label(
                 "Mission 28 is locked. Complete Mission 27 before beginning Dr. Ribeiro's dependency-mapping experiment.",
@@ -79,6 +82,7 @@ class Mission28_info:
         hint3 = pygame_menu.Menu(
             height=720, center_content=False, onclose=pygame_menu.events.BACK,
             theme=mytheme, title='Mission 28 Hint 3', width=1280,
+        overflow=(False, True),
         )
         hint3.add.label(
             f"Technical hint: use {MISSION28_METHOD} with objective {MISSION28_GROWTH_OBJECTIVE}. Keep {MISSION28_PRIMARY_GENE} / {MISSION28_PRIMARY_GENE_NAME} knocked out and open only the {MISSION28_RESCUE_SUPPLEMENT} lower bound. Record the rescue reference with no second knockout, then add exactly one highlighted secondary gene per trial. Leave glucose, oxygen and every unrelated bound at model default. No Production Flux selection is required.",
@@ -91,6 +95,7 @@ class Mission28_info:
         hint2 = pygame_menu.Menu(
             height=720, center_content=False, onclose=pygame_menu.events.BACK,
             theme=mytheme, title='Mission 28 Hint 2', width=1280,
+        overflow=(False, True),
         )
         hint2.add.label(
             'Experimental hint: a dependency should affect both the rescue phenotype and measured 2-oxoglutarate uptake. Compare every double knockout with the same single-knockout rescue reference.',
@@ -104,6 +109,7 @@ class Mission28_info:
         hint1 = pygame_menu.Menu(
             height=720, center_content=False, onclose=pygame_menu.events.BACK,
             theme=mytheme, title='Mission 28 Hint 1', width=1280,
+        overflow=(False, True),
         )
         hint1.add.label(
             'Conceptual hint: external availability is not the same as intracellular access. Look for the secondary knockout that removes supplement uptake and collapses the rescue while citrate synthase remains disabled.',
@@ -121,6 +127,7 @@ class Mission28_info:
             theme=mytheme,
             title='Mission 28 Briefing',
             width=1280,
+        overflow=(False, True),
         )
         briefing.add.label(
             f"""
@@ -156,7 +163,7 @@ class Mission28_info:
             font_size=34,
         )
         menu.add.label(
-            'Map the network function required for the 2-oxoglutarate rescue while keeping the original gltA lesion fixed.',
+            'Map the network function for 2-oxoglutarate rescue with the original gltA lesion fixed.',
             wordwrap=True,
             align=pygame_menu.locals.ALIGN_CENTER,
             font_size=28,
@@ -205,7 +212,7 @@ class Mission28_info:
         await run_menu(menu, self.display_surface)
 
     def activate_mission28(self):
-        if not is_mission28_unlocked(self.missions_completed):
+        if not self.player.is_mission_unlocked('28'):
             self.failed.play()
             animation_text_save('Complete Mission 27 before starting Mission 28.', time=3000)
             return
@@ -224,7 +231,7 @@ class Mission28_info:
         save_file(self.player.get_save_data())
 
     def deliver_results(self, answer):
-        if not is_mission28_unlocked(self.missions_completed):
+        if not self.player.is_mission_unlocked('28'):
             self.failed.play()
             animation_text_save('Complete Mission 27 first!', time=2500)
             return
@@ -249,6 +256,7 @@ class Mission28_info:
         if not mission28_answer_matches(answer, report):
             self.failed.play()
             animation_text_save('Recompare rescue retention, 2-oxoglutarate uptake and GPR-disabled reactions.', time=3300)
+            penalize_wrong_answer(self.player, '28')
             return
 
         self.success.play()

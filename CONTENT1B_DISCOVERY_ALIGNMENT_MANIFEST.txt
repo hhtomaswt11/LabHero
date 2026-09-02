@@ -1,0 +1,33 @@
+CONTENT.1B — global discovery alignment and residual unit fixes
+
+Purpose
+-------
+Resolve the 10 failures revealed by the user's full unittest discovery after
+CONTENT.1, while preserving the scientific/runtime behaviour of all missions.
+
+Runtime presentation fixes
+--------------------------
+- Mission 09: L-malate uptake and oxygen uptake now include the canonical flux
+  unit in the baseline evidence report.
+- Mission 15: every tracked product/co-product flux in the two-optimum evidence
+  report now includes the canonical flux unit.
+- Mission 18: baseline and candidate export-profile fluxes now include the
+  canonical flux unit.
+
+Regression-contract alignment
+-----------------------------
+Legacy assertions in M09/M12/M13/M14/M15/M17/M18 were updated to expect the
+new player-visible terminology introduced by CONTENT.1:
+- predicted growth rate instead of biomass/growth labels where appropriate;
+- h^-1 on predicted growth-rate values;
+- mmol gDW^-1 h^-1 on reaction/exchange fluxes;
+- the existing three-decimal player-facing display precision.
+
+CONTENT.1 regression coverage was expanded from 9 to 11 tests to explicitly
+protect the M09/M15/M18 unit cases above.
+
+Not changed
+-----------
+No solver values, mission thresholds, answers, validators, objectives, genes,
+GPR logic, configured model bounds, model files, save/progression state, map,
+backend or deployment behaviour was changed.

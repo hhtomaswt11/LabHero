@@ -6,6 +6,7 @@ from timers import Timer
 from options_values import *
 from button import Button
 from utils import *
+from hint_system import INITIAL_KEYS, SCORE_BY_HINT_LEVEL, WRONG_ANSWER_PENALTY
 
 class Dialogues: 
     def __init__(self,toggle_menu, player) -> None: # add variable name character to change message and id
@@ -36,20 +37,22 @@ class Dialogues:
         self.character = character
         if self.character == 'Sequeira':    
             self.message = [
-            "Hey there, jolly chap! I am Dr. João Sequeira, and my line of research is meta-omics,",
+            "Hello! I am Dr. João Sequeira, and my research focuses on meta-omics,",
             "which means I study complex microbial communities through their collective DNA, RNA",
              "and proteins!",
              " ",
-            "Now go on, and be the best pokemon master you can be! Gotta catchem' all!"
+            "By combining these layers, we can study microbial communities as interacting systems."
         ]
             self.imagem_path = get_resource_path('graphics/dialogues/Sequeira.jpg')
             self.nome = get_dialogue_text_surface(self.font_nome, 'Dr. Sequeira')
             
         elif self.character == 'Alves':
             self.message = [
-                f"Your registration is complete, {self.player.player_name}.",
-                "Your name is now linked to this Lab Hero campaign.",
-                "Good luck with your missions!"
+                f"Registration complete, {self.player.player_name}. Mode: {self.player.campaign_mode.title()}.",
+                f"Hint keys: {INITIAL_KEYS['bronze']} Bronze, {INITIAL_KEYS['silver']} Silver, {INITIAL_KEYS['gold']} Gold.",
+                "Unlocking a hint spends a key. Keys are limited, so use them carefully.",
+                f"Hints reduce mission score: {SCORE_BY_HINT_LEVEL[0]} -> {SCORE_BY_HINT_LEVEL[1]} -> {SCORE_BY_HINT_LEVEL[2]} -> {SCORE_BY_HINT_LEVEL[3]}.",
+                f"Incorrect final-answer submissions cost {WRONG_ANSWER_PENALTY} point each, even typos. A mission can fall to 0."
             ]
             self.imagem_path = get_resource_path('graphics/dialogues/alves.jpg')
             self.nome = get_dialogue_text_surface(self.font_nome, 'Dr. Alves')
@@ -66,8 +69,8 @@ class Dialogues:
         elif self.character == 'Pacheco':
             self.message = [
             "Oh hello, fellow student! My name is Dr. Miguel Pacheco and I'm trying to improve the",
-            "production of bacterial cellulose. For that, I'm building a Genome-Scale Metabolic Model,",
-            "as well as, conducting experiments in laboratory to confirm that I'm being successful",
+            "production of bacterial cellulose. For that, I'm building a genome-scale metabolic model",
+            "and carrying out laboratory experiments to test the model's predictions.",
             "in my quest! Let's both try our best!"
             ]
             self.imagem_path = get_resource_path('graphics/dialogues/Pacheco.jpg')
@@ -77,7 +80,7 @@ class Dialogues:
             self.message = [
             "I’m Marta Sampaio, and I developed a Genome-scale metabolic model to study how",
             "grapevines grow and change throughout the day and night.",
-            "This was really a grape achievement!"
+            "This helps us connect metabolism with how the plant responds across the day."
             ]
             self.imagem_path = get_resource_path('graphics/dialogues/Marta.jpg')
             self.nome = get_dialogue_text_surface(self.font_nome, 'Dra. Sampaio')
@@ -107,7 +110,7 @@ class Dialogues:
             "Hello there! My name is Dr. Alexandre Oliveira, and I am studying the metabolic",
             "interactions between SARS-CoV-2 and various human tissues using genome-scale",
             "metabolic models.",
-            "SARS-COV-2 is a strain of coronavirus that causes COVID-19!"
+            "SARS-CoV-2 is the coronavirus that causes COVID-19."
             ]
             self.imagem_path = get_resource_path('graphics/dialogues/Alexandre.jpg')
             self.nome = get_dialogue_text_surface(self.font_nome, 'Dr. Oliveira')
@@ -123,9 +126,9 @@ class Dialogues:
             self.nome = get_dialogue_text_surface(self.font_nome, 'Dr. Cunha')
         elif self.character == 'Oscar':
             self.message = [
-            "Hello there my young padawan! I’m Oscar Dias, and I study how living things",
-            "work using computers and math. ",
-            "In our lab, we use the data side of the Force to unlock life's mysteries! ",
+            "Hello! I’m Oscar Dias, and I study how living systems",
+            "work using computational and mathematical methods. ",
+            "In our lab, data and models help us investigate complex biological questions. ",
             ]
             self.imagem_path = get_resource_path('graphics/dialogues/Oscar.jpg') 
             self.nome = get_dialogue_text_surface(self.font_nome, 'Dr. Dias')
@@ -133,7 +136,7 @@ class Dialogues:
             self.message = [
             "Hi there! I’m Miguel Rocha, and I study how computers can help us understand ",
             "and solve problems in biology and medicine. ",
-            "We’re not just solving problems, we’re debugging the code of life!"
+            "The goal is to turn biological data into models that can support useful predictions."
             ]
             self.imagem_path = get_resource_path('graphics/dialogues/Miguel.jpg') 
             self.nome = get_dialogue_text_surface(self.font_nome, 'Dr. Rocha')

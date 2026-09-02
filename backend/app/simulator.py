@@ -177,11 +177,24 @@ def simulate(req: SimulateRequest) -> SimulateResponse:
                 f'Supported methods: {", ".join(supported_methods)}'
             )
 
-        # Validate model-scoped ids before running an expensive solver.
-        template.reactions.get_by_id(req.objective)
+        # Validate model-scoped ids before running an expensive solver.  Convert
+        # COBRA's bare KeyError into a useful model-aware message so a malformed
+        # browser request never surfaces only a quoted reaction id to students.
+        try:
+            template.reactions.get_by_id(req.objective)
+        except KeyError:
+            raise ValueError(
+                f'Objective reaction {req.objective} is not available in model {model_id}.'
+            ) from None
+
         environmental_constraints = {k: tuple(v) for k, v in req.env_conditions.items()}
         for reaction_id in environmental_constraints:
-            template.reactions.get_by_id(reaction_id)
+            try:
+                template.reactions.get_by_id(reaction_id)
+            except KeyError:
+                raise ValueError(
+                    f'Environmental reaction {reaction_id} is not available in model {model_id}.'
+                ) from None
 
         known_gene_ids = {str(gene.id) for gene in template.genes}
         requested_knockouts = [str(gene_id) for gene_id in req.gene_knockouts]

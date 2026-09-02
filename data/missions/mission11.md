@@ -32,7 +32,7 @@ All five values must be selected and numerically present in the same visible sol
 
 | Evidence | Expected result |
 |---|---:|
-| Predicted biomass flux | approximately `0.211663` |
+| Predicted growth rate | approximately `0.211663` |
 | Formate secretion | approximately `17.804674` |
 | Acetate secretion | approximately `8.503585` |
 | Ethanol secretion | approximately `8.279455` |

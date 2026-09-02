@@ -301,10 +301,10 @@ class Mission18RegressionTests(unittest.TestCase):
     def test_report_presents_comparison_without_printing_the_answer(self):
         report = self._complete_screen()
         text = simulation.build_mission18_binding_export_report_text(report)
-        self.assertIn('Baseline growth: 0.212', text)
+        self.assertIn('Baseline predicted growth rate: 0.212 h^-1', text)
         self.assertIn('Candidate trials recorded: 2/2', text)
-        self.assertIn('growth 0.189; 89.4% of baseline', text)
-        self.assertIn('growth 0.212; 100.0% of baseline', text)
+        self.assertIn('predicted growth rate 0.189 h^-1; 89.4% of baseline', text)
+        self.assertIn('predicted growth rate 0.212 h^-1; 100.0% of baseline', text)
         self.assertIn('Which upper-bound closure created', text)
         self.assertNotIn('Answer: acetate', text.lower())
         self.assertNotIn('Acetate is the binding constraint', text)

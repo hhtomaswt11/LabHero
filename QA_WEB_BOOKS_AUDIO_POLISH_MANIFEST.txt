@@ -1,0 +1,30 @@
+QA Web polish — Books navigation, How to Play, credits and audio default
+
+Changes
+-------
+1. Books navigation
+- Library books are standalone async pygame-menu instances.
+- Their Back button now explicitly disables the current book menu so Books.update()
+  returns to the Books index.
+- This applies to all six library books.
+
+2. How to Play unification
+- Settings (M) -> How to Play now uses the same canonical BOOKS.1 content and
+  menu rendering helper as Books -> How to Play.
+- The title/menu style is aligned with the library version.
+- Intro -> Controls remains the concise controls screen by design.
+
+3. Credits
+- "Game developed by Monica Leiras and Tomas Melo".
+
+4. Music default
+- Settings slider starts at 15.
+- Player startup mixer volume is derived from the same 15% slider value and the
+  existing mixer scale, so the UI and audible startup level are consistent.
+
+5. Coffee (audited, not changed)
+- Base player speed: 750.
+- Coffee sets speed to 900 (+20%).
+- The boost does not stack, has no timer and is not persisted in the save.
+
+No mission science, validators, progression, map, backend or deployment logic changed.

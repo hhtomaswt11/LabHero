@@ -1,0 +1,19 @@
+TEACHER.1A — Pygbag asset/auth compatibility fix
+
+Observed browser failure:
+- /teacher/?mission=17 authenticated successfully.
+- Pygbag then fetched /teacher/src.<hash>.tar.gz with `credentials: omit`.
+- nginx protected every /teacher/* request with Basic Auth.
+- The archive fetch therefore returned HTTP 401 and the game remained stuck.
+
+Fix:
+- Keep /teacher/ and /teacher/index.html Basic-Auth protected.
+- Rewrite other /teacher/* asset requests to the identical public root assets
+  without Basic Auth.
+- The public root query ?teacher=1&mission=XX still cannot activate Teacher Mode.
+- deploy.sh now verifies all three runtime conditions:
+    unauthenticated Teacher entry -> 401
+    authenticated Teacher entry   -> 200
+    unauthenticated Pygbag archive under /teacher/ -> 200
+
+No game mission, simulator, save, campaign, score, map, or backend logic changed.

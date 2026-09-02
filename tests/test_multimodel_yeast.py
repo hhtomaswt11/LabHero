@@ -60,6 +60,7 @@ except ModuleNotFoundError:
 
 import model_registry  # noqa: E402
 import progression  # noqa: E402
+import save_load  # noqa: E402
 import simulation  # noqa: E402
 sys.platform = _original_platform
 
@@ -557,6 +558,28 @@ class MultiModelYeastRegressionTests(unittest.TestCase):
         with patch.object(simulation, 'load_file', return_value=new_save):
             self.assertEqual(simulation._read_simulation_model_id(), 'yeast_iMM904')
 
+    def test_web_simulation_artifact_preserves_yeast_model_metadata(self):
+        """The six-field simulation artifact must never be normalised as player data."""
+        artifact = [
+            {'method': [['pFBA', 'pFBA']]},
+            {'objective': 'BIOMASS_SC5_notrace'},
+            {},
+            {},
+            {'EX_etoh_e': True, 'EX_co2_e': True},
+            {'model_id': 'yeast_iMM904'},
+        ]
+        previous_memstore = dict(save_load._MEMSTORE)
+        self.addCleanup(lambda: (save_load._MEMSTORE.clear(), save_load._MEMSTORE.update(previous_memstore)))
+        save_load._MEMSTORE.clear()
+        save_load._MEMSTORE['simulation_file'] = artifact
+
+        loaded = save_load.load_file('simulation_file')
+        self.assertEqual(loaded[5], {'model_id': 'yeast_iMM904'})
+        self.assertEqual(simulation._read_simulation_model_id(), 'yeast_iMM904')
+        payload = simulation._build_request_payload()
+        self.assertEqual(payload['model_id'], 'yeast_iMM904')
+        self.assertEqual(payload['objective'], 'BIOMASS_SC5_notrace')
+
     def test_simulation_reader_preserves_text_objective_and_legacy_dropselect(self):
         # Yeast TextInput is a plain string.  It must never be indexed like a
         # DropSelect or BIOMASS_SC5_notrace silently becomes just 'B'.
@@ -601,6 +624,8 @@ class MultiModelYeastRegressionTests(unittest.TestCase):
         self.assertNotIn('_simul = get_simulator(_model)', simulator_source)
         self.assertIn('Unknown gene id(s) for model', simulator_source)
         self.assertIn('Method {req.method} is not enabled for model', simulator_source)
+        self.assertIn('Objective reaction {req.objective} is not available in model {model_id}.', simulator_source)
+        self.assertIn('Environmental reaction {reaction_id} is not available in model {model_id}.', simulator_source)
 
     def test_backend_and_game_ship_the_same_yeast_model(self):
         backend_path = PROJECT_ROOT / 'backend' / 'models' / 'iMM904.xml.gz'

@@ -1,6 +1,8 @@
 import pygame
 import pygame_menu
 
+from answer_penalty import penalize_wrong_answer
+
 from settings import *
 from save_load import *
 from timers import Timer
@@ -51,9 +53,10 @@ class Mission26_info:
             theme=mytheme,
             title='Mission 26',
             width=1280,
+        overflow=(False, True),
         )
 
-        if not is_mission26_unlocked(self.missions_completed):
+        if not self.player.is_mission_unlocked('26'):
             menu.add.vertical_margin(40)
             menu.add.label(
                 "Mission 26 is locked. Complete Mission 25 before beginning Dr. Smith's second experiment.",
@@ -70,6 +73,7 @@ class Mission26_info:
         hint3 = pygame_menu.Menu(
             height=720, center_content=False, onclose=pygame_menu.events.BACK,
             theme=mytheme, title='Mission 26 Hint 3', width=1280,
+        overflow=(False, True),
         )
         hint3.add.label(
             f"Technical hint: use {MISSION26_METHOD} with objective {MISSION26_GROWTH_OBJECTIVE}. Keep the base environment completely default. In Bound Sweep Setup choose the lower bound of {MISSION26_SWEEP_REACTION} and values "
@@ -84,6 +88,7 @@ class Mission26_info:
         hint2 = pygame_menu.Menu(
             height=720, center_content=False, onclose=pygame_menu.events.BACK,
             theme=mytheme, title='Mission 26 Hint 2', width=1280,
+        overflow=(False, True),
         )
         hint2.add.label(
             'Experimental hint: use identical oxygen lower-bound values for both genotypes. Match the rows by bound and compare knockout-to-wild-type growth retention at each point, rather than comparing only the two endpoints.',
@@ -97,6 +102,7 @@ class Mission26_info:
         hint1 = pygame_menu.Menu(
             height=720, center_content=False, onclose=pygame_menu.events.BACK,
             theme=mytheme, title='Mission 26 Hint 1', width=1280,
+        overflow=(False, True),
         )
         hint1.add.label(
             'Conceptual hint: a genotype-environment interaction curve can distinguish a gradual defect from a threshold. Look for the tested oxygen capacity where the mutant response separates sharply from the matched wild-type response.',
@@ -114,6 +120,7 @@ class Mission26_info:
             theme=mytheme,
             title='Mission 26 Briefing',
             width=1280,
+        overflow=(False, True),
         )
         briefing.add.label(
             f"""
@@ -198,7 +205,7 @@ class Mission26_info:
         await run_menu(menu, self.display_surface)
 
     def activate_mission26(self):
-        if not is_mission26_unlocked(self.missions_completed):
+        if not self.player.is_mission_unlocked('26'):
             self.failed.play()
             animation_text_save('Complete Mission 25 before starting Mission 26.', time=3000)
             return
@@ -217,7 +224,7 @@ class Mission26_info:
         save_file(self.player.get_save_data())
 
     def deliver_results(self, answer):
-        if not is_mission26_unlocked(self.missions_completed):
+        if not self.player.is_mission_unlocked('26'):
             self.failed.play()
             animation_text_save('Complete Mission 25 first!', time=2500)
             return
@@ -242,6 +249,7 @@ class Mission26_info:
         if not mission26_answer_matches(answer, report):
             self.failed.play()
             animation_text_save('Recompare matched wild-type and knockout growth at every tested lower bound.', time=3300)
+            penalize_wrong_answer(self.player, '26')
             return
 
         self.success.play()

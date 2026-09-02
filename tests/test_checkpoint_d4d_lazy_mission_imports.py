@@ -68,8 +68,10 @@ class TestCheckpointD4DLazyMissionImports(unittest.TestCase):
             guards = [node for node in method.body if isinstance(node, ast.If)]
             self.assertEqual(len(guards), 1)
             guard = guards[0]
+            # EASY.2B may add a mode branch inside the first-open guard, but
+            # Normal mission modules must still stay below that outer guard.
             imports = [
-                node for node in guard.body
+                node for node in ast.walk(guard)
                 if isinstance(node, ast.ImportFrom) and node.module == module_name
             ]
             self.assertEqual(len(imports), 1, f'{module_name} import escaped lazy guard')
@@ -77,14 +79,20 @@ class TestCheckpointD4DLazyMissionImports(unittest.TestCase):
     def test_import_precedes_controller_construction(self):
         for suffix, module_name, class_name in TALKS:
             guard = next(node for node in _method(f'toggle_talk_{suffix}').body if isinstance(node, ast.If))
-            self.assertGreaterEqual(len(guard.body), 2)
-            self.assertIsInstance(guard.body[0], ast.ImportFrom)
-            self.assertEqual(guard.body[0].module, module_name)
-            assignment = guard.body[1]
-            self.assertIsInstance(assignment, ast.Assign)
-            self.assertIsInstance(assignment.value, ast.Call)
-            self.assertIsInstance(assignment.value.func, ast.Name)
-            self.assertEqual(assignment.value.func.id, class_name)
+            imports = [
+                node for node in ast.walk(guard)
+                if isinstance(node, ast.ImportFrom) and node.module == module_name
+            ]
+            assignments = [
+                node for node in ast.walk(guard)
+                if isinstance(node, ast.Assign)
+                and isinstance(node.value, ast.Call)
+                and isinstance(node.value.func, ast.Name)
+                and node.value.func.id == class_name
+            ]
+            self.assertEqual(len(imports), 1)
+            self.assertEqual(len(assignments), 1)
+            self.assertLess(imports[0].lineno, assignments[0].lineno)
 
     def test_old_eager_mission02_import_is_removed(self):
         source = LEVEL_PATH.read_text()

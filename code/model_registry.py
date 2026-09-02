@@ -438,6 +438,20 @@ def build_ui_context(model_id=DEFAULT_MODEL_ID):
     else:
         objective_ids = list(all_ids)
 
+    all_reaction_names_by_id = dict(zip(all_ids, all_names))
+    objective_options = []
+    for reaction_id in objective_ids:
+        reaction_name = all_reaction_names_by_id.get(reaction_id, reaction_id)
+        objective_options.append({
+            'id': reaction_id,
+            'name': reaction_name,
+            'label': (
+                f'{reaction_name} ({reaction_id})'
+                if reaction_name and reaction_name != reaction_id
+                else reaction_id
+            ),
+        })
+
     exchange_names_by_id = _exchange_name_map(metadata)
     production_flux_options = []
     for reaction_id in profile['production_flux_ids']:
@@ -463,6 +477,7 @@ def build_ui_context(model_id=DEFAULT_MODEL_ID):
         'objective_ui_mode': profile['objective_ui_mode'],
         'environment_ui_mode': profile.get('environment_ui_mode', 'toggles'),
         'objective_ids': objective_ids,
+        'objective_options': objective_options,
         'all_reaction_ids': all_ids,
         'all_reaction_names': all_names,
         'exchanges': exchange_rows,

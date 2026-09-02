@@ -43,9 +43,10 @@ class Mission08_info:
         menu = pygame_menu.Menu(
             height=720, center_content=False, onclose=self.toggle_menu,
             theme=mytheme, title='Mission 08', width=1280,
+        overflow=(False, True),
         )
 
-        if not is_mission08_unlocked(self.missions_completed):
+        if not self.player.is_mission_unlocked('08'):
             menu.add.vertical_margin(40)
             menu.add.label(
                 'Mission 08 is locked. Complete the controlled objective comparison in Mission 07 before studying environmental constraints.',
@@ -59,6 +60,7 @@ class Mission08_info:
         hint3 = pygame_menu.Menu(
             height=720, center_content=False, onclose=pygame_menu.events.BACK,
             theme=mytheme, title='Mission 08 Hint 3', width=1280,
+        overflow=(False, True),
         )
         hint3.add.label(
             f'Technical hint: use {MISSION08_METHOD}, maximise {MISSION08_TARGET_OBJECTIVE}, keep all genes active, track {MISSION08_TARGET_FLUX}, and compare the default medium with a run in which only the lower bound of {MISSION08_OXYGEN_REACTION} is closed.',
@@ -69,6 +71,7 @@ class Mission08_info:
         hint2 = pygame_menu.Menu(
             height=720, center_content=False, onclose=pygame_menu.events.BACK,
             theme=mytheme, title='Mission 08 Hint 2', width=1280,
+        overflow=(False, True),
         )
         hint2.add.label(
             'Experimental hint: observe oxygen uptake before imposing the constraint. Keep the objective, genes, method and all other environmental bounds identical between the two runs.',
@@ -80,6 +83,7 @@ class Mission08_info:
         hint1 = pygame_menu.Menu(
             height=720, center_content=False, onclose=pygame_menu.events.BACK,
             theme=mytheme, title='Mission 08 Hint 1', width=1280,
+        overflow=(False, True),
         )
         hint1.add.label(
             'Conceptual hint: a new constraint changes the optimum only if it removes or limits something that the previous optimum was able to use.',
@@ -91,6 +95,7 @@ class Mission08_info:
         briefing = pygame_menu.Menu(
             height=720, center_content=False, onclose=pygame_menu.events.BACK,
             theme=mytheme, title='Mission 08 Briefing', width=1280,
+        overflow=(False, True),
         )
         briefing.add.label(
             f"""
@@ -117,6 +122,7 @@ class Mission08_info:
             wordwrap=True, align=pygame_menu.locals.ALIGN_CENTER, font_size=30,
         )
         menu.add.button('Mission 08 Briefing', briefing, font_color='black', background_color=(255, 215, 0, 255))
+        menu.add.button('Optional Hints (Bronze Key if locked)', self.hint_access.request, 1, menu, hint1, font_color='black', background_color=(230, 230, 180, 255))
         menu.add.vertical_margin(30)
 
         report = load_mission08_constraint_check()
@@ -139,7 +145,7 @@ class Mission08_info:
         await run_menu(menu, self.display_surface)
 
     def activate_mission08(self):
-        if not is_mission08_unlocked(self.missions_completed):
+        if not self.player.is_mission_unlocked('08'):
             self.failed.play()
             animation_text_save('Complete Mission 07 first!', time=2500)
             return
@@ -160,7 +166,7 @@ class Mission08_info:
         save_file(self.player.get_save_data())
 
     def deliver_results(self):
-        if not is_mission08_unlocked(self.missions_completed):
+        if not self.player.is_mission_unlocked('08'):
             self.failed.play()
             animation_text_save('Complete Mission 07 first!', time=2500)
             return

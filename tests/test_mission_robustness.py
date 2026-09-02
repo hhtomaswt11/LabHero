@@ -145,7 +145,7 @@ class MissionLifecycleSourceTests(unittest.TestCase):
             source = (CODE_DIR / f'mission{mission_id}.py').read_text(encoding='utf-8')
             node = self._method_node(source, 'deliver_results')
             segment = self._segment(source, node)
-            unlock = f'if not is_mission{mission_id}_unlocked(self.missions_completed):'
+            unlock = f"if not self.player.is_mission_unlocked('{mission_id}'):"
             active = f"if '{mission_id}' not in self.missions_activated:"
             # Both guards must precede any load of mission evidence.
             load_positions = [

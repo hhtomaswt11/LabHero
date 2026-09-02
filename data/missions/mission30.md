@@ -10,7 +10,7 @@ Mission 29 identified isoenzyme redundancy under one default aerobic condition. 
 
 The player must distinguish two different model outputs:
 
-- a feasible solution with a numerical biomass flux;
+- a feasible solution with a numerical predicted growth rate;
 - an `INFEASIBLE` solver status, where no flux state satisfies all current constraints.
 
 An `INFEASIBLE` row must never be converted into a measured growth value of `0.000`.

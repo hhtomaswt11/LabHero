@@ -1,6 +1,8 @@
 import pygame
 import pygame_menu
 
+from answer_penalty import penalize_wrong_answer
+
 from settings import *
 from save_load import *
 from timers import Timer
@@ -52,9 +54,10 @@ class Mission17_info:
             theme=mytheme,
             title='Mission 17',
             width=1280,
+        overflow=(False, True),
         )
 
-        if not is_mission17_unlocked(self.missions_completed):
+        if not self.player.is_mission_unlocked('17'):
             menu.add.vertical_margin(40)
             menu.add.label(
                 'Mission 17 is locked. Complete Mission 16 before beginning the uptake-route screen.',
@@ -71,6 +74,7 @@ class Mission17_info:
         hint3 = pygame_menu.Menu(
             height=720, center_content=False, onclose=pygame_menu.events.BACK,
             theme=mytheme, title='Mission 17 Hint 3', width=1280,
+        overflow=(False, True),
         )
         hint3.add.label(
             f'Technical hint: first use {MISSION17_METHOD}, objective {MISSION17_GROWTH_OBJECTIVE}, all genes active and every environmental bound at default. Then repeat the same setup five times, closing only one candidate lower bound per run: ' + ', '.join(MISSION17_CANDIDATE_NUTRIENTS) + '.',
@@ -83,6 +87,7 @@ class Mission17_info:
         hint2 = pygame_menu.Menu(
             height=720, center_content=False, onclose=pygame_menu.events.BACK,
             theme=mytheme, title='Mission 17 Hint 2', width=1280,
+        overflow=(False, True),
         )
         hint2.add.label(
             'Experimental hint: compare every trial with the same recorded baseline. A lower-bound closure removes uptake capacity; it does not necessarily remove positive secretion through that exchange.',
@@ -96,6 +101,7 @@ class Mission17_info:
         hint1 = pygame_menu.Menu(
             height=720, center_content=False, onclose=pygame_menu.events.BACK,
             theme=mytheme, title='Mission 17 Hint 1', width=1280,
+        overflow=(False, True),
         )
         hint1.add.label(
             'Conceptual hint: use the sign of each baseline exchange flux. Negative flux indicates uptake; positive flux indicates secretion under the displayed solution.',
@@ -109,6 +115,7 @@ class Mission17_info:
         briefing = pygame_menu.Menu(
             height=720, center_content=False, onclose=pygame_menu.events.BACK,
             theme=mytheme, title='Mission 17 Briefing', width=1280,
+        overflow=(False, True),
         )
         briefing.add.label(
             f"""
@@ -197,7 +204,7 @@ class Mission17_info:
         await run_menu(menu, self.display_surface)
 
     def activate_mission17(self):
-        if not is_mission17_unlocked(self.missions_completed):
+        if not self.player.is_mission_unlocked('17'):
             self.failed.play()
             animation_text_save('Complete Mission 16 before starting Mission 17.', time=3000)
             return
@@ -215,7 +222,7 @@ class Mission17_info:
         save_file(self.player.get_save_data())
 
     def deliver_results(self, answer):
-        if not is_mission17_unlocked(self.missions_completed):
+        if not self.player.is_mission_unlocked('17'):
             self.failed.play()
             animation_text_save('Complete Mission 16 first!', time=2500)
             return
@@ -248,10 +255,12 @@ class Mission17_info:
         if len(normalise_mission17_answer(answer)) != 2:
             self.failed.play()
             animation_text_save('Enter exactly two candidate route names or reaction identifiers.', time=3000)
+            penalize_wrong_answer(self.player, '17')
             return
         if not mission17_answer_matches(answer, report):
             self.failed.play()
             animation_text_save('Those two routes are not supported by the recorded growth responses.', time=3000)
+            penalize_wrong_answer(self.player, '17')
             return
 
         self.success.play()

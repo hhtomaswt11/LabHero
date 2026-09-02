@@ -304,7 +304,7 @@ class Mission09RegressionTests(unittest.TestCase):
         self.assertFalse(simulation.mission09_answer_matches('b0115', legacy))
         stale_text = simulation.build_mission09_evidence_report_text(legacy)
         self.assertIn('b1479 (maeA): pending', stale_text)
-        self.assertIn('b0721 (sdhC): growth', stale_text)
+        self.assertIn('b0721 (sdhC): predicted growth rate', stale_text)
         self.assertNotIn('b0720 (', stale_text)
 
         migrated = self._record(['b1479'], report=legacy)

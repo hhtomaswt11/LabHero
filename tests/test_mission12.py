@@ -305,7 +305,7 @@ class Mission12RegressionTests(unittest.TestCase):
             production_fluxes=production, medium_fluxes=medium,
         )
         self.assertFalse(no_zero_growth['current_run_valid'])
-        self.assertTrue(any('biomass' in issue.lower() for issue in no_zero_growth['current_issues']))
+        self.assertTrue(any('growth' in issue.lower() for issue in no_zero_growth['current_issues']))
 
         objective, production, medium = self._synthetic_data('default')
         medium['items'] = [item for item in medium['items'] if item['reaction_id'] != simulation.MISSION12_OXYGEN_REACTION]

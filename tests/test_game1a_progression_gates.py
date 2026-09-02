@@ -24,10 +24,12 @@ class Game1AProgressionGateTests(unittest.TestCase):
     def test_teacher_bypasses_gates(self):
         self.assertTrue(CampaignContext("teacher").should_gate_be_open("35", []))
 
-    def test_easy_does_not_invent_skips_yet(self):
+    def test_easy_uses_curated_progression_milestones(self):
         ctx = CampaignContext("easy")
-        self.assertFalse(ctx.should_gate_be_open("06", []))
+        self.assertFalse(ctx.should_gate_be_open("06", ["03"]))
         self.assertTrue(ctx.should_gate_be_open("06", ["06"]))
+        self.assertFalse(ctx.should_gate_be_open("35", ["25"]))
+        self.assertTrue(ctx.should_gate_be_open("35", ["27"]))
 
     def test_invalid_mode_rejected(self):
         with self.assertRaises(ValueError):

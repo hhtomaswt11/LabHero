@@ -1,6 +1,8 @@
 import pygame
 import pygame_menu
 
+from answer_penalty import penalize_wrong_answer
+
 from settings import *
 from save_load import *
 from timers import Timer
@@ -57,9 +59,10 @@ class Mission15_info:
             theme=mytheme,
             title='Mission 15',
             width=1280,
+        overflow=(False, True),
         )
 
-        if not is_mission15_unlocked(self.missions_completed):
+        if not self.player.is_mission_unlocked('15'):
             menu.add.vertical_margin(40)
             menu.add.label(
                 'Mission 15 is locked. Complete Mission 14 before beginning the final Dr. Almeida audit.',
@@ -76,6 +79,7 @@ class Mission15_info:
         hint3 = pygame_menu.Menu(
             height=720, center_content=False, onclose=pygame_menu.events.BACK,
             theme=mytheme, title='Mission 15 Hint 3', width=1280,
+        overflow=(False, True),
         )
         hint3.add.label(
             f'Technical hint: use {MISSION15_TARGET_METHOD}, keep all genes active, keep default glucose, close only the lower bound of EX_o2_e, and track ' + ', '.join(MISSION15_REQUIRED_TRACKED_FLUXES) + f'. Record one run with objective {MISSION15_PRODUCT_OBJECTIVE} and one with {MISSION15_GROWTH_OBJECTIVE}.',
@@ -88,6 +92,7 @@ class Mission15_info:
         hint2 = pygame_menu.Menu(
             height=720, center_content=False, onclose=pygame_menu.events.BACK,
             theme=mytheme, title='Mission 15 Hint 2', width=1280,
+        overflow=(False, True),
         )
         hint2.add.label(
             'Experimental hint: the selected objective must be the only variable that changes. Compare biomass in the product-priority solution with succinate in the growth-priority solution.',
@@ -101,6 +106,7 @@ class Mission15_info:
         hint1 = pygame_menu.Menu(
             height=720, center_content=False, onclose=pygame_menu.events.BACK,
             theme=mytheme, title='Mission 15 Hint 1', width=1280,
+        overflow=(False, True),
         )
         hint1.add.label(
             'Conceptual hint: a high optimum for one reaction does not by itself establish that another biological objective is simultaneously supported.',
@@ -114,6 +120,7 @@ class Mission15_info:
         briefing = pygame_menu.Menu(
             height=720, center_content=False, onclose=pygame_menu.events.BACK,
             theme=mytheme, title='Mission 15 Briefing', width=1280,
+        overflow=(False, True),
         )
         briefing.add.label(
             f"""
@@ -197,7 +204,7 @@ class Mission15_info:
         await run_menu(menu, self.display_surface)
 
     def activate_mission15(self):
-        if not is_mission15_unlocked(self.missions_completed):
+        if not self.player.is_mission_unlocked('15'):
             self.failed.play()
             animation_text_save('Complete Mission 14 before starting Mission 15.', time=3000)
             return
@@ -215,7 +222,7 @@ class Mission15_info:
         save_file(self.player.get_save_data())
 
     def deliver_results(self, answer):
-        if not is_mission15_unlocked(self.missions_completed):
+        if not self.player.is_mission_unlocked('15'):
             self.failed.play()
             animation_text_save('Complete Mission 14 first!', time=2500)
             return
@@ -240,10 +247,12 @@ class Mission15_info:
         if normalise_mission15_answer(answer) is None:
             self.failed.play()
             animation_text_save('State the relationship supported by the two controlled optima.', time=3000)
+            penalize_wrong_answer(self.player, '15')
             return
         if not mission15_answer_matches(answer, report):
             self.failed.play()
             animation_text_save('That conclusion is not consistent with both cross-objective fluxes.', time=3300)
+            penalize_wrong_answer(self.player, '15')
             return
 
         self.success.play()

@@ -1,6 +1,8 @@
 import pygame
 import pygame_menu
 
+from answer_penalty import penalize_wrong_answer
+
 from settings import *
 from save_load import *
 from timers import Timer
@@ -81,7 +83,7 @@ class Mission35:
             self.menu_message(completed_dialogue, buttons=False)
         elif '35' in self.missions_activated:
             self.menu_message(active_dialogue, menu_to_open=self.menu35)
-        elif is_mission35_unlocked(self.missions_completed):
+        elif self.player.is_mission_unlocked('35'):
             self.menu_message(intro_dialogue, menu_to_open=self.menu35)
         else:
             self.menu_message(locked_dialogue, buttons=False)
@@ -144,9 +146,10 @@ class Mission35_info:
             theme=mytheme,
             title='Mission 35',
             width=1280,
+        overflow=(False, True),
         )
 
-        if not is_mission35_unlocked(self.missions_completed):
+        if not self.player.is_mission_unlocked('35'):
             menu.add.vertical_margin(40)
             menu.add.label(
                 "Mission 35 is locked. Complete Mission 34 and Dr. Chen's programme first.",
@@ -170,6 +173,7 @@ class Mission35_info:
         hint3 = pygame_menu.Menu(
             height=720, center_content=False, onclose=pygame_menu.events.BACK,
             theme=mytheme, title='Mission 35 Hint 3', width=1280,
+        overflow=(False, True),
         )
         hint3.add.label(
             f'Technical hint: design screen = {MISSION35_METHOD}, biomass objective, default environment and exactly {production_panel}. For robustness, run two EX_o2_e lower-bound sweeps using the "Final oxygen convergence" preset ({sweep_values}) with b0114 and b0116. For the final audit, return to the default environment, keep b0114, use {MISSION35_METHOD}, and change the objective to {MISSION35_FORMATE_OBJECTIVE}.',
@@ -181,6 +185,7 @@ class Mission35_info:
         hint2 = pygame_menu.Menu(
             height=720, center_content=False, onclose=pygame_menu.events.BACK,
             theme=mytheme, title='Mission 35 Hint 2', width=1280,
+        overflow=(False, True),
         )
         hint2.add.label(
             'Experimental hint: a qualifying design must satisfy all three approval criteria at once. In the oxygen curves, compare matched rows rather than only endpoints. For the objective audit, compare direct formate maximisation with the same genotype under the biomass objective.',
@@ -193,6 +198,7 @@ class Mission35_info:
         hint1 = pygame_menu.Menu(
             height=720, center_content=False, onclose=pygame_menu.events.BACK,
             theme=mytheme, title='Mission 35 Hint 1', width=1280,
+        overflow=(False, True),
         )
         hint1.add.label(
             'Conceptual hint: this is a certification dossier, not a highest-number contest. Integrate production, growth retention, GPR reaction impact, oxygen-response behaviour and objective choice before deciding.',
@@ -205,6 +211,7 @@ class Mission35_info:
         briefing = pygame_menu.Menu(
             height=720, center_content=False, onclose=pygame_menu.events.BACK,
             theme=mytheme, title='Mission 35 Final Briefing', width=1280,
+        overflow=(False, True),
         )
         briefing.add.label(
             f"""
@@ -268,7 +275,7 @@ class Mission35_info:
             menu.add.label('Mission Completed', font_color=(40, 120, 40))
             if rewards.get('golden_skin_unlocked'):
                 menu.add.label(
-                    'Golden LabHero unlocked. Press C outside this menu to equip it.',
+                    'Golden LabHero unlocked. Open the Inventory with E to equip it.',
                     wordwrap=True, align=pygame_menu.locals.ALIGN_CENTER, font_color=(160, 110, 0),
                 )
         elif self.mission35 or '35' in self.missions_activated:
@@ -303,7 +310,7 @@ class Mission35_info:
         await run_menu(menu, self.display_surface)
 
     def activate_mission35(self):
-        if not is_mission35_unlocked(self.missions_completed):
+        if not self.player.is_mission_unlocked('35'):
             self.failed.play()
             animation_text_save('Complete Mission 34 before starting the final certification.', time=3000)
             return
@@ -320,7 +327,7 @@ class Mission35_info:
         save_file(self.player.get_save_data())
 
     def deliver_results(self, target_answer, bound_answer, viability_answer):
-        if not is_mission35_unlocked(self.missions_completed):
+        if not self.player.is_mission_unlocked('35'):
             self.failed.play()
             animation_text_save('Complete Mission 34 first!', time=2500)
             return
@@ -347,18 +354,22 @@ class Mission35_info:
         if not checks.get('target'):
             self.failed.play()
             animation_text_save('Recheck which reaction target satisfies all design criteria.', time=3000)
+            penalize_wrong_answer(self.player, '35')
             return
         if not checks.get('bound'):
             self.failed.play()
             animation_text_save('Recheck the first tested oxygen bound where the visible phenotypes converge.', time=3200)
+            penalize_wrong_answer(self.player, '35')
             return
         if not checks.get('viability'):
             self.failed.play()
             animation_text_save('Recheck whether direct formate maximisation retains viable predicted growth.', time=3200)
+            penalize_wrong_answer(self.player, '35')
             return
         if not mission35_answers_match(target_answer, bound_answer, viability_answer, report):
             self.failed.play()
             animation_text_save('The final dossier answers do not yet match the accumulated evidence.', time=3000)
+            penalize_wrong_answer(self.player, '35')
             return
 
         self.success.play()
@@ -366,7 +377,7 @@ class Mission35_info:
             self.missions_completed.insert(0, '35')
         save_file(self.player.get_save_data())
         animation_text_save(
-            'E. coli certification complete! Golden LabHero unlocked — press C to equip it.',
+            'E. coli certification complete! Golden LabHero unlocked — open the Inventory with E to equip it.',
             time=3800,
         )
 

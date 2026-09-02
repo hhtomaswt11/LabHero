@@ -1,65 +1,33 @@
-# Book "E. coli Basics"
+# E. coli and the Core Metabolic Model
 
-This book provides a deep dive into the world of E. coli, focusing on its metabolic model and its importance in scientific research and various industries. It's an exploration of a tiny microbe with big contributions to our understanding of life.
+Escherichia coli is a major experimental and industrial model organism. LabHero begins with a compact E. coli core network so that central metabolic trade-offs remain visible while you learn constraint-based analysis.
 
+## Central carbon metabolism
 
-## Chapter 1: Meet E. coli
+Glucose can feed glycolysis, the pentose-phosphate pathway and the tricarboxylic-acid network. These pathways exchange carbon, reducing power and precursor metabolites needed for biomass formation.
 
-### Introducing Our Tiny Hero
+The core model intentionally omits much of the full organism. Its simplicity is useful for reasoning, but predictions should be interpreted as properties of this model under the selected conditions.
 
-Meet Escherichia coli, or E. coli for short. It's a microscopic superstar! This tiny bacterium might look simple, but it holds the secrets to understanding how life works at its core.
+## Aerobic and oxygen-limited states
 
-### E. coli's Microscopic Machinery
+When oxygen uptake is available, respiratory pathways can support efficient reoxidation of reducing equivalents and high predicted growth rate. Closing or limiting oxygen forces the feasible network to redistribute flux through alternative pathways.
 
-E. coli is like a well-oiled machine, with tiny parts that work together flawlessly. Inside, it has a metabolic model — a set of instructions that tells it how to grow, eat, and survive. Think of it as E. coli's rulebook for life.
+Anaerobic does not mean 'no metabolism'. E. coli can maintain redox balance through fermentative products and other routes represented in the model, depending on available nutrients and bounds.
 
-### Feeding the Beast
+## Growth versus production
 
-Just like us, E. coli needs to eat. But instead of burgers and fries, its favorite meal is glucose. It knows how to transform this sugar into energy, fueling its daily activities and growth.
+Maximizing the biomass reaction and maximizing a secreted product are different objectives. A design with high product flux can have poor predicted growth rate, and a high-growth solution can secrete little of the target product.
 
-### Breathing Lessons for Microbes
+Metabolic engineering therefore involves trade-offs. LabHero missions use controlled objectives, knockouts and environmental constraints to make those trade-offs measurable.
 
-E. coli has its own way of breathing. Some breathe with oxygen, just like we do. Others are like tiny rebels, thriving without oxygen. It's all part of their amazing adaptability.
+## Gene knockouts and redundancy
 
-### Reproduction, E. coli Style
+Knocking out a gene disables only reactions whose GPR rules require that gene. Alternative isoenzymes or pathways can preserve the phenotype, while the same knockout may become severe in a different environment.
 
-E. coli might not have families like we do, but it knows how to make baby E. coli. When conditions are perfect, it multiplies rapidly, filling its world with new generations.
+This is why essentiality is context dependent and why rescue experiments must distinguish restored predicted growth rate from restoration of the deleted gene or reaction.
 
-### Beyond the Microscope
+## Reading exchange reactions
 
-E. coli isn't just a fascinating microbe; it's also a superstar in science and industry. Scientists use it to study life's mysteries, and it plays a vital role in creating medicines, biofuels, and more.
+Exchange IDs such as EX_glc__D_e or EX_o2_e describe transfer between the model and its environment. In LabHero's convention, negative flux typically denotes uptake and positive flux secretion.
 
-## Chapter 2: Metabolic Model
-
-### Core Metabolism of E. coli
-
-E. coli's core metabolism includes essential biochemical pathways that are crucial for its growth and survival.
-
-You can see a visual map of these pathways in this link:
-
-[Escher Map](https://escher.github.io/#/app?map=e_coli_core.Core%20metabolism&tool=Viewer)
-
-
-Escher is an open-source web application that allows you to interactively explore and visualize metabolic maps, which are representations of the biochemical pathways within an organism's metabolism.
-
-Escher maps like this one are valuable tools for researchers studying the metabolism of microorganisms like E. coli.
-
-They help visualize complex metabolic networks and gain insights into how genes, enzymes, and metabolites interact to support cellular functions.
-
-This understanding has applications in various fields, including biotechnology, systems biology, and metabolic engineering.
-
-
-### Key Features of Escher Maps:
-
-**Interactive Exploration**: Escher maps are highly interactive. You can zoom in and out, pan across the map, and click on individual metabolites and reactions to view detailed information.
-
-**Pathway Representation**: The map displays key metabolic pathways, such as glycolysis, the TCA (tricarboxylic acid) cycle, and the pentose phosphate pathway. These pathways are essential for energy production and biosynthesis.
-
-**Metabolite and Reaction Details**: Clicking on a metabolite or reaction node provides information about its name, abbreviation, and associated genes and enzymes. You can also see reaction reversibility and flux values.
-
-**Color Coding**: Metabolites and reactions may be color-coded to indicate various properties or conditions, such as metabolite concentration or reaction directionality.
-
-**Search Function**: Escher allows you to search for specific metabolites or reactions within the map, making it easy to find and focus on particular components of the metabolic network.
-
-**Export Options**: You can export the map for use in presentations or publications, which can be particularly useful for researchers and educators.
-
+Always inspect the actual optimized exchange flux. A permissive lower bound does not prove that the model consumed the full permitted amount.

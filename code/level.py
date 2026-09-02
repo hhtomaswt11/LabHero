@@ -20,15 +20,21 @@ from skin_menu import SkinSelectionMenu
 from progression import is_model_unlocked
 from campaign import CampaignContext
 from student_registration import StudentRegistrationMenu
+from easy_mission_npc import EasyMissionNPC
+from final_results import FinalResultsMenu
+from teacher_mission_launcher import TeacherMissionLauncher
 
 class Level:
-	def __init__(self, load_game):
+	def __init__(self, load_game, teacher_target_mission=None):
 
 		# get the display surface
 		self.display_surface = pygame.display.get_surface()
 
 		# load the game
 		self.load_game = load_game
+		self.teacher_target_mission = teacher_target_mission
+		self.teacher_launch_pending = teacher_target_mission is not None
+		self.teacher_open_key_locked = False
 		self.campaign_context = CampaignContext(mode='normal')
 
 		# sprite groups
@@ -103,11 +109,27 @@ class Level:
 		self.dialogues_active = False
 		self.student_registration_active = False
 		self.student_registration = StudentRegistrationMenu(
-			self.player, self.toggle_student_registration
+			self.player,
+			self.toggle_student_registration,
+			self.refresh_campaign_context,
+		)
+		# STUDENT.2 final results are opened automatically once the selected
+		# campaign's actual final mission is complete.
+		self.final_results_active = False
+		self.final_results = FinalResultsMenu(self.player, self.close_final_results)
+		# After campaign completion, F can reopen the final-results screen.
+		# The lock prevents a held key from reopening the menu repeatedly.
+		self.final_results_open_key_locked = False
+		self.teacher_launcher = (
+			TeacherMissionLauncher(self.player, self.teacher_target_mission)
+			if self.teacher_target_mission is not None else None
 		)
 		self.skin_menu_active = False
 		self.skin_menu = SkinSelectionMenu(self.skin_manager, self.player)
 		self.skin_open_key_locked = False
+		# Track modal -> map transitions. If a modal was confirmed with ENTER,
+		# the same held key must not trigger a nearby world interaction.
+		self._map_modal_was_active = False
 
 		# sounds
 		success_path = get_resource_path('audio/success.ogg')
@@ -216,6 +238,7 @@ class Level:
 		# Keep the post-Mission-06 Carter reveal anchored to the current
 		# Tiled interaction object instead of the coordinates of an older map.
 		carter_reveal_pos = None
+		golden_egg_obj = None
 		for obj in tmx_data.get_layer_by_name('Player'):
 			if obj.name == 'Start':
 				self.player = Player(
@@ -255,6 +278,12 @@ class Level:
 					skin_manager = self.skin_manager
 					# music = self.music_bg
 					)
+				# EASY.1A: rebuild the campaign policy from the persisted player
+				# mode before progression gates are instantiated later in setup().
+				self.campaign_context = CampaignContext(mode=self.player.campaign_mode)
+
+			if obj.name == 'GoldenEgg':
+				golden_egg_obj = obj
 			
 			if obj.name == 'Mission01':
 				Interaction((obj.x, obj.y), (obj.width, obj.height), self.interaction_sprites, obj.name)
@@ -345,7 +374,33 @@ class Level:
 				
 			if obj.name == 'Coffee':
 				Interaction((obj.x, obj.y), (obj.width, obj.height), self.interaction_sprites, obj.name)
-			
+
+		# The Golden Egg is authored as a tile object on the Player layer. It is
+		# deliberately not a collision object: players can walk up to it, press
+		# ENTER nearby, collect its one-time reward and then it disappears.
+		if (
+			golden_egg_obj is not None
+			and not getattr(self.player, 'golden_egg_collected', False)
+		):
+			GoldenEgg(
+				pos=(golden_egg_obj.x, golden_egg_obj.y),
+				surf=golden_egg_obj.image,
+				groups=[self.all_sprites, self.dynamic_sprites],
+				player=self.player,
+			)
+			interaction_padding = 32
+			Interaction(
+				(
+					golden_egg_obj.x - interaction_padding,
+					golden_egg_obj.y - interaction_padding,
+				),
+				(
+					golden_egg_obj.width + (interaction_padding * 2),
+					golden_egg_obj.height + (interaction_padding * 2),
+				),
+				self.interaction_sprites,
+				'GoldenEgg',
+			)
 
 		# Gates are created after Player has loaded missions_completed from save.
 		self._setup_progression_gates(tmx_data)
@@ -362,6 +417,13 @@ class Level:
 			groups = self.all_sprites,
 			z = LAYERS['ground'])
 
+	def refresh_campaign_context(self):
+		"""Synchronise Level/gates after the one-time Normal/Easy registration."""
+		self.campaign_context = CampaignContext(mode=self.player.campaign_mode)
+		for gate in self.progression_gate_sprites.sprites():
+			gate.campaign_context = self.campaign_context
+			gate.sync_with_progression()
+
 	def player_add(self, item):
 		self.player.item_inventory[item] += 1
 		self.success.play()
@@ -371,62 +433,92 @@ class Level:
 
 	def toggle_talk_1(self):
 		if not self.talk_1_active and self.talk_1 is None:
-			from mission01 import Mission01
-			self.talk_1 = Mission01(self.toggle_talk_1, self.player)
+			if getattr(self.player, 'campaign_mode', 'normal') == 'easy':
+				self.talk_1 = EasyMissionNPC(self.toggle_talk_1, self.player, '01')
+			else:
+				from mission01 import Mission01
+				self.talk_1 = Mission01(self.toggle_talk_1, self.player)
 		self.talk_1_active = not self.talk_1_active
 
 	def toggle_talk_2(self):
 		if not self.talk_2_active and self.talk_2 is None:
-			from mission03 import Mission03
-			self.talk_2 = Mission03(self.toggle_talk_2, self.player)
+			if getattr(self.player, 'campaign_mode', 'normal') == 'easy':
+				self.talk_2 = EasyMissionNPC(self.toggle_talk_2, self.player, '03')
+			else:
+				from mission03 import Mission03
+				self.talk_2 = Mission03(self.toggle_talk_2, self.player)
 		self.talk_2_active = not self.talk_2_active
 	
 	def toggle_talk_3(self):
 		if not self.talk_3_active and self.talk_3 is None:
-			from mission06 import Mission06
-			self.talk_3 = Mission06(self.toggle_talk_3, self.player)
+			if getattr(self.player, 'campaign_mode', 'normal') == 'easy':
+				self.talk_3 = EasyMissionNPC(self.toggle_talk_3, self.player, '06')
+			else:
+				from mission06 import Mission06
+				self.talk_3 = Mission06(self.toggle_talk_3, self.player)
 		self.talk_3_active = not self.talk_3_active
 
 	def toggle_talk_7(self):
 		if not self.talk_7_active and self.talk_7 is None:
-			from mission07 import Mission07
-			self.talk_7 = Mission07(self.toggle_talk_7, self.player)
+			if getattr(self.player, 'campaign_mode', 'normal') == 'easy':
+				self.talk_7 = EasyMissionNPC(self.toggle_talk_7, self.player, '07')
+			else:
+				from mission07 import Mission07
+				self.talk_7 = Mission07(self.toggle_talk_7, self.player)
 		self.talk_7_active = not self.talk_7_active
 
 	def toggle_talk_11(self):
 		if not self.talk_11_active and self.talk_11 is None:
-			from mission11 import Mission11
-			self.talk_11 = Mission11(self.toggle_talk_11, self.player)
+			if getattr(self.player, 'campaign_mode', 'normal') == 'easy':
+				self.talk_11 = EasyMissionNPC(self.toggle_talk_11, self.player, '13')
+			else:
+				from mission11 import Mission11
+				self.talk_11 = Mission11(self.toggle_talk_11, self.player)
 		self.talk_11_active = not self.talk_11_active
 
 	def toggle_talk_16(self):
 		if not self.talk_16_active and self.talk_16 is None:
-			from mission16 import Mission16
-			self.talk_16 = Mission16(self.toggle_talk_16, self.player)
+			if getattr(self.player, 'campaign_mode', 'normal') == 'easy':
+				self.talk_16 = EasyMissionNPC(self.toggle_talk_16, self.player, '18')
+			else:
+				from mission16 import Mission16
+				self.talk_16 = Mission16(self.toggle_talk_16, self.player)
 		self.talk_16_active = not self.talk_16_active
 
 	def toggle_talk_21(self):
 		if not self.talk_21_active and self.talk_21 is None:
-			from mission21 import Mission21
-			self.talk_21 = Mission21(self.toggle_talk_21, self.player)
+			if getattr(self.player, 'campaign_mode', 'normal') == 'easy':
+				self.talk_21 = EasyMissionNPC(self.toggle_talk_21, self.player, '21')
+			else:
+				from mission21 import Mission21
+				self.talk_21 = Mission21(self.toggle_talk_21, self.player)
 		self.talk_21_active = not self.talk_21_active
 
 	def toggle_talk_23(self):
 		if not self.talk_23_active and self.talk_23 is None:
-			from mission23 import Mission23
-			self.talk_23 = Mission23(self.toggle_talk_23, self.player)
+			if getattr(self.player, 'campaign_mode', 'normal') == 'easy':
+				self.talk_23 = EasyMissionNPC(self.toggle_talk_23, self.player, '23')
+			else:
+				from mission23 import Mission23
+				self.talk_23 = Mission23(self.toggle_talk_23, self.player)
 		self.talk_23_active = not self.talk_23_active
 
 	def toggle_talk_25(self):
 		if not self.talk_25_active and self.talk_25 is None:
-			from mission25 import Mission25
-			self.talk_25 = Mission25(self.toggle_talk_25, self.player)
+			if getattr(self.player, 'campaign_mode', 'normal') == 'easy':
+				self.talk_25 = EasyMissionNPC(self.toggle_talk_25, self.player, '25')
+			else:
+				from mission25 import Mission25
+				self.talk_25 = Mission25(self.toggle_talk_25, self.player)
 		self.talk_25_active = not self.talk_25_active
 
 	def toggle_talk_27(self):
 		if not self.talk_27_active and self.talk_27 is None:
-			from mission27 import Mission27
-			self.talk_27 = Mission27(self.toggle_talk_27, self.player)
+			if getattr(self.player, 'campaign_mode', 'normal') == 'easy':
+				self.talk_27 = EasyMissionNPC(self.toggle_talk_27, self.player, '27')
+			else:
+				from mission27 import Mission27
+				self.talk_27 = Mission27(self.toggle_talk_27, self.player)
 		self.talk_27_active = not self.talk_27_active
 
 	def toggle_talk_29(self):
@@ -449,8 +541,11 @@ class Level:
 
 	def toggle_talk_36(self):
 		if not self.talk_36_active and self.talk_36 is None:
-			from mission36 import Mission36
-			self.talk_36 = Mission36(self.toggle_talk_36, self.player)
+			if getattr(self.player, 'campaign_mode', 'normal') == 'easy':
+				self.talk_36 = EasyMissionNPC(self.toggle_talk_36, self.player, '36')
+			else:
+				from mission36 import Mission36
+				self.talk_36 = Mission36(self.toggle_talk_36, self.player)
 		self.talk_36_active = not self.talk_36_active
 
 	def toggle_talk_37(self):
@@ -483,12 +578,56 @@ class Level:
 	def toggle_student_registration(self):
 		self.student_registration_active = not self.student_registration_active
 
+	def should_show_final_results(self):
+		return (
+			self.campaign_context.mode != 'teacher'
+			and self.player.name_confirmed
+			and not self.player.final_results_seen
+			and self.campaign_context.is_campaign_complete(self.player.missions_completed)
+		)
+
+	def can_reopen_final_results(self):
+		"""Return whether the completed campaign summary may be reopened with F."""
+		return (
+			self.campaign_context.mode != 'teacher'
+			and self.player.name_confirmed
+			and self.campaign_context.is_campaign_complete(self.player.missions_completed)
+		)
+
+	def close_final_results(self):
+		self.final_results_active = False
+		if not self.player.final_results_seen:
+			self.player.final_results_seen = True
+			save_file(self.player.get_save_data())
+
+	def handle_final_results_shortcut(self):
+		"""Reopen Final Results with F, but only after campaign completion."""
+		keys = pygame.key.get_pressed()
+		f_pressed = keys[pygame.K_f]
+
+		# Re-arm only after the key is released, so holding F cannot immediately
+		# reopen the menu after the player closes it.
+		if not f_pressed:
+			self.final_results_open_key_locked = False
+			return
+
+		if (
+			not self.final_results_open_key_locked
+			and self.can_reopen_final_results()
+			and not self.any_modal_active()
+			and not self.skin_menu_active
+		):
+			self.final_results_active = True
+
+		self.final_results_open_key_locked = True
+
 	def desk_menu(self):
 		self.desk_active = not self.desk_active
 
 	def yeast_simulator_menu(self):
-		if not is_model_unlocked('yeast_iMM904', self.player.missions_completed):
-			animation_text_save('Complete Mission 35 to unlock the yeast simulator.', time=2500)
+		if not is_model_unlocked('yeast_iMM904', self.player.missions_completed, self.campaign_context):
+			required = self.campaign_context.progression_milestone_for('35') or '35'
+			animation_text_save(f'Complete Mission {required} to unlock the yeast simulator.', time=2500)
 			return
 		if self.yeast_window is None:
 			animation_text_save('Loading yeast simulator...', time=250)
@@ -527,8 +666,25 @@ class Level:
 			self.talk_39_active or
 			self.talk_40_active or
 			self.dialogues_active or
-			self.student_registration_active
+			self.student_registration_active or
+			self.final_results_active
 		)
+
+	def suppress_enter_after_modal_close(self):
+		"""Require an ENTER release when control returns from any modal UI."""
+		modal_active = self.any_modal_active() or self.skin_menu_active
+		if self._map_modal_was_active and not modal_active:
+			self.player.block_interaction_until_enter_release()
+		self._map_modal_was_active = modal_active
+
+	def handle_teacher_mission_shortcut(self):
+		if self.teacher_launcher is None or self.campaign_context.mode != 'teacher':
+			return
+		keys = pygame.key.get_pressed()
+		t_pressed = keys[pygame.K_t]
+		if t_pressed and not self.teacher_open_key_locked and not self.any_modal_active() and not self.skin_menu_active:
+			self.teacher_launch_pending = True
+		self.teacher_open_key_locked = t_pressed
 
 	def handle_skin_menu_shortcut(self):
 		keys = pygame.key.get_pressed()
@@ -574,6 +730,41 @@ class Level:
 		self.display_surface.fill('black')
 		self.all_sprites.custom_draw(self.player)
 
+		# A menu may have just closed using ENTER. Re-arm map interaction only
+		# after RETURN/KP_ENTER are physically released.
+		self.suppress_enter_after_modal_close()
+
+		# TEACHER.1 opens the requested mission menu immediately and lets the
+		# professor reopen it with T without walking back through NPC chains.
+		if (
+			self.teacher_launch_pending
+			and self.teacher_launcher is not None
+			and not self.any_modal_active()
+			and not self.skin_menu_active
+		):
+			self.teacher_launch_pending = False
+			await self.teacher_launcher.update()
+			return
+
+		self.handle_teacher_mission_shortcut()
+		if self.teacher_launch_pending:
+			return
+
+		# Once the campaign is complete, F provides a persistent way to reopen
+		# the final-results screen after the one-shot automatic presentation.
+		self.handle_final_results_shortcut()
+
+		# Open the summary only after every mission/dialogue/menu has closed.
+		# This makes M36 (Easy) and M40 (Normal) completion feel immediate while
+		# avoiding nested pygame-menu loops inside a mission screen.
+		if (
+			not self.final_results_active
+			and not self.skin_menu_active
+			and not self.any_modal_active()
+			and self.should_show_final_results()
+		):
+			self.final_results_active = True
+
 		if self.skin_menu_active:
 			result = self.skin_menu.update()
 			self.skin_menu.draw()
@@ -587,7 +778,10 @@ class Level:
 			return
 
 		#updates
-		if self.menu_active:
+		if self.final_results_active:
+			await self.final_results.update()
+
+		elif self.menu_active:
 			# self.menu.update()
 			await self.menu.update()
 

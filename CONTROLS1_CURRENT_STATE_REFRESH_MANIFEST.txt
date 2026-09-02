@@ -1,0 +1,21 @@
+CONTROLS.1 — current-state controls refresh
+
+Purpose
+-------
+Keep the title-screen Controls panel and the in-game Settings > How to Play
+panel aligned with the current LabHero controls.
+
+Changes
+-------
+- Added code/controls_content.py as the single source of truth for control copy.
+- Updated both code/intro.py and code/menu_2.py to use that shared content.
+- Documented current title-screen ENTER/SPACE actions.
+- Documented movement (arrows/WASD), ENTER interaction, ESC back/close,
+  E Inventory, skin-selection controls, M Settings and mouse-driven buttons.
+- Kept Web and Desktop save/exit wording distinct.
+- Removed the old "righ" typo and stale/partial control descriptions.
+
+Not changed
+-----------
+No mission logic, simulator logic, save format, campaign progression, map,
+backend, deployment, score/hint rules or scientific content was changed.

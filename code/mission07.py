@@ -102,7 +102,7 @@ class Mission07:
         ]
 
         self.input()
-        if not is_mission07_unlocked(self.missions_completed):
+        if not self.player.is_mission_unlocked('07'):
             self.menu_message(locked, buttons=False)
         elif '10' in self.missions_completed:
             self.menu_message(self.m10_step2, buttons=False)
@@ -188,9 +188,10 @@ class Mission07_info:
             theme=mytheme,
             title='Mission 07',
             width=1280,
+        overflow=(False, True),
         )
 
-        if not is_mission07_unlocked(self.missions_completed):
+        if not self.player.is_mission_unlocked('07'):
             menu.add.vertical_margin(40)
             menu.add.label(
                 "Mission 07 is locked. Complete Mission 06 with Dr. Carter before entering Dr. Nova's objective-comparison investigation.",
@@ -207,6 +208,7 @@ class Mission07_info:
         hint3 = pygame_menu.Menu(
             height=720, center_content=False, onclose=pygame_menu.events.BACK,
             theme=mytheme, title='Mission 07 Hint 3', width=1280,
+        overflow=(False, True),
         )
         hint3.add.label(
             f'Technical hint: use {MISSION07_METHOD}, keep the default medium and all genes unchanged, track {MISSION07_TARGET_FLUX}, and compare {MISSION07_BIOMASS_OBJECTIVE} with {MISSION07_TARGET_OBJECTIVE} as objectives.',
@@ -217,6 +219,7 @@ class Mission07_info:
         hint2 = pygame_menu.Menu(
             height=720, center_content=False, onclose=pygame_menu.events.BACK,
             theme=mytheme, title='Mission 07 Hint 2', width=1280,
+        overflow=(False, True),
         )
         hint2.add.label(
             'Experimental hint: record one run that asks the model to maximise growth and another that asks it to maximise ethanol. Method, genes, medium and tracked fluxes must remain identical.',
@@ -228,6 +231,7 @@ class Mission07_info:
         hint1 = pygame_menu.Menu(
             height=720, center_content=False, onclose=pygame_menu.events.BACK,
             theme=mytheme, title='Mission 07 Hint 1', width=1280,
+        overflow=(False, True),
         )
         hint1.add.label(
             'Conceptual hint: an objective function is a modelling assumption that selects which feasible solution the algorithm seeks. It is not itself a biological intervention.',
@@ -243,6 +247,7 @@ class Mission07_info:
             theme=mytheme,
             title='Mission 07 Briefing',
             width=1280,
+        overflow=(False, True),
         )
         briefing.add.label(
             f"""
@@ -279,6 +284,7 @@ class Mission07_info:
             font_size=30,
         )
         menu.add.button('Mission 07 Briefing', briefing, font_color='black', background_color=(255, 215, 0, 255))
+        menu.add.button('Optional Hints (Bronze Key if locked)', self.hint_access.request, 1, menu, hint1, font_color='black', background_color=(230, 230, 180, 255))
         menu.add.vertical_margin(30)
 
         report = load_mission07_objective_check()
@@ -304,7 +310,7 @@ class Mission07_info:
         await run_menu(menu, self.display_surface)
 
     def activate_mission07(self):
-        if not is_mission07_unlocked(self.missions_completed):
+        if not self.player.is_mission_unlocked('07'):
             self.failed.play()
             animation_text_save('Complete Mission 06 first!', time=2500)
             return
@@ -325,7 +331,7 @@ class Mission07_info:
         save_file(self.player.get_save_data())
 
     def deliver_results(self):
-        if not is_mission07_unlocked(self.missions_completed):
+        if not self.player.is_mission_unlocked('07'):
             self.failed.play()
             animation_text_save('Complete Mission 06 first!', time=2500)
             return

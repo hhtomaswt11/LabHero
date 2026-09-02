@@ -9,6 +9,7 @@ import warnings
 from save_load import *
 from options_values import *
 from gpr import disabled_reaction_ids
+from scientific_display import GROWTH_RATE_UNIT, FLUX_UNIT, AGGREGATE_FLUX_UNIT
 from model_registry import (
     DEFAULT_MODEL_ID,
     build_legacy_tables,
@@ -2418,7 +2419,7 @@ def build_mission06_challenge_report_text(report_data=None):
             'Controlled setup for recorded designs: unchanged default aerobic medium; FBA biomass objective; ethanol exchange tracked; highlighted genes only; at most two knockouts.',
             '',
             (
-                f"Reference: growth {float(baseline.get('growth', 0.0)):.3f}; "
+                f"Reference: predicted growth rate {float(baseline.get('growth', 0.0)):.3f} {GROWTH_RATE_UNIT}; "
                 f"ethanol {float(baseline.get('production', 0.0)):.3f}; "
                 f"oxygen uptake {_clean_display_number(baseline.get('oxygen_uptake', 0.0)):.3f}"
             ),
@@ -2434,7 +2435,7 @@ def build_mission06_challenge_report_text(report_data=None):
             lines.extend([
                 '',
                 (
-                    f"Latest valid design: {genes}; growth {float(current.get('growth', 0.0)):.3f} "
+                    f"Latest valid design: {genes}; predicted growth rate {float(current.get('growth', 0.0)):.3f} {GROWTH_RATE_UNIT} "
                     f"({float(current.get('growth_percent', 0.0)):.1f}% of reference); "
                     f"ethanol {float(current.get('production', 0.0)):.3f}; "
                     f"balance index {float(current.get('score', 0.0)):.3f}."
@@ -2451,7 +2452,7 @@ def build_mission06_challenge_report_text(report_data=None):
             'Best valid design retained:',
             (
                 f"- Knockouts: {genes}\n"
-                f"- Growth: {float(best.get('growth', 0.0)):.3f} "
+                f"- Predicted growth rate: {float(best.get('growth', 0.0)):.3f} {GROWTH_RATE_UNIT} "
                 f"({float(best.get('growth_percent', 0.0)):.1f}% of reference)\n"
                 f"- Ethanol: {float(best.get('production', 0.0)):.3f}\n"
                 f"- Balance index: {float(best.get('score', 0.0)):.3f}"
@@ -2466,7 +2467,7 @@ def build_mission06_challenge_report_text(report_data=None):
         for attempt in history[-5:]:
             genes = ' + '.join(attempt.get('knocked_out_genes') or [])
             lines.append(
-                f"- {genes}: growth {float(attempt.get('growth', 0.0)):.3f}; "
+                f"- {genes}: predicted growth rate {float(attempt.get('growth', 0.0)):.3f} {GROWTH_RATE_UNIT}; "
                 f"ethanol {float(attempt.get('production', 0.0)):.3f}; "
                 f"index {float(attempt.get('score', 0.0)):.3f}"
             )
@@ -2745,8 +2746,8 @@ def build_mission03_evidence_report_text(report_data=None):
         )
         lines.append('')
         lines.append(
-            f"Baseline growth: {baseline:.3f}" if baseline is not None
-            else 'Baseline growth: not recorded yet'
+            f"Baseline predicted growth rate: {baseline:.3f} {GROWTH_RATE_UNIT}" if baseline is not None
+            else 'Baseline predicted growth rate: not recorded yet'
         )
         lines.append(f'Candidate knockout trials recorded: {count}/{required}')
         lines.append('')
@@ -2760,7 +2761,7 @@ def build_mission03_evidence_report_text(report_data=None):
             percent = trial.get('growth_percent')
             percent_text = f'{percent:.1f}% of baseline' if percent is not None else 'baseline missing'
             lines.append(
-                f"- {gene_id} ({gene_name}): growth {float(trial.get('growth', 0.0)):.3f}; "
+                f"- {gene_id} ({gene_name}): predicted growth rate {float(trial.get('growth', 0.0)):.3f} {GROWTH_RATE_UNIT}; "
                 f"{percent_text}; {trial.get('impact', '')}"
             )
 
@@ -2773,7 +2774,7 @@ def build_mission03_evidence_report_text(report_data=None):
             gene_name = MISSION03_GENE_NAMES.get(gene_id, '')
             lines.append(
                 f"Latest valid trial recorded: {gene_id} ({gene_name}), "
-                f"growth {float(report_data.get('current_growth', 0.0)):.3f}."
+                f"predicted growth rate {float(report_data.get('current_growth', 0.0)):.3f} {GROWTH_RATE_UNIT}."
             )
     elif report_data.get('current_issues'):
         lines.append('')
@@ -3052,9 +3053,9 @@ def build_mission07_objective_comparison_report_text(report_data=None):
         ])
         if reference:
             lines.extend([
-                f"- Biomass flux: {float(reference.get('biomass_flux', 0.0)):.3f}",
-                f"- Ethanol secretion: {float(reference.get('ethanol_flux', 0.0)):.3f}",
-                f"- Oxygen uptake: {_clean_display_number(reference.get('oxygen_uptake', 0.0)):.3f}",
+                f"- Predicted growth rate: {float(reference.get('biomass_flux', 0.0)):.3f} {GROWTH_RATE_UNIT}",
+                f"- Ethanol secretion: {float(reference.get('ethanol_flux', 0.0)):.3f} {FLUX_UNIT}",
+                f"- Oxygen uptake: {_clean_display_number(reference.get('oxygen_uptake', 0.0)):.3f} {FLUX_UNIT}",
             ])
         else:
             lines.append('- Not recorded yet')
@@ -3062,9 +3063,9 @@ def build_mission07_objective_comparison_report_text(report_data=None):
         lines.extend(['', 'Ethanol-objective run:'])
         if target:
             lines.extend([
-                f"- Biomass flux: {float(target.get('biomass_flux', 0.0)):.3f}",
-                f"- Ethanol secretion: {float(target.get('ethanol_flux', 0.0)):.3f}",
-                f"- Oxygen uptake: {_clean_display_number(target.get('oxygen_uptake', 0.0)):.3f}",
+                f"- Predicted growth rate: {float(target.get('biomass_flux', 0.0)):.3f} {GROWTH_RATE_UNIT}",
+                f"- Ethanol secretion: {float(target.get('ethanol_flux', 0.0)):.3f} {FLUX_UNIT}",
+                f"- Oxygen uptake: {_clean_display_number(target.get('oxygen_uptake', 0.0)):.3f} {FLUX_UNIT}",
             ])
         else:
             lines.append('- Not recorded yet')
@@ -3355,9 +3356,9 @@ def build_mission08_constraint_comparison_report_text(report_data=None):
         ])
         if default_run:
             lines.extend([
-                f"- D-lactate secretion: {float(default_run.get('d_lactate_flux', 0.0)):.3f}",
-                f"- Biomass flux: {float(default_run.get('biomass_flux', 0.0)):.3f}",
-                f"- Oxygen uptake: {_clean_display_number(default_run.get('oxygen_uptake', 0.0)):.3f}",
+                f"- D-lactate secretion: {float(default_run.get('d_lactate_flux', 0.0)):.3f} {FLUX_UNIT}",
+                f"- Predicted growth rate: {float(default_run.get('biomass_flux', 0.0)):.3f} {GROWTH_RATE_UNIT}",
+                f"- Oxygen uptake: {_clean_display_number(default_run.get('oxygen_uptake', 0.0)):.3f} {FLUX_UNIT}",
             ])
         else:
             lines.append('- Not recorded yet')
@@ -3365,9 +3366,9 @@ def build_mission08_constraint_comparison_report_text(report_data=None):
         lines.extend(['', 'Oxygen-constrained run:'])
         if constrained_run:
             lines.extend([
-                f"- D-lactate secretion: {float(constrained_run.get('d_lactate_flux', 0.0)):.3f}",
-                f"- Biomass flux: {float(constrained_run.get('biomass_flux', 0.0)):.3f}",
-                f"- Oxygen uptake: {_clean_display_number(constrained_run.get('oxygen_uptake', 0.0)):.3f}",
+                f"- D-lactate secretion: {float(constrained_run.get('d_lactate_flux', 0.0)):.3f} {FLUX_UNIT}",
+                f"- Predicted growth rate: {float(constrained_run.get('biomass_flux', 0.0)):.3f} {GROWTH_RATE_UNIT}",
+                f"- Oxygen uptake: {_clean_display_number(constrained_run.get('oxygen_uptake', 0.0)):.3f} {FLUX_UNIT}",
             ])
         else:
             lines.append('- Not recorded yet')
@@ -3412,7 +3413,7 @@ def build_mission08_constraint_comparison_report_text(report_data=None):
         lines.extend([
             '',
             'Interpretation guidance: do not decide whether closing oxygen changes the optimum until both controlled runs have been recorded and their visible flux profiles compared.',
-            'Direct D-lactate maximisation describes a theoretical product objective. Inspect the biomass flux in each solution before drawing conclusions about viability.',
+            'Direct D-lactate maximisation describes a theoretical product objective. Inspect the predicted growth rate in each solution before drawing conclusions about viability.',
         ])
     return '\n'.join(lines)
 
@@ -3820,8 +3821,8 @@ def build_mission09_evidence_report_text(report_data=None):
         ])
         if baseline:
             lines.append(
-                f"Baseline: growth {float(baseline.get('growth', 0.0)):.3f}; formate {float(baseline.get('production', 0.0)):.3f}; "
-                f"L-malate uptake {float(baseline.get('malate_uptake', 0.0)):.3f}; oxygen uptake {float(baseline.get('oxygen_uptake', 0.0)):.3f}."
+                f"Baseline: predicted growth rate {float(baseline.get('growth', 0.0)):.3f} {GROWTH_RATE_UNIT}; formate {float(baseline.get('production', 0.0)):.3f} {FLUX_UNIT}; "
+                f"L-malate uptake {float(baseline.get('malate_uptake', 0.0)):.3f} {FLUX_UNIT}; oxygen uptake {float(baseline.get('oxygen_uptake', 0.0)):.3f} {FLUX_UNIT}."
             )
         else:
             lines.append('Baseline: not recorded yet')
@@ -3837,8 +3838,8 @@ def build_mission09_evidence_report_text(report_data=None):
             change = trial.get('production_change')
             change_text = f'{float(change):+.3f}' if change is not None else 'baseline missing'
             lines.append(
-                f"- {gene_id} ({name}): growth {float(trial.get('growth', 0.0)):.3f} ({percent_text}); "
-                f"formate {float(trial.get('production', 0.0)):.3f} (change {change_text}); {trial.get('assessment', '')}"
+                f"- {gene_id} ({name}): predicted growth rate {float(trial.get('growth', 0.0)):.3f} {GROWTH_RATE_UNIT} ({percent_text}); "
+                f"formate {float(trial.get('production', 0.0)):.3f} {FLUX_UNIT} (change {change_text} {FLUX_UNIT}); {trial.get('assessment', '')}"
             )
     if report_data.get('current_run_recorded'):
         lines.append('')
@@ -3848,7 +3849,7 @@ def build_mission09_evidence_report_text(report_data=None):
             gene_id = report_data.get('current_selected_gene')
             lines.append(
                 f"Latest valid trial recorded: {gene_id} ({MISSION09_GENE_NAMES.get(gene_id, '')}); "
-                f"growth {float(report_data.get('current_growth', 0.0)):.3f}; formate {float(report_data.get('current_production', 0.0)):.3f}."
+                f"predicted growth rate {float(report_data.get('current_growth', 0.0)):.3f} {GROWTH_RATE_UNIT}; formate {float(report_data.get('current_production', 0.0)):.3f} {FLUX_UNIT}."
             )
     elif report_data.get('current_issues'):
         lines.extend(['', 'Latest run was not recorded:'])
@@ -3867,7 +3868,7 @@ def build_mission09_evidence_report_text(report_data=None):
     lines.extend([
         '',
         'Interpretation note: this mission measures formate secretion in the same biomass-optimal FBA solution used to assess growth. It does not combine values from separate hidden objectives.',
-        f'A candidate is operationally viable when it retains at least {MISSION09_MIN_VIABLE_GROWTH_RATIO * 100:.0f}% of the L-malate reference growth and increases formate by at least {MISSION09_MIN_PRODUCTION_INCREASE:.1f}. These are mission criteria, not universal biological definitions.',
+        f'A candidate is operationally viable when it retains at least {MISSION09_MIN_VIABLE_GROWTH_RATIO * 100:.0f}% of the L-malate reference growth and increases formate by at least {MISSION09_MIN_PRODUCTION_INCREASE:.1f} {FLUX_UNIT}. These are mission criteria, not universal biological definitions.',
         'The result is conditional on this model, L-malate medium, oxygen availability and biomass objective.',
     ])
     return '\n'.join(lines)
@@ -4286,8 +4287,8 @@ def build_mission10_evidence_report_text(report_data=None):
         ])
         if baseline:
             lines.append(
-                f"Baseline: growth {float(baseline.get('growth', 0.0)):.3f}; ethanol {float(baseline.get('ethanol', 0.0)):.3f}; "
-                f"acetate {float(baseline.get('acetate', 0.0)):.3f}; glucose uptake {float(baseline.get('glucose_uptake', 0.0)):.3f}; oxygen uptake {float(baseline.get('oxygen_uptake', 0.0)):.3f}."
+                f"Baseline: predicted growth rate {float(baseline.get('growth', 0.0)):.3f} {GROWTH_RATE_UNIT}; ethanol {float(baseline.get('ethanol', 0.0)):.3f} {FLUX_UNIT}; "
+                f"acetate {float(baseline.get('acetate', 0.0)):.3f} {FLUX_UNIT}; glucose uptake {float(baseline.get('glucose_uptake', 0.0)):.3f} {FLUX_UNIT}; oxygen uptake {float(baseline.get('oxygen_uptake', 0.0)):.3f} {FLUX_UNIT}."
             )
         else:
             lines.append('Baseline: not recorded yet')
@@ -4306,9 +4307,9 @@ def build_mission10_evidence_report_text(report_data=None):
             ethanol_change_text = f'{float(ethanol_change):+.3f}' if ethanol_change is not None else 'baseline missing'
             acetate_change_text = f'{float(acetate_change):+.3f}' if acetate_change is not None else 'baseline missing'
             lines.append(
-                f"- {label}: growth {float(trial.get('growth', 0.0)):.3f} ({percent_text}); "
-                f"ethanol {float(trial.get('ethanol', 0.0)):.3f} (change {ethanol_change_text}); "
-                f"acetate {float(trial.get('acetate', 0.0)):.3f} (change {acetate_change_text}); {trial.get('assessment', '')}"
+                f"- {label}: predicted growth rate {float(trial.get('growth', 0.0)):.3f} {GROWTH_RATE_UNIT} ({percent_text}); "
+                f"ethanol {float(trial.get('ethanol', 0.0)):.3f} {FLUX_UNIT} (change {ethanol_change_text} {FLUX_UNIT}); "
+                f"acetate {float(trial.get('acetate', 0.0)):.3f} {FLUX_UNIT} (change {acetate_change_text} {FLUX_UNIT}); {trial.get('assessment', '')}"
             )
 
     if report_data.get('current_run_recorded'):
@@ -4319,9 +4320,9 @@ def build_mission10_evidence_report_text(report_data=None):
             pair_key = report_data.get('current_pair_key')
             lines.append(
                 f"Latest valid pair recorded: {_mission10_pair_label(pair_key)}; "
-                f"growth {float(report_data.get('current_growth', 0.0)):.3f}; "
-                f"ethanol {float(report_data.get('current_ethanol', 0.0)):.3f}; "
-                f"acetate {float(report_data.get('current_acetate', 0.0)):.3f}."
+                f"predicted growth rate {float(report_data.get('current_growth', 0.0)):.3f} {GROWTH_RATE_UNIT}; "
+                f"ethanol {float(report_data.get('current_ethanol', 0.0)):.3f} {FLUX_UNIT}; "
+                f"acetate {float(report_data.get('current_acetate', 0.0)):.3f} {FLUX_UNIT}."
             )
     elif report_data.get('current_issues'):
         lines.extend(['', 'Latest run was not recorded:'])
@@ -4343,7 +4344,7 @@ def build_mission10_evidence_report_text(report_data=None):
         '',
         'Interpretation note: all growth, ethanol and acetate values come from the same visible biomass-optimal FBA solution. No hidden product objective is used.',
         'The candidate genes illustrate OR-type GPR redundancy: one knockout can leave a reaction functional through an alternative gene, whereas the appropriate pair can disable the route.',
-        f'A pair is operationally eligible when it retains at least {MISSION10_MIN_GROWTH_RATIO * 100:.0f}% of reference growth and increases ethanol by at least {MISSION10_MIN_ETHANOL_INCREASE:.1f}. These are mission criteria, not universal biological definitions.',
+        f'A pair is operationally eligible when it retains at least {MISSION10_MIN_GROWTH_RATIO * 100:.0f}% of reference growth and increases ethanol by at least {MISSION10_MIN_ETHANOL_INCREASE:.1f} {FLUX_UNIT}. These are mission criteria, not universal biological definitions.',
         'The result is conditional on this model, default glucose supply, anaerobic environment and biomass objective.',
     ])
     return '\n'.join(lines)
@@ -4462,7 +4463,7 @@ def _build_mission11_data(
     if missing_measured:
         issues.append('The visible solution did not provide numeric evidence for: ' + ', '.join(missing_measured) + '.')
     if growth is None:
-        issues.append('The visible solution did not provide a numeric biomass flux.')
+        issues.append('The visible solution did not provide a numeric predicted growth rate.')
     elif growth < MISSION11_MIN_GROWTH:
         issues.append(f'The model must predict positive growth of at least {MISSION11_MIN_GROWTH:.3f} in this controlled reference.')
     if glucose_uptake is None:
@@ -4625,9 +4626,9 @@ def build_mission11_fingerprint_report_text(report_data=None):
         lines.extend([
             'Controlled setup recorded: FBA biomass objective; default glucose supply; oxygen uptake disabled; all genes active; all other bounds unchanged.',
             '',
-            f"Predicted biomass flux: {float(fingerprint.get('growth', 0.0)):.3f}",
-            f"Glucose uptake: {float(fingerprint.get('glucose_uptake', 0.0)):.3f}",
-            f"Oxygen uptake: {_clean_display_number(fingerprint.get('oxygen_uptake', 0.0)):.3f}",
+            f"Predicted growth rate: {float(fingerprint.get('growth', 0.0)):.3f} {GROWTH_RATE_UNIT}",
+            f"Glucose uptake: {float(fingerprint.get('glucose_uptake', 0.0)):.3f} {FLUX_UNIT}",
+            f"Oxygen uptake: {_clean_display_number(fingerprint.get('oxygen_uptake', 0.0)):.3f} {FLUX_UNIT}",
             '',
             'Tracked secretion fingerprint:',
         ])
@@ -4783,9 +4784,9 @@ def _build_mission12_data(
             issues.append('The tracked succinate flux does not match the visible EX_succ_e objective value from the same solution.')
 
     if biomass_flux is None:
-        issues.append('The visible product-optimal solution did not provide a numeric biomass flux.')
+        issues.append('The visible product-optimal solution did not provide a numeric predicted growth rate.')
     elif biomass_flux > MISSION12_MAX_BIOMASS_FLUX:
-        issues.append('Both direct succinate optima should show approximately zero predicted biomass flux in this controlled comparison.')
+        issues.append('Both direct succinate optima should show approximately zero predicted growth rate in this controlled comparison.')
 
     if glucose_uptake is None:
         issues.append(f'The Exchange Flux Report did not provide glucose-uptake evidence for {MISSION12_GLUCOSE_REACTION}.')
@@ -4885,7 +4886,7 @@ def _build_mission12_data(
         if new_byproduct != MISSION12_EXPECTED_NEW_BYPRODUCT:
             comparison_issues.append('The two fingerprints do not yet show the expected single co-product changing from approximately zero to positive secretion.')
         if not both_no_growth:
-            comparison_issues.append('Both direct product-optimal solutions should have approximately zero predicted biomass flux.')
+            comparison_issues.append('Both direct product-optimal solutions should have approximately zero predicted growth rate.')
         if not constraint_binding:
             comparison_issues.append('The recorded evidence does not yet demonstrate that oxygen availability is binding for this succinate objective.')
 
@@ -5034,9 +5035,9 @@ def build_mission12_comparison_report_text(report_data=None):
             for reaction_id in MISSION12_REQUIRED_TRACKED_FLUXES:
                 lines.append(f"- {_mission12_product_label(reaction_id)}: {_clean_display_number(values.get(reaction_id, 0.0)):.3f}")
             lines.extend([
-                f"- Predicted biomass flux: {_clean_display_number(run.get('biomass_flux', 0.0)):.3f}",
-                f"- Glucose uptake: {_clean_display_number(run.get('glucose_uptake', 0.0)):.3f}",
-                f"- Oxygen uptake: {_clean_display_number(run.get('oxygen_uptake', 0.0)):.3f}",
+                f"- Predicted growth rate: {_clean_display_number(run.get('biomass_flux', 0.0)):.3f} {GROWTH_RATE_UNIT}",
+                f"- Glucose uptake: {_clean_display_number(run.get('glucose_uptake', 0.0)):.3f} {FLUX_UNIT}",
+                f"- Oxygen uptake: {_clean_display_number(run.get('oxygen_uptake', 0.0)):.3f} {FLUX_UNIT}",
             ])
 
         append_run('Oxygen-available default-medium run', default_run)
@@ -5058,7 +5059,7 @@ def build_mission12_comparison_report_text(report_data=None):
         acetate_change = report_data.get('acetate_change')
         percent_text = f' ({float(percent):+.1f}%)' if percent is not None else ''
         lines.extend([
-            f"Succinate change after disabling oxygen uptake: {float(change):+.3f}{percent_text}",
+            f"Succinate flux change after disabling oxygen uptake: {float(change):+.3f} {FLUX_UNIT}{percent_text}",
             'Compare the complete tracked fingerprints above and identify which co-product changes from approximately zero to positive secretion after oxygen uptake is disabled.',
         ])
         if report_data.get('comparison_issues'):
@@ -5255,9 +5256,9 @@ def _build_mission13_data(
         issues.append('New Results is not displaying the primary objective-reaction flux consistently.')
 
     if biomass_flux is None:
-        issues.append('The visible solution did not provide a numeric biomass flux.')
+        issues.append('The visible solution did not provide a numeric predicted growth rate.')
     elif biomass_flux > MISSION13_MAX_BIOMASS_FLUX:
-        issues.append('This direct succinate-optimal comparison should show approximately zero predicted biomass flux.')
+        issues.append('This direct succinate-optimal comparison should show approximately zero predicted growth rate.')
     if glucose_uptake is None:
         issues.append('The Exchange Flux Report did not provide numeric glucose-uptake evidence.')
     elif abs(float(glucose_uptake) - MISSION13_DEFAULT_GLUCOSE_UPTAKE) > MISSION13_FLUX_TOLERANCE:
@@ -5503,15 +5504,15 @@ def build_mission13_parsimony_report_text(report_data=None):
             return
         values = run.get('tracked_flux_values') or {}
         lines.extend([
-            f"- Primary succinate flux: {_clean_display_number(run.get('primary_objective_flux', 0.0)):.3f}",
-            f"- Acetate: {_clean_display_number(values.get('EX_ac_e', 0.0)):.3f}",
-            f"- Formate: {_clean_display_number(values.get('EX_for_e', 0.0)):.3f}",
-            f"- Ethanol: {_clean_display_number(values.get('EX_etoh_e', 0.0)):.3f}",
-            f"- D-lactate: {_clean_display_number(values.get('EX_lac__D_e', 0.0)):.3f}",
-            f"- Predicted biomass flux: {_clean_display_number(run.get('biomass_flux', 0.0)):.3f}",
-            f"- Glucose uptake: {_clean_display_number(run.get('glucose_uptake', 0.0)):.3f}",
-            f"- Oxygen uptake: {_clean_display_number(run.get('oxygen_uptake', 0.0)):.3f}",
-            f"- Total absolute flux of returned solution: {_clean_display_number(run.get('total_absolute_flux', 0.0)):.3f}",
+            f"- Primary succinate flux: {_clean_display_number(run.get('primary_objective_flux', 0.0)):.3f} {FLUX_UNIT}",
+            f"- Acetate: {_clean_display_number(values.get('EX_ac_e', 0.0)):.3f} {FLUX_UNIT}",
+            f"- Formate: {_clean_display_number(values.get('EX_for_e', 0.0)):.3f} {FLUX_UNIT}",
+            f"- Ethanol: {_clean_display_number(values.get('EX_etoh_e', 0.0)):.3f} {FLUX_UNIT}",
+            f"- D-lactate: {_clean_display_number(values.get('EX_lac__D_e', 0.0)):.3f} {FLUX_UNIT}",
+            f"- Predicted growth rate: {_clean_display_number(run.get('biomass_flux', 0.0)):.3f} {GROWTH_RATE_UNIT}",
+            f"- Glucose uptake: {_clean_display_number(run.get('glucose_uptake', 0.0)):.3f} {FLUX_UNIT}",
+            f"- Oxygen uptake: {_clean_display_number(run.get('oxygen_uptake', 0.0)):.3f} {FLUX_UNIT}",
+            f"- Total absolute flux of returned solution: {_clean_display_number(run.get('total_absolute_flux', 0.0)):.3f} {AGGREGATE_FLUX_UNIT}",
             f"- Active reactions: {int(run.get('active_reaction_count', 0))}",
         ])
         if include_secondary:
@@ -5535,7 +5536,7 @@ def build_mission13_parsimony_report_text(report_data=None):
         lines.append('External fingerprint preserved: ' + ('yes' if report.get('external_fingerprint_preserved') else 'no'))
         change = report.get('total_flux_change')
         if change is not None:
-            lines.append(f"pFBA minus FBA total absolute flux: {float(change):+.3f}")
+            lines.append(f"pFBA minus FBA total absolute flux: {float(change):+.3f} {AGGREGATE_FLUX_UNIT}")
         if report.get('parsimony_classification') == 'reduced_total_flux':
             lines.append('Parsimony interpretation: pFBA selected a solution with lower total absolute flux.')
         elif report.get('parsimony_classification') == 'equal_fba_already_parsimonious':
@@ -5884,9 +5885,9 @@ def _build_mission14_data(
         issues.append('New Results is not displaying the primary succinate reaction flux consistently.')
 
     if biomass_flux is None:
-        issues.append('The visible solution did not provide a numeric biomass flux.')
+        issues.append('The visible solution did not provide a numeric predicted growth rate.')
     elif biomass_flux > MISSION14_MAX_BIOMASS_FLUX:
-        issues.append('These direct succinate-optimal screening runs should show approximately zero predicted biomass flux.')
+        issues.append('These direct succinate-optimal screening runs should show approximately zero predicted growth rate.')
     if glucose_uptake is None:
         issues.append('The Exchange Flux Report did not provide numeric glucose-uptake evidence.')
     elif abs(float(glucose_uptake) - MISSION14_DEFAULT_GLUCOSE_UPTAKE) > MISSION14_FLUX_TOLERANCE:
@@ -6141,15 +6142,15 @@ def build_mission14_tradeoff_report_text(report_data=None):
             values = baseline.get('tracked_flux_values') or {}
             lines.extend([
                 'Reference:',
-                f"- Succinate: {_clean_display_number(values.get('EX_succ_e', 0.0)):.3f}",
-                f"- Acetate: {_clean_display_number(values.get('EX_ac_e', 0.0)):.3f}",
-                f"- Formate: {_clean_display_number(values.get('EX_for_e', 0.0)):.3f}",
-                f"- Ethanol: {_clean_display_number(values.get('EX_etoh_e', 0.0)):.3f}",
-                f"- D-lactate: {_clean_display_number(values.get('EX_lac__D_e', 0.0)):.3f}",
-                f"- Predicted biomass flux: {_clean_display_number(baseline.get('biomass_flux', 0.0)):.3f}",
-                f"- Glucose uptake: {_clean_display_number(baseline.get('glucose_uptake', 0.0)):.3f}",
-                f"- Oxygen uptake: {_clean_display_number(baseline.get('oxygen_uptake', 0.0)):.3f}",
-                f"- Total absolute flux: {_clean_display_number(baseline.get('total_absolute_flux', 0.0)):.3f}",
+                f"- Succinate: {_clean_display_number(values.get('EX_succ_e', 0.0)):.3f} {FLUX_UNIT}",
+                f"- Acetate: {_clean_display_number(values.get('EX_ac_e', 0.0)):.3f} {FLUX_UNIT}",
+                f"- Formate: {_clean_display_number(values.get('EX_for_e', 0.0)):.3f} {FLUX_UNIT}",
+                f"- Ethanol: {_clean_display_number(values.get('EX_etoh_e', 0.0)):.3f} {FLUX_UNIT}",
+                f"- D-lactate: {_clean_display_number(values.get('EX_lac__D_e', 0.0)):.3f} {FLUX_UNIT}",
+                f"- Predicted growth rate: {_clean_display_number(baseline.get('biomass_flux', 0.0)):.3f} {GROWTH_RATE_UNIT}",
+                f"- Glucose uptake: {_clean_display_number(baseline.get('glucose_uptake', 0.0)):.3f} {FLUX_UNIT}",
+                f"- Oxygen uptake: {_clean_display_number(baseline.get('oxygen_uptake', 0.0)):.3f} {FLUX_UNIT}",
+                f"- Total absolute flux: {_clean_display_number(baseline.get('total_absolute_flux', 0.0)):.3f} {AGGREGATE_FLUX_UNIT}",
                 f"- Active reactions: {int(baseline.get('active_reaction_count', 0))}",
             ])
             if baseline.get('source') == 'mission13_visible_pfba_run':
@@ -6177,11 +6178,11 @@ def build_mission14_tradeoff_report_text(report_data=None):
             new_products = trial.get('new_positive_byproducts') or []
             new_text = ', '.join(_mission14_product_label(rid) for rid in new_products) if new_products else 'none'
             lines.append(
-                f"- {label}: succinate {_clean_display_number(values.get('EX_succ_e', 0.0)):.3f} ({retention_text}); "
-                f"acetate {_clean_display_number(values.get('EX_ac_e', 0.0)):.3f} (reduction {reduction_text}); "
-                f"formate {_clean_display_number(values.get('EX_for_e', 0.0)):.3f}; "
-                f"ethanol {_clean_display_number(values.get('EX_etoh_e', 0.0)):.3f}; "
-                f"D-lactate {_clean_display_number(values.get('EX_lac__D_e', 0.0)):.3f}; "
+                f"- {label}: succinate {_clean_display_number(values.get('EX_succ_e', 0.0)):.3f} {FLUX_UNIT} ({retention_text}); "
+                f"acetate {_clean_display_number(values.get('EX_ac_e', 0.0)):.3f} {FLUX_UNIT} (reduction {reduction_text} {FLUX_UNIT}); "
+                f"formate {_clean_display_number(values.get('EX_for_e', 0.0)):.3f} {FLUX_UNIT}; "
+                f"ethanol {_clean_display_number(values.get('EX_etoh_e', 0.0)):.3f} {FLUX_UNIT}; "
+                f"D-lactate {_clean_display_number(values.get('EX_lac__D_e', 0.0)):.3f} {FLUX_UNIT}; "
                 f"new positive co-products: {new_text}; {trial.get('assessment', '')}"
             )
 
@@ -6225,7 +6226,7 @@ def build_mission14_tradeoff_report_text(report_data=None):
         f"Operational criteria: retain at least {MISSION14_MIN_TARGET_RETENTION * 100:.0f}% of reference succinate, reduce acetate by at least {MISSION14_MIN_ACETATE_REDUCTION:.1f}, and introduce no new co-product above {MISSION14_NEW_BYPRODUCT_THRESHOLD:.1f}. These are mission criteria, not universal biological definitions.",
         'Interpretation note: lowering one byproduct does not by itself prove that a design improved. Carbon can be redirected into other secreted products, and the primary product can fall.',
         'The b1241 trial also revisits GPR redundancy: a selected gene knockout can leave its associated reactions functional through alternative genes.',
-        'Every run is a theoretical succinate-optimal pFBA solution with approximately zero predicted biomass flux; it is not a viable production-strain claim.',
+        'Every run is a theoretical succinate-optimal pFBA solution with approximately zero predicted growth rate; it is not a viable production-strain claim.',
         'All objective, product, biomass, medium and parsimony values come from the same visible solver results. No hidden simulation is used.',
     ])
     return '\n'.join(lines)
@@ -6488,7 +6489,7 @@ def _build_mission15_data(
     if objective_value is None:
         issues.append('The visible objective value is not numeric.')
     if biomass_flux is None:
-        issues.append('The visible result does not contain a numeric biomass flux.')
+        issues.append('The visible result does not contain a numeric predicted growth rate.')
     if glucose_uptake is None:
         issues.append('The visible result does not contain glucose uptake.')
     elif abs(float(glucose_uptake) - MISSION15_DEFAULT_GLUCOSE_UPTAKE) > MISSION15_FLUX_TOLERANCE:
@@ -6532,7 +6533,7 @@ def _build_mission15_data(
             and primary_objective_flux is not None
             and abs(float(biomass_flux) - float(primary_objective_flux)) > MISSION15_PRIMARY_TOLERANCE
         ):
-            issues.append('The measured biomass flux does not match the growth objective flux.')
+            issues.append('The predicted growth rate does not match the growth objective flux.')
         if biomass_flux is not None and biomass_flux < MISSION15_MIN_GROWTH_FLUX:
             issues.append('The growth-optimal run did not produce viable predicted growth.')
 
@@ -6805,18 +6806,26 @@ def _mission15_run_lines(title, run):
     lines = [
         f'{title}:',
         f"- Objective: {run.get('objective')}",
-        f"- Primary objective flux: {_clean_display_number(run.get('primary_objective_flux')):.3f}",
-        f"- Predicted biomass: {_clean_display_number(run.get('biomass_flux')):.3f}",
     ]
+    if run.get('objective') == MISSION15_GROWTH_OBJECTIVE:
+        lines.append(
+            f"- Predicted growth rate (primary objective): "
+            f"{_clean_display_number(run.get('primary_objective_flux')):.3f} {GROWTH_RATE_UNIT}"
+        )
+    else:
+        lines.extend([
+            f"- Primary objective flux: {_clean_display_number(run.get('primary_objective_flux')):.3f} {FLUX_UNIT}",
+            f"- Predicted growth rate: {_clean_display_number(run.get('biomass_flux')):.3f} {GROWTH_RATE_UNIT}",
+        ])
     for reaction_id in MISSION15_REQUIRED_TRACKED_FLUXES:
         lines.append(
             f"- {MISSION15_PRODUCT_NAMES.get(reaction_id, reaction_id)} ({reaction_id}): "
-            f"{_clean_display_number(values.get(reaction_id)):.3f}"
+            f"{_clean_display_number(values.get(reaction_id)):.3f} {FLUX_UNIT}"
         )
     lines.extend([
-        f"- Glucose uptake: {_clean_display_number(run.get('glucose_uptake')):.3f}",
-        f"- Oxygen uptake: {_clean_display_number(run.get('oxygen_uptake')):.3f}",
-        f"- Total absolute flux: {_clean_display_number(run.get('total_absolute_flux')):.3f}",
+        f"- Glucose uptake: {_clean_display_number(run.get('glucose_uptake')):.3f} {FLUX_UNIT}",
+        f"- Oxygen uptake: {_clean_display_number(run.get('oxygen_uptake')):.3f} {FLUX_UNIT}",
+        f"- Total absolute flux: {_clean_display_number(run.get('total_absolute_flux')):.3f} {AGGREGATE_FLUX_UNIT}",
         f"- Active reactions: {int(run.get('active_reaction_count', 0))}",
     ])
     return lines
@@ -6855,8 +6864,8 @@ def build_mission15_viability_report_text(report_data=None):
         lines.extend([
             '',
             'Cross-objective evidence:',
-            f'- Biomass in the product-priority optimum: {product_biomass:.3f}',
-            f'- Succinate in the growth-priority optimum: {growth_succinate:.3f}',
+            f'- Predicted growth rate in the product-priority optimum: {product_biomass:.3f} {GROWTH_RATE_UNIT}',
+            f'- Succinate in the growth-priority optimum: {growth_succinate:.3f} {FLUX_UNIT}',
             '- Controlled setup preserved: ' + ('yes' if report.get('same_controlled_setup') else 'no'),
         ])
 
@@ -7367,7 +7376,7 @@ def build_mission16_context_report_text(report):
         '- FBA biomass objective; all genes active',
         '- Glucose uptake closed; one candidate source opened per run',
         '- Oxygen and every unrelated medium bound kept at model default',
-        f'- Common molar uptake protocol: {MISSION16_EXPECTED_SOURCE_UPTAKE:.1f}',
+        f'- Common molar uptake protocol: {MISSION16_EXPECTED_SOURCE_UPTAKE:.1f} {FLUX_UNIT}',
         '',
         f"Candidate trials recorded: {report.get('valid_trial_count', 0)}/{report.get('required_trial_count', len(MISSION16_CANDIDATE_CARBON_SOURCES))}",
     ]
@@ -7380,9 +7389,9 @@ def build_mission16_context_report_text(report):
             lines.append(f'- {label}: not recorded')
             continue
         lines.append(
-            f"- {label}: growth {float(trial.get('growth', 0.0)):.3f}; "
-            f"source uptake {float(trial.get('source_uptake', 0.0)):.3f}; "
-            f"oxygen uptake {float(trial.get('oxygen_uptake', 0.0)):.3f}"
+            f"- {label}: predicted growth rate {float(trial.get('growth', 0.0)):.3f} {GROWTH_RATE_UNIT}; "
+            f"source uptake {float(trial.get('source_uptake', 0.0)):.3f} {FLUX_UNIT}; "
+            f"oxygen uptake {float(trial.get('oxygen_uptake', 0.0)):.3f} {FLUX_UNIT}"
         )
 
     if report.get('aerobic_screen_complete'):
@@ -7393,7 +7402,7 @@ def build_mission16_context_report_text(report):
             for index, row in enumerate(ranked, start=1):
                 lines.append(
                     f"{index}. {MISSION16_SOURCE_NAMES.get(row.get('source_id'), row.get('source_id'))} "
-                    f"({row.get('source_id')}): {float(row.get('growth', 0.0)):.3f}"
+                    f"({row.get('source_id')}): {float(row.get('growth', 0.0)):.3f} {GROWTH_RATE_UNIT}"
                 )
             if report.get('strongest_candidate'):
                 lines.append(
@@ -7886,7 +7895,7 @@ def build_mission17_essential_routes_report_text(report):
     baseline = report.get('baseline_run') or {}
     if baseline:
         lines.extend([
-            f"Baseline growth: {_mission17_clean_number(baseline.get('growth', 0.0)):.3f}",
+            f"Baseline predicted growth rate: {_mission17_clean_number(baseline.get('growth', 0.0)):.3f} {GROWTH_RATE_UNIT}",
             'Baseline signed candidate fluxes:',
         ])
         baseline_fluxes = baseline.get('medium_raw_fluxes') or {}
@@ -7897,7 +7906,7 @@ def build_mission17_essential_routes_report_text(report):
             else:
                 lines.append(
                     f'- {MISSION17_NUTRIENT_NAMES.get(reaction_id)} ({reaction_id}): '
-                    f'{_mission17_clean_number(value):+.3f} ({_mission17_direction(value)})'
+                    f'{_mission17_clean_number(value):+.3f} {FLUX_UNIT} ({_mission17_direction(value)})'
                 )
     else:
         lines.append('Baseline: not recorded.')
@@ -7919,8 +7928,8 @@ def build_mission17_essential_routes_report_text(report):
         growth_value = _mission17_clean_number(trial.get('growth', 0.0))
         closed_route_uptake = _mission17_clean_number(trial.get('closed_route_uptake', 0.0))
         lines.append(
-            f"- {label}: growth {growth_value:.3f}; "
-            f"{percentage:.1f}% of baseline; closed-route uptake {closed_route_uptake:.3f}"
+            f"- {label}: predicted growth rate {growth_value:.3f} {GROWTH_RATE_UNIT}; "
+            f"{percentage:.1f}% of baseline; closed-route uptake {closed_route_uptake:.3f} {FLUX_UNIT}"
         )
 
     if report.get('screen_complete'):
@@ -8505,16 +8514,16 @@ def build_mission18_binding_export_report_text(report):
     baseline = report.get('baseline_run') or {}
     if baseline:
         lines.extend([
-            f"Baseline growth: {float(baseline.get('growth', 0.0)):.3f}",
-            f"Baseline glucose uptake: {float(baseline.get('glucose_uptake', 0.0)):.3f}",
-            f"Baseline oxygen uptake: {float(baseline.get('oxygen_uptake', 0.0)):.3f}",
+            f"Baseline predicted growth rate: {float(baseline.get('growth', 0.0)):.3f} {GROWTH_RATE_UNIT}",
+            f"Baseline glucose uptake: {float(baseline.get('glucose_uptake', 0.0)):.3f} {FLUX_UNIT}",
+            f"Baseline oxygen uptake: {float(baseline.get('oxygen_uptake', 0.0)):.3f} {FLUX_UNIT}",
             'Baseline export profile:',
         ])
         baseline_fluxes = baseline.get('tracked_flux_values') or {}
         for reaction_id in MISSION18_REQUIRED_TRACKED_FLUXES:
             lines.append(
                 f"- {MISSION18_FLUX_NAMES.get(reaction_id, reaction_id)} ({reaction_id}): "
-                f"{float(baseline_fluxes.get(reaction_id, 0.0)):.3f}"
+                f"{float(baseline_fluxes.get(reaction_id, 0.0)):.3f} {FLUX_UNIT}"
             )
     else:
         lines.append('Baseline: not recorded.')
@@ -8528,13 +8537,13 @@ def build_mission18_binding_export_report_text(report):
             lines.append(f'- {label} upper-bound closure ({reaction_id}): not recorded')
             continue
         lines.append(
-            f"- {label} upper-bound closure ({reaction_id}): growth {float(trial.get('growth', 0.0)):.3f}; "
+            f"- {label} upper-bound closure ({reaction_id}): predicted growth rate {float(trial.get('growth', 0.0)):.3f} {GROWTH_RATE_UNIT}; "
             f"{float(trial.get('baseline_fraction', 0.0)) * 100:.1f}% of baseline"
         )
         fluxes = trial.get('tracked_flux_values') or {}
         lines.append(
             '  Export profile: ' + '; '.join(
-                f"{flux_id} {float(fluxes.get(flux_id, 0.0)):.3f}"
+                f"{flux_id} {float(fluxes.get(flux_id, 0.0)):.3f} {FLUX_UNIT}"
                 for flux_id in MISSION18_REQUIRED_TRACKED_FLUXES
             )
         )
@@ -8788,7 +8797,7 @@ def _build_mission19_data(
 
     if objective_numeric is not None and biomass_raw is not None:
         if abs(float(objective_numeric) - float(biomass_raw)) > MISSION19_FLUX_TOLERANCE:
-            issues.append('The displayed biomass and biomass flux do not describe the same visible solution.')
+            issues.append('The displayed biomass value and predicted growth rate do not describe the same visible solution.')
     if primary_flux is not None and biomass_raw is not None:
         if abs(float(primary_flux) - float(biomass_raw)) > MISSION19_FLUX_TOLERANCE:
             issues.append('Method diagnostics and biomass evidence do not describe the same visible solution.')
@@ -9017,17 +9026,17 @@ def build_mission19_method_comparison_report_text(report):
             return
         lines.append(f'{title}:')
         lines.append(f"- Method: {run.get('method')}")
-        lines.append(f"- Biomass flux: {float(run.get('growth', 0.0)):.3f}")
+        lines.append(f"- Predicted growth rate: {float(run.get('growth', 0.0)):.3f} {GROWTH_RATE_UNIT}")
         if run.get('knocked_out_genes'):
             lines.append('- Knockout: ' + ', '.join(run.get('knocked_out_genes') or []))
             lines.append('- GPR-disabled reactions: ' + ', '.join(run.get('disabled_reactions') or []))
         diagnostics = run.get('method_diagnostics') or {}
         if run.get('method') == MISSION19_TARGET_METHOD and diagnostics.get('method_score') is not None:
-            lines.append(f"- lMOMA adjustment score: {float(diagnostics.get('method_score')):.3f}")
+            lines.append(f"- lMOMA adjustment score: {float(diagnostics.get('method_score')):.3f} {AGGREGATE_FLUX_UNIT}")
         lines.append('- Product/byproduct profile:')
         fluxes = run.get('tracked_flux_values') or {}
         for reaction_id in MISSION19_REQUIRED_TRACKED_FLUXES:
-            lines.append(f"  {reaction_id}: {float(fluxes.get(reaction_id, 0.0)):.3f}")
+            lines.append(f"  {reaction_id}: {float(fluxes.get(reaction_id, 0.0)):.3f} {FLUX_UNIT}")
 
     add_run('Wild-type FBA baseline', report.get('baseline_run'))
     lines.append('')
@@ -9041,12 +9050,12 @@ def build_mission19_method_comparison_report_text(report):
         lines.extend([
             '',
             'Controlled comparison complete.',
-            f"FBA mutant biomass: {float((report.get('fba_mutant_run') or {}).get('growth', 0.0)):.3f} ({float(ratios.get('fba_mutant_vs_wt', 0.0)) * 100:.1f}% of WT)",
-            f"lMOMA mutant biomass: {float((report.get('lmoma_mutant_run') or {}).get('growth', 0.0)):.3f} ({float(ratios.get('lmoma_mutant_vs_wt', 0.0)) * 100:.1f}% of WT)",
+            f"FBA mutant predicted growth rate: {float((report.get('fba_mutant_run') or {}).get('growth', 0.0)):.3f} {GROWTH_RATE_UNIT} ({float(ratios.get('fba_mutant_vs_wt', 0.0)) * 100:.1f}% of WT)",
+            f"lMOMA mutant predicted growth rate: {float((report.get('lmoma_mutant_run') or {}).get('growth', 0.0)):.3f} {GROWTH_RATE_UNIT} ({float(ratios.get('lmoma_mutant_vs_wt', 0.0)) * 100:.1f}% of WT)",
             'lMOMA minus FBA mutant product-flux differences:',
         ])
         for reaction_id in MISSION19_REQUIRED_TRACKED_FLUXES:
-            lines.append(f"- {reaction_id}: {float(differences.get(reaction_id, 0.0)):+.3f}")
+            lines.append(f"- {reaction_id}: {float(differences.get(reaction_id, 0.0)):+.3f} {FLUX_UNIT}")
 
     if report.get('current_run_recorded'):
         lines.extend(['', f"Latest valid visible run recorded: {str(report.get('current_run_type', '')).replace('_', ' ')}."])
@@ -9510,7 +9519,7 @@ def _build_mission20_data(
     if primary_flux is None:
         issues.append('The primary biomass objective flux is missing from the visible result.')
     if biomass_raw is None:
-        issues.append('The visible result does not contain a numeric biomass flux.')
+        issues.append('The visible result does not contain a numeric predicted growth rate.')
     if method_score is None:
         issues.append('The pFBA secondary score is missing from the visible result.')
     if method_score_name != MISSION20_EXPECTED_SECONDARY_CRITERION:
@@ -9526,9 +9535,9 @@ def _build_mission20_data(
     ):
         issues.append('The pFBA score and total absolute flux are inconsistent.')
     for left, right, message in (
-        (objective_numeric, primary_flux, 'The displayed objective value does not match the primary biomass flux.'),
-        (objective_numeric, biomass_raw, 'The displayed objective value does not match the measured biomass flux.'),
-        (primary_flux, biomass_raw, 'The primary objective flux does not match the measured biomass flux.'),
+        (objective_numeric, primary_flux, 'The displayed objective value does not match the primary biomass-reaction flux.'),
+        (objective_numeric, biomass_raw, 'The displayed objective value does not match the predicted growth rate.'),
+        (primary_flux, biomass_raw, 'The primary objective flux does not match the predicted growth rate.'),
     ):
         if left is not None and right is not None and abs(float(left) - float(right)) > MISSION20_PRIMARY_TOLERANCE:
             issues.append(message)
@@ -9763,16 +9772,16 @@ def build_mission20_context_report_text(report):
         diagnostics = run.get('method_diagnostics') or {}
         lines.extend([
             f'{title}:',
-            f"- Biomass flux: {float(run.get('growth', 0.0)):.3f}",
-            f"- Glucose uptake: {float(run.get('glucose_uptake', 0.0)):.3f}",
-            f"- Oxygen uptake: {float(run.get('oxygen_uptake', 0.0)):.3f}",
-            f"- Total absolute flux: {float(diagnostics.get('total_absolute_flux', 0.0)):.3f}",
+            f"- Predicted growth rate: {float(run.get('growth', 0.0)):.3f} {GROWTH_RATE_UNIT}",
+            f"- Glucose uptake: {float(run.get('glucose_uptake', 0.0)):.3f} {FLUX_UNIT}",
+            f"- Oxygen uptake: {float(run.get('oxygen_uptake', 0.0)):.3f} {FLUX_UNIT}",
+            f"- Total absolute flux: {float(diagnostics.get('total_absolute_flux', 0.0)):.3f} {AGGREGATE_FLUX_UNIT}",
             f"- Active reactions: {int(diagnostics.get('active_reaction_count', 0))}",
             '- Export profile:',
         ])
         fluxes = run.get('tracked_flux_values') or {}
         for reaction_id in MISSION20_REQUIRED_TRACKED_FLUXES:
-            lines.append(f"  {reaction_id}: {float(fluxes.get(reaction_id, 0.0)):.3f}")
+            lines.append(f"  {reaction_id}: {float(fluxes.get(reaction_id, 0.0)):.3f} {FLUX_UNIT}")
         lines.append('')
 
     def add_pair(title, response):
@@ -9782,10 +9791,10 @@ def build_mission20_context_report_text(report):
         lines.extend([
             f'{title}:',
             f"- Growth after/before closure: {float(response.get('growth_ratio', 0.0)) * 100:.1f}%",
-            f"- Acetate export before: {float(response.get('baseline_acetate_export', 0.0)):.3f}",
-            f"- Acetate export after: {float(response.get('closed_acetate_export', 0.0)):.3f}",
-            f"- Largest tracked-profile change: {float(response.get('maximum_profile_change', 0.0)):.3f}",
-            f"- Total absolute flux change: {float(response.get('total_absolute_flux_change') or 0.0):+.3f}",
+            f"- Acetate export before: {float(response.get('baseline_acetate_export', 0.0)):.3f} {FLUX_UNIT}",
+            f"- Acetate export after: {float(response.get('closed_acetate_export', 0.0)):.3f} {FLUX_UNIT}",
+            f"- Largest tracked-profile change: {float(response.get('maximum_profile_change', 0.0)):.3f} {FLUX_UNIT}",
+            f"- Total absolute flux change: {float(response.get('total_absolute_flux_change') or 0.0):+.3f} {AGGREGATE_FLUX_UNIT}",
             f"- Active-reaction change: {int(response.get('active_reaction_change') or 0):+d}",
         ])
 
@@ -10182,7 +10191,7 @@ def build_mission04_evidence_report_text(report_data=None):
             'Controlled setup confirmed for recorded evidence: baseline with all genes active; exactly one candidate knockout per candidate trial; unchanged default aerobic environment; FBA biomass objective; ethanol exchange tracked.',
             '',
             (
-                f'Baseline: growth {float(baseline_growth):.3f}; ethanol {float(baseline_production):.3f}; '
+                f'Baseline: predicted growth rate {float(baseline_growth):.3f} {GROWTH_RATE_UNIT}; ethanol {float(baseline_production):.3f} {FLUX_UNIT}; '
                 f'oxygen uptake {_clean_display_number(baseline_oxygen):.3f}'
                 if baseline_growth is not None and baseline_production is not None and baseline_oxygen is not None
                 else 'Baseline: not fully recorded yet'
@@ -10202,7 +10211,7 @@ def build_mission04_evidence_report_text(report_data=None):
             change = trial.get('production_change')
             change_text = f'{float(change):+.3f}' if change is not None else 'baseline missing'
             lines.append(
-                f"- {gene_id} ({gene_name}): growth {float(trial.get('growth', 0.0)):.3f} "
+                f"- {gene_id} ({gene_name}): predicted growth rate {float(trial.get('growth', 0.0)):.3f} {GROWTH_RATE_UNIT} "
                 f"({percent_text}); ethanol {float(trial.get('production', 0.0)):.3f} "
                 f"(change {change_text}); oxygen uptake {_clean_display_number(trial.get('oxygen_uptake', 0.0)):.3f}; "
                 f"{trial.get('assessment', '')}"
@@ -10217,7 +10226,7 @@ def build_mission04_evidence_report_text(report_data=None):
             gene_name = MISSION04_GENE_NAMES.get(gene_id, '')
             lines.append(
                 f"Latest valid trial recorded: {gene_id} ({gene_name}); "
-                f"growth {float(report_data.get('current_growth', 0.0)):.3f}; "
+                f"predicted growth rate {float(report_data.get('current_growth', 0.0)):.3f} {GROWTH_RATE_UNIT}; "
                 f"ethanol {float(report_data.get('current_production', 0.0)):.3f}."
             )
     elif report_data.get('current_issues'):
@@ -10246,7 +10255,7 @@ def build_mission04_evidence_report_text(report_data=None):
     lines.extend([
         '',
         'Interpretation note: this mission measures ethanol secretion in a biomass-optimal FBA solution; it does not maximise the theoretical ethanol yield directly.',
-        f'A candidate is operationally viable here when predicted growth remains at or above {MISSION04_MIN_VIABLE_GROWTH_RATIO * 100:.0f}% of the reference, and production improvement must be at least {MISSION04_MIN_PRODUCTION_INCREASE:.1f}. These are mission criteria, not universal biological definitions.',
+        f'A candidate is operationally viable here when predicted growth remains at or above {MISSION04_MIN_VIABLE_GROWTH_RATIO * 100:.0f}% of the reference, and production improvement must be at least {MISSION04_MIN_PRODUCTION_INCREASE:.1f} {FLUX_UNIT}. These are mission criteria, not universal biological definitions.',
         'A growth reduction alone is not evidence of useful flux redirection. The unchanged medium may still contain oxygen even when a knockout removes respiratory capacity and the model no longer consumes it.',
     ])
     return '\n'.join(lines)
@@ -10662,7 +10671,7 @@ def build_mission05_evidence_report_text(report_data=None):
             'Controlled setup confirmed for recorded evidence: anaerobic reference with all genes active; exactly one candidate knockout per candidate trial; oxygen lower bound as the only environmental change; FBA biomass objective; ethanol exchange tracked.',
             '',
             (
-                f'Baseline: growth {float(baseline_growth):.3f}; ethanol {float(baseline_production):.3f}; '
+                f'Baseline: predicted growth rate {float(baseline_growth):.3f} {GROWTH_RATE_UNIT}; ethanol {float(baseline_production):.3f} {FLUX_UNIT}; '
                 f'oxygen uptake {_clean_display_number(baseline_oxygen):.3f}'
                 if baseline_growth is not None and baseline_production is not None and baseline_oxygen is not None
                 else 'Baseline: not fully recorded yet'
@@ -10682,7 +10691,7 @@ def build_mission05_evidence_report_text(report_data=None):
             change = trial.get('production_change')
             change_text = f'{float(change):+.3f}' if change is not None else 'baseline missing'
             lines.append(
-                f"- {gene_id} ({gene_name}): growth {float(trial.get('growth', 0.0)):.3f} "
+                f"- {gene_id} ({gene_name}): predicted growth rate {float(trial.get('growth', 0.0)):.3f} {GROWTH_RATE_UNIT} "
                 f"({percent_text}); ethanol {float(trial.get('production', 0.0)):.3f} "
                 f"(change {change_text}); oxygen uptake {_clean_display_number(trial.get('oxygen_uptake', 0.0)):.3f}; "
                 f"{trial.get('assessment', '')}"
@@ -10697,7 +10706,7 @@ def build_mission05_evidence_report_text(report_data=None):
             gene_name = MISSION05_GENE_NAMES.get(gene_id, '')
             lines.append(
                 f"Latest valid trial recorded: {gene_id} ({gene_name}); "
-                f"growth {float(report_data.get('current_growth', 0.0)):.3f}; "
+                f"predicted growth rate {float(report_data.get('current_growth', 0.0)):.3f} {GROWTH_RATE_UNIT}; "
                 f"ethanol {float(report_data.get('current_production', 0.0)):.3f}."
             )
     elif report_data.get('current_issues'):
@@ -10727,7 +10736,7 @@ def build_mission05_evidence_report_text(report_data=None):
         '',
         'Interpretation note: a knockout strategy is conditional on the model, objective and environment. The candidate that was useful in the aerobic Mission 04 may become neutral when oxygen uptake is already unavailable.',
         'This mission measures ethanol secretion in a biomass-optimal anaerobic FBA solution; it does not maximise theoretical ethanol yield directly.',
-        f'A candidate retains sufficient growth here when predicted growth remains at or above {MISSION05_MIN_VIABLE_GROWTH_RATIO * 100:.0f}% of the anaerobic reference, and additional ethanol must be at least {MISSION05_MIN_PRODUCTION_INCREASE:.1f}. These are operational mission criteria, not universal biological definitions.',
+        f'A candidate retains sufficient growth here when predicted growth remains at or above {MISSION05_MIN_VIABLE_GROWTH_RATIO * 100:.0f}% of the anaerobic reference, and additional ethanol must be at least {MISSION05_MIN_PRODUCTION_INCREASE:.1f} {FLUX_UNIT}. These are operational mission criteria, not universal biological definitions.',
     ])
     return '\n'.join(lines)
 
@@ -11332,7 +11341,7 @@ def _build_mission02_trial_data(
         current_issues.append('Keep every other environmental bound unchanged: ' + ', '.join(unexpected_changes))
     if selected_source and not common_bound_used:
         current_issues.append(
-            f'Use the common molar uptake limit ({MISSION02_COMMON_UPTAKE_BOUND:g}) for every candidate.'
+            f'Use the common molar uptake limit ({MISSION02_COMMON_UPTAKE_BOUND:g} {FLUX_UNIT}) for every candidate.'
         )
     if not result_valid:
         current_issues.append('A positive biomass-growth result was not returned for this trial.')
@@ -11458,7 +11467,7 @@ def build_mission02_evidence_report_text(report_data=None):
     if valid_count > 0:
         lines.append(
             f'Controlled setup confirmed: glucose unavailable; one candidate per trial; '
-            f'common uptake limit {MISSION02_COMMON_UPTAKE_BOUND:g}; FBA biomass objective; genes unchanged.'
+            f'common uptake limit {MISSION02_COMMON_UPTAKE_BOUND:g} {FLUX_UNIT}; FBA biomass objective; genes unchanged.'
         )
     else:
         lines.append(
@@ -11901,7 +11910,7 @@ def _build_mission21_data(
         issues.append('The visible result is missing biomass or FBA objective diagnostics.')
     else:
         if abs(primary_flux - objective_numeric) > MISSION21_PRIMARY_TOLERANCE:
-            issues.append('The displayed objective value does not match the visible primary biomass flux.')
+            issues.append('The displayed objective value does not match the visible primary biomass-reaction flux.')
         if abs(biomass_raw - primary_flux) > MISSION21_PRIMARY_TOLERANCE:
             issues.append('The biomass value and primary objective flux describe different results.')
         if abs(method_score - primary_flux) > MISSION21_PRIMARY_TOLERANCE:
@@ -12142,16 +12151,16 @@ def build_mission21_compensatory_report_text(report):
             continue
         lines.extend([
             f'{title}:',
-            f"- Growth: {float(run.get('growth')):.3f}",
-            f"- Glucose uptake: {float(run.get('glucose_uptake')):.3f}",
-            f"- Oxygen uptake: {float(run.get('oxygen_uptake')):.3f}",
+            f"- Predicted growth rate: {float(run.get('growth')):.3f} {GROWTH_RATE_UNIT}",
+            f"- Glucose uptake: {float(run.get('glucose_uptake')):.3f} {FLUX_UNIT}",
+            f"- Oxygen uptake: {float(run.get('oxygen_uptake')):.3f} {FLUX_UNIT}",
             '- Export profile:',
         ])
         fluxes = run.get('tracked_flux_values') or {}
         for reaction_id in MISSION21_REQUIRED_TRACKED_FLUXES:
             lines.append(
                 f"  {MISSION21_FLUX_NAMES.get(reaction_id, reaction_id)} ({reaction_id}): "
-                f"{float(fluxes.get(reaction_id)):.3f}"
+                f"{float(fluxes.get(reaction_id)):.3f} {FLUX_UNIT}"
             )
         lines.append('')
 
@@ -12165,7 +12174,7 @@ def build_mission21_compensatory_report_text(report):
                 value = float(differences[reaction_id])
                 prefix = '+' if value > 0 else ''
                 lines.append(
-                    f"- {MISSION21_FLUX_NAMES.get(reaction_id, reaction_id)} ({reaction_id}): {prefix}{value:.3f}"
+                    f"- {MISSION21_FLUX_NAMES.get(reaction_id, reaction_id)} ({reaction_id}): {prefix}{value:.3f} {FLUX_UNIT}"
                 )
     else:
         missing = report.get('missing_run_types') or []
@@ -12523,7 +12532,7 @@ def _build_mission22_data(
         issues.append('The visible result is missing biomass or FBA objective diagnostics.')
     else:
         if abs(primary_flux - objective_numeric) > MISSION22_PRIMARY_TOLERANCE:
-            issues.append('The displayed objective result does not match the primary biomass flux.')
+            issues.append('The displayed objective result does not match the primary biomass-reaction flux.')
         if abs(biomass_raw - objective_numeric) > MISSION22_PRIMARY_TOLERANCE:
             issues.append('The visible biomass evidence does not match the displayed result.')
         if method_score_name != 'primary_objective_flux':
@@ -12763,9 +12772,9 @@ def build_mission22_phenotype_equivalence_report_text(report):
             continue
         lines.extend([
             f'{title}:',
-            f"- Growth: {float(run.get('growth')):.3f}",
-            f"- Glucose uptake: {float(run.get('glucose_uptake')):.3f}",
-            f"- Oxygen uptake: {float(run.get('oxygen_uptake')):.3f}",
+            f"- Predicted growth rate: {float(run.get('growth')):.3f} {GROWTH_RATE_UNIT}",
+            f"- Glucose uptake: {float(run.get('glucose_uptake')):.3f} {FLUX_UNIT}",
+            f"- Oxygen uptake: {float(run.get('oxygen_uptake')):.3f} {FLUX_UNIT}",
             f"- Knockouts: {', '.join(run.get('knocked_out_genes') or []) or 'none'}",
             f"- GPR-disabled reactions: {', '.join(run.get('disabled_reactions') or []) or 'none'}",
             '- Export profile:',
@@ -12774,7 +12783,7 @@ def build_mission22_phenotype_equivalence_report_text(report):
         for reaction_id in MISSION22_REQUIRED_TRACKED_FLUXES:
             lines.append(
                 f"  {MISSION22_FLUX_NAMES.get(reaction_id, reaction_id)} ({reaction_id}): "
-                f"{float(fluxes.get(reaction_id)):.3f}"
+                f"{float(fluxes.get(reaction_id)):.3f} {FLUX_UNIT}"
             )
         lines.append('')
 
@@ -13226,7 +13235,7 @@ def build_mission23_nutrient_sensitivity_report_text(report):
     rows = report.get('sweep_rows') or []
     if rows:
         lines.extend([
-            'LB | growth | NH4 uptake | glucose uptake | oxygen uptake | acetate | CO2 | total abs flux | active reactions',
+            f'LB ({FLUX_UNIT}) | growth rate ({GROWTH_RATE_UNIT}) | NH4 uptake ({FLUX_UNIT}) | glucose uptake ({FLUX_UNIT}) | oxygen uptake ({FLUX_UNIT}) | acetate ({FLUX_UNIT}) | CO2 ({FLUX_UNIT}) | total abs flux ({FLUX_UNIT}) | active reactions',
         ])
         for row in rows:
             tracked = row.get('tracked_flux_values') or {}
@@ -13752,7 +13761,7 @@ def build_mission24_export_capacity_report_text(report):
     ]
     rows = report.get('sweep_rows') or []
     if rows:
-        lines.append('UB | growth | glucose uptake | oxygen uptake | CO2 | formate | acetate | total abs flux | active reactions')
+        lines.append(f'UB ({FLUX_UNIT}) | growth rate ({GROWTH_RATE_UNIT}) | glucose uptake ({FLUX_UNIT}) | oxygen uptake ({FLUX_UNIT}) | CO2 ({FLUX_UNIT}) | formate ({FLUX_UNIT}) | acetate ({FLUX_UNIT}) | total abs flux ({FLUX_UNIT}) | active reactions')
         for row in rows:
             tracked = row.get('tracked_flux_values') or {}
             diagnostics = row.get('method_diagnostics') or {}
@@ -14259,10 +14268,10 @@ def build_mission25_context_report_text(report_data=None):
             continue
         lines.extend([
             labels[key] + ':',
-            f"- Growth: {fmt(run.get('growth'))}",
-            f"- Glucose uptake: {fmt(run.get('glucose_uptake'))}",
-            f"- Oxygen uptake: {fmt(run.get('oxygen_uptake'))}",
-            f"- Total absolute flux: {fmt((run.get('method_diagnostics') or {}).get('total_absolute_flux'))}",
+            f"- Predicted growth rate: {fmt(run.get('growth'))} {GROWTH_RATE_UNIT}",
+            f"- Glucose uptake: {fmt(run.get('glucose_uptake'))} {FLUX_UNIT}",
+            f"- Oxygen uptake: {fmt(run.get('oxygen_uptake'))} {FLUX_UNIT}",
+            f"- Total absolute flux: {fmt((run.get('method_diagnostics') or {}).get('total_absolute_flux'))} {AGGREGATE_FLUX_UNIT}",
             f"- Active reactions: {(run.get('method_diagnostics') or {}).get('active_reaction_count', 'pending')}",
         ])
 
@@ -15032,9 +15041,9 @@ def _mission26_validate_sweep(sweep_data):
         if diagnostics.get('method_score_name') != MISSION26_EXPECTED_SCORE_NAME:
             issues.append(f'The FBA score label is missing at oxygen lower bound {bound_value:g}.')
         if primary is None or growth is None or abs(float(primary) - float(growth)) > MISSION26_PRIMARY_TOLERANCE:
-            issues.append(f'The primary biomass flux does not match growth at oxygen lower bound {bound_value:g}.')
+            issues.append(f'The primary biomass-reaction flux does not match growth at oxygen lower bound {bound_value:g}.')
         if method_score is None or primary is None or abs(float(method_score) - float(primary)) > MISSION26_PRIMARY_TOLERANCE:
-            issues.append(f'The FBA method score does not match the primary biomass flux at oxygen lower bound {bound_value:g}.')
+            issues.append(f'The FBA method score does not match the primary biomass-reaction flux at oxygen lower bound {bound_value:g}.')
         if total_absolute_flux is None or active_reactions is None:
             issues.append(f'Total flux or active-reaction diagnostics are missing at oxygen lower bound {bound_value:g}.')
 
@@ -15334,7 +15343,7 @@ def build_mission26_interaction_report_text(report):
         if not rows:
             lines.append('- pending')
             return
-        lines.append('LB | growth | glucose uptake | O2 uptake | total abs flux | active reactions')
+        lines.append(f'LB ({FLUX_UNIT}) | growth rate ({GROWTH_RATE_UNIT}) | glucose uptake ({FLUX_UNIT}) | O2 uptake ({FLUX_UNIT}) | total abs flux ({FLUX_UNIT}) | active reactions')
         for row in rows:
             diagnostics = row.get('method_diagnostics') or {}
             lines.append(
@@ -15867,13 +15876,13 @@ def build_mission27_rescue_report_text(report_data=None):
             continue
         lines.extend([
             title + ':',
-            f"- Growth: {fmt(run.get('growth'))}",
-            f"- Glucose uptake: {fmt(run.get('glucose_uptake'))}",
-            f"- Oxygen uptake: {fmt(run.get('oxygen_uptake'))}",
+            f"- Predicted growth rate: {fmt(run.get('growth'))} {GROWTH_RATE_UNIT}",
+            f"- Glucose uptake: {fmt(run.get('glucose_uptake'))} {FLUX_UNIT}",
+            f"- Oxygen uptake: {fmt(run.get('oxygen_uptake'))} {FLUX_UNIT}",
             f"- {MISSION27_TARGET_REACTION} disabled: {'yes' if run.get('target_reaction_disabled') else 'no'}",
         ])
 
-    lines.extend(['', 'Candidate supplementation trials:', 'Candidate | growth | candidate uptake | CS disabled'])
+    lines.extend(['', 'Candidate supplementation trials:', f'Candidate | growth rate ({GROWTH_RATE_UNIT}) | candidate uptake ({FLUX_UNIT}) | CS disabled'])
     trials = report.get('candidate_trials') or {}
     for candidate_id in MISSION27_CANDIDATE_SUPPLEMENTS:
         trial = trials.get(candidate_id)
@@ -16480,8 +16489,8 @@ def build_mission28_dependency_report_text(report_data=None):
     reference = report.get('rescue_reference')
     if isinstance(reference, dict):
         lines.extend([
-            f"- Growth: {fmt(reference.get('growth'))}",
-            f"- 2-Oxoglutarate uptake: {fmt(reference.get('supplement_uptake'))}",
+            f"- Predicted growth rate: {fmt(reference.get('growth'))} {GROWTH_RATE_UNIT}",
+            f"- 2-Oxoglutarate uptake: {fmt(reference.get('supplement_uptake'))} {FLUX_UNIT}",
             f"- {MISSION28_PRIMARY_REACTION} disabled: {'yes' if reference.get('primary_reaction_disabled') else 'no'}",
             f"- Source: {'Mission 27 visible evidence' if report.get('reference_imported_from_mission27') else 'current visible run'}",
         ])
@@ -16491,7 +16500,7 @@ def build_mission28_dependency_report_text(report_data=None):
     lines.extend([
         '',
         'Secondary-knockout trials:',
-        'Candidate | growth | retention | 2OG uptake | GPR-disabled reactions',
+        f'Candidate | growth rate ({GROWTH_RATE_UNIT}) | retention | 2OG uptake ({FLUX_UNIT}) | GPR-disabled reactions',
     ])
     trials = report.get('secondary_trials') or {}
     retention = report.get('growth_retention_by_candidate') or {}
@@ -17390,7 +17399,7 @@ def _build_mission29_data(
             issues.append('The run must remain aerobic with positive measured oxygen uptake.')
 
     if biomass_raw is None:
-        issues.append('The visible biomass flux is missing from the structured result.')
+        issues.append('The visible predicted growth rate is missing from the structured result.')
     if primary_flux is None:
         issues.append('The visible primary-objective diagnostic is missing.')
     if objective_numeric is not None and biomass_raw is not None:
@@ -17398,7 +17407,7 @@ def _build_mission29_data(
             issues.append('The visible growth value does not match the biomass reaction flux.')
     if biomass_raw is not None and primary_flux is not None:
         if abs(biomass_raw - primary_flux) > MISSION29_PRIMARY_TOLERANCE:
-            issues.append('The primary-objective diagnostic does not match the biomass flux.')
+            issues.append('The primary-objective diagnostic does not match the predicted growth rate.')
     if diagnostics.get('method') != MISSION29_METHOD:
         issues.append('The visible method diagnostics do not describe pFBA.')
     if diagnostics.get('objective_reaction') != MISSION29_GROWTH_OBJECTIVE:
@@ -17708,9 +17717,9 @@ def build_mission29_redundancy_report_text(report_data=None):
     wt = report.get('wild_type_reference')
     if wt:
         lines.extend([
-            f"- Growth: {float(wt.get('growth', 0.0)):.3f}",
-            f"- Glucose uptake: {float(wt.get('glucose_uptake', 0.0)):.3f}",
-            f"- Oxygen uptake: {float(wt.get('oxygen_uptake', 0.0)):.3f}",
+            f"- Predicted growth rate: {float(wt.get('growth', 0.0)):.3f} {GROWTH_RATE_UNIT}",
+            f"- Glucose uptake: {float(wt.get('glucose_uptake', 0.0)):.3f} {FLUX_UNIT}",
+            f"- Oxygen uptake: {float(wt.get('oxygen_uptake', 0.0)):.3f} {FLUX_UNIT}",
         ])
     else:
         lines.append('- Pending')
@@ -17718,7 +17727,7 @@ def build_mission29_redundancy_report_text(report_data=None):
     lines.extend([
         '',
         'Matched isoenzyme screen:',
-        'Pair | single A growth | single B growth | double growth | double retention | GPR-disabled reactions',
+        f'Pair | single A growth rate ({GROWTH_RATE_UNIT}) | single B growth rate ({GROWTH_RATE_UNIT}) | double growth rate ({GROWTH_RATE_UNIT}) | double retention | GPR-disabled reactions',
     ])
     singles = report.get('single_trials') or {}
     pairs = report.get('pair_trials') or {}
@@ -17991,7 +18000,7 @@ def _mission30_validate_feasible_row(row, bound_value, issues):
     if diagnostics.get('method_score_name') != MISSION30_EXPECTED_SCORE_NAME:
         issues.append(f'The pFBA score label is missing at oxygen lower bound {bound_value:g}.')
     if primary is None or growth is None or abs(primary - growth) > MISSION30_PRIMARY_TOLERANCE:
-        issues.append(f'The primary biomass flux does not match growth at oxygen lower bound {bound_value:g}.')
+        issues.append(f'The primary biomass-reaction flux does not match growth at oxygen lower bound {bound_value:g}.')
     if method_score is None or total_abs is None or abs(method_score - total_abs) > MISSION30_FLUX_TOLERANCE:
         issues.append(f'The pFBA secondary score is incomplete at oxygen lower bound {bound_value:g}.')
     if active_count is None:
@@ -18374,7 +18383,7 @@ def build_mission30_redundancy_threshold_report_text(report_data=None):
         if not rows:
             lines.append('- pending')
             continue
-        lines.append('LB | status | growth | glucose uptake | O2 uptake | total abs flux | active reactions')
+        lines.append(f'LB ({FLUX_UNIT}) | status | growth rate ({GROWTH_RATE_UNIT}) | glucose uptake ({FLUX_UNIT}) | O2 uptake ({FLUX_UNIT}) | total abs flux ({FLUX_UNIT}) | active reactions')
         for row in rows:
             if row.get('status') == 'infeasible':
                 lines.append(f"{float(row.get('bound_value')):.0f} | INFEASIBLE | -- | -- | -- | -- | --")
@@ -18745,7 +18754,7 @@ def _build_mission31_data(
     if not isinstance(production_fluxes, dict) or production_fluxes.get('error'):
         issues.append('The structured visible pFBA result is unavailable.')
     if biomass_raw is None:
-        issues.append('The visible biomass flux is missing from the structured result.')
+        issues.append('The visible predicted growth rate is missing from the structured result.')
     if primary_flux is None:
         issues.append('The visible primary-objective diagnostic is missing.')
     if objective_numeric is not None and biomass_raw is not None:
@@ -18753,7 +18762,7 @@ def _build_mission31_data(
             issues.append('The visible growth value does not match the biomass reaction flux.')
     if biomass_raw is not None and primary_flux is not None:
         if abs(biomass_raw - primary_flux) > MISSION31_PRIMARY_TOLERANCE:
-            issues.append('The primary-objective diagnostic does not match the biomass flux.')
+            issues.append('The primary-objective diagnostic does not match the predicted growth rate.')
     if diagnostics.get('method') != MISSION31_METHOD:
         issues.append('The visible method diagnostics do not describe pFBA.')
     if diagnostics.get('objective_reaction') != MISSION31_GROWTH_OBJECTIVE:
@@ -19023,7 +19032,7 @@ def build_mission31_environmental_suppression_report_text(report_data=None):
         f"Runs recorded: {report.get('recorded_run_count', 0)}/{report.get('required_run_count', MISSION31_REQUIRED_RUN_COUNT)}",
         '',
         'Matched source matrix:',
-        'Source | WT growth | double growth | retention | double uptake | ACONT disabled',
+        f'Source | WT growth rate ({GROWTH_RATE_UNIT}) | double growth rate ({GROWTH_RATE_UNIT}) | retention | double uptake ({FLUX_UNIT}) | ACONT disabled',
     ]
 
     trials = report.get('source_trials') or {}
@@ -19387,7 +19396,7 @@ def _build_mission32_data(
     if not isinstance(production_fluxes, dict) or production_fluxes.get('error'):
         issues.append('The structured visible pFBA result is unavailable.')
     if biomass_raw is None:
-        issues.append('The visible biomass flux is missing from the structured result.')
+        issues.append('The visible predicted growth rate is missing from the structured result.')
     if primary_flux is None:
         issues.append('The visible primary-objective diagnostic is missing.')
     if objective_numeric is not None and biomass_raw is not None:
@@ -19395,7 +19404,7 @@ def _build_mission32_data(
             issues.append('The visible growth value does not match the biomass reaction flux.')
     if biomass_raw is not None and primary_flux is not None:
         if abs(biomass_raw - primary_flux) > MISSION32_PRIMARY_TOLERANCE:
-            issues.append('The primary-objective diagnostic does not match the biomass flux.')
+            issues.append('The primary-objective diagnostic does not match the predicted growth rate.')
     if diagnostics.get('method') != MISSION32_METHOD:
         issues.append('The visible method diagnostics do not describe pFBA.')
     if diagnostics.get('objective_reaction') != MISSION32_GROWTH_OBJECTIVE:
@@ -19715,7 +19724,7 @@ def build_mission32_respiratory_cut_set_report_text(report_data=None):
         f"Runs recorded: {report.get('recorded_run_count', 0)}/{report.get('required_run_count', MISSION32_REQUIRED_RUN_COUNT)}",
         '',
         'Respiratory branch screen:',
-        'Condition | growth | O2 uptake | cbdAB | cydAB | CYTBD disabled',
+        f'Condition | growth rate ({GROWTH_RATE_UNIT}) | O2 uptake ({FLUX_UNIT}) | cbdAB | cydAB | CYTBD disabled',
     ]
 
     runs = report.get('runs') or {}
@@ -19737,9 +19746,9 @@ def build_mission32_respiratory_cut_set_report_text(report_data=None):
         lines.extend([
             '',
             'Cross-branch phenotype:',
-            f"- Acetate secretion: {_mission32_value_text(cross_run, 'acetate_secretion')}",
-            f"- Ethanol secretion: {_mission32_value_text(cross_run, 'ethanol_secretion')}",
-            f"- Formate secretion: {_mission32_value_text(cross_run, 'formate_secretion')}",
+            f"- Acetate secretion: {_mission32_value_text(cross_run, 'acetate_secretion')} {FLUX_UNIT}",
+            f"- Ethanol secretion: {_mission32_value_text(cross_run, 'ethanol_secretion')} {FLUX_UNIT}",
+            f"- Formate secretion: {_mission32_value_text(cross_run, 'formate_secretion')} {FLUX_UNIT}",
         ])
 
     latest = report.get('latest_attempt') or {}
@@ -20050,9 +20059,9 @@ def _build_mission33_data(
     if not isinstance(medium_fluxes, dict) or medium_fluxes.get('error'):
         issues.append('The visible exchange-flux evidence is unavailable.')
     if growth is None:
-        issues.append('The visible biomass flux is missing.')
+        issues.append('The visible predicted growth rate is missing.')
     elif growth < 0:
-        issues.append('The biomass flux is not valid.')
+        issues.append('The predicted growth rate is not valid.')
     if len(growth_candidates) >= 2 and max(growth_candidates) - min(growth_candidates) > MISSION33_PRIMARY_TOLERANCE:
         issues.append('The displayed objective, biomass and primary objective fluxes are inconsistent.')
     if oxygen_uptake is None or oxygen_raw is None:
@@ -20137,7 +20146,7 @@ def _build_mission33_data(
         if reference_metadata['reference_objective_reaction'] != MISSION33_GROWTH_OBJECTIVE:
             issues.append('The ROOM reference must use the biomass objective.')
         if reference_metadata['reference_primary_objective_flux'] is None:
-            issues.append('The ROOM reference biomass flux is missing.')
+            issues.append('The ROOM reference predicted growth rate is missing.')
         if reference_metadata['reference_cytbd_flux'] is None:
             issues.append('The ROOM reference CYTBD flux is missing.')
         if reference_metadata['reference_uses_same_environment'] is not True:
@@ -20426,7 +20435,7 @@ def build_mission33_reference_adjustment_report_text(report_data=None):
         f"Runs recorded: {report.get('recorded_run_count', 0)}/{report.get('required_run_count', MISSION33_REQUIRED_RUN_COUNT)}",
         '',
         'Reference-state comparison:',
-        'Context | ref growth | ref CYTBD | ROOM score | mutant growth | mutant O2 uptake | CYTBD disabled',
+        f'Context | ref growth rate ({GROWTH_RATE_UNIT}) | ref CYTBD ({FLUX_UNIT}) | ROOM score | mutant growth rate ({GROWTH_RATE_UNIT}) | mutant O2 uptake ({FLUX_UNIT}) | CYTBD disabled',
     ]
     runs = report.get('runs') or {}
     for context in MISSION33_CONTEXT_ORDER:
@@ -20776,7 +20785,7 @@ def _build_mission34_data(
     if not isinstance(production_fluxes, dict) or production_fluxes.get('error'):
         issues.append('The structured visible pFBA result is unavailable.')
     if biomass_raw is None:
-        issues.append('The visible biomass flux is missing from the structured result.')
+        issues.append('The visible predicted growth rate is missing from the structured result.')
     if primary_flux is None:
         issues.append('The visible primary-objective diagnostic is missing.')
     if objective_numeric is not None and biomass_raw is not None:
@@ -20784,7 +20793,7 @@ def _build_mission34_data(
             issues.append('The visible growth value does not match the biomass reaction flux.')
     if biomass_raw is not None and primary_flux is not None:
         if abs(biomass_raw - primary_flux) > MISSION34_PRIMARY_TOLERANCE:
-            issues.append('The primary-objective diagnostic does not match the biomass flux.')
+            issues.append('The primary-objective diagnostic does not match the predicted growth rate.')
     if diagnostics.get('method') != MISSION34_METHOD:
         issues.append('The visible method diagnostics do not describe pFBA.')
     if diagnostics.get('objective_reaction') != MISSION34_GROWTH_OBJECTIVE:
@@ -21042,7 +21051,7 @@ def build_mission34_shared_subunit_report_text(report_data=None):
         f"Runs recorded: {report.get('recorded_run_count', 0)}/{report.get('required_run_count', MISSION34_REQUIRED_RUN_COUNT)}",
         '',
         'Shared-subunit audit:',
-        'Condition | disabled reactions | growth | O2 uptake | formate | pFBA total | active',
+        f'Condition | disabled reactions | growth rate ({GROWTH_RATE_UNIT}) | O2 uptake ({FLUX_UNIT}) | formate ({FLUX_UNIT}) | pFBA total ({FLUX_UNIT}) | active',
     ]
     runs = report.get('runs') or {}
     for condition_id in MISSION34_CONDITION_ORDER:
@@ -21576,7 +21585,7 @@ def _build_mission35_visible_run(
         if formate is not None and objective_numeric is not None and abs(formate - objective_numeric) > MISSION35_PRIMARY_TOLERANCE:
             issues.append('The direct formate objective must match measured formate secretion.')
         if biomass_raw is None:
-            issues.append('The objective audit requires a measured biomass flux; missing biomass is not zero.')
+            issues.append('The objective audit requires a predicted growth rate; missing biomass is not zero.')
 
     recorded = False
     if not issues:
@@ -22022,14 +22031,14 @@ def build_mission35_final_certification_report_text(report_data=None):
         f'- Growth objective: {MISSION35_GROWTH_OBJECTIVE}',
         '- Normal-run environment: completely model-default and aerobic',
         '- Design Production Flux panel: EX_for_e, EX_ac_e, EX_etoh_e',
-        f'- Approval criteria: formate >= {MISSION35_APPROVAL_MIN_FORMATE:.1f}, growth retention >= {MISSION35_APPROVAL_MIN_GROWTH_RETENTION * 100:.0f}%, <= {MISSION35_APPROVAL_MAX_DISABLED_REACTIONS} GPR-disabled reaction',
+        f'- Approval criteria: formate >= {MISSION35_APPROVAL_MIN_FORMATE:.1f} {FLUX_UNIT}, growth retention >= {MISSION35_APPROVAL_MIN_GROWTH_RETENTION * 100:.0f}%, <= {MISSION35_APPROVAL_MAX_DISABLED_REACTIONS} GPR-disabled reaction',
         f'- Oxygen sweep: EX_o2_e lower bound at {", ".join(f"{v:g}" for v in MISSION35_SWEEP_VALUES)}',
         '- Objective audit: b0114 with EX_for_e as the direct pFBA objective',
         '',
         f"Progress: design {report.get('design_recorded_count', 0)}/4 | oxygen curves {report.get('curve_recorded_count', 0)}/2 | objective audit {1 if isinstance((report.get('objective_audit') or {}).get('formate_optimum'), dict) else 0}/1",
         '',
         'A. Design Approval Screen',
-        'Condition | disabled | growth | retention | formate | O2 uptake | pFBA total | active',
+        f'Condition | disabled | growth rate ({GROWTH_RATE_UNIT}) | retention | formate ({FLUX_UNIT}) | O2 uptake ({FLUX_UNIT}) | pFBA total ({FLUX_UNIT}) | active',
     ]
     design = report.get('design_screen') or {}
     for condition_id in MISSION35_DESIGN_ORDER:
@@ -22051,7 +22060,7 @@ def build_mission35_final_certification_report_text(report_data=None):
     if all(isinstance(curves.get(key), dict) for key in MISSION35_CURVE_ORDER):
         rows_a = {float(row['bound_value']): row for row in curves['pdh_specific'].get('rows') or []}
         rows_b = {float(row['bound_value']): row for row in curves['shared_subunit'].get('rows') or []}
-        lines.append('O2 LB | aceE growth | aceE formate | lpd growth | lpd formate | visible phenotype match')
+        lines.append(f'O2 LB ({FLUX_UNIT}) | aceE growth rate ({GROWTH_RATE_UNIT}) | aceE formate ({FLUX_UNIT}) | lpd growth rate ({GROWTH_RATE_UNIT}) | lpd formate ({FLUX_UNIT}) | visible phenotype match')
         for bound in MISSION35_SWEEP_VALUES:
             a = rows_a.get(float(bound), {})
             b = rows_b.get(float(bound), {})
@@ -22077,21 +22086,23 @@ def build_mission35_final_certification_report_text(report_data=None):
     product = audit.get('formate_optimum')
     if isinstance(baseline, dict):
         lines.append(
-            'Biomass-objective b0114 | growth '
+            'Biomass-objective b0114 | predicted growth rate '
             + _mission35_text_number(baseline.get('growth'))
-            + ' | formate '
+            + f' {GROWTH_RATE_UNIT} | formate '
             + _mission35_text_number(baseline.get('formate_secretion'))
+            + f' {FLUX_UNIT}'
         )
     else:
         lines.append('Biomass-objective b0114 | pending')
     if isinstance(product, dict):
         lines.append(
-            'Direct-formate objective b0114 | formate objective '
+            'Direct-formate objective b0114 | formate objective flux '
             + _mission35_text_number(product.get('formate_objective_flux'))
-            + ' | biomass '
+            + f' {FLUX_UNIT} | predicted growth rate '
             + _mission35_text_number(product.get('biomass_flux'))
-            + ' | O2 uptake '
+            + f' {GROWTH_RATE_UNIT} | O2 uptake '
             + _mission35_text_number(product.get('oxygen_uptake'))
+            + f' {FLUX_UNIT}'
         )
     else:
         lines.append('Direct-formate objective b0114 | pending')
@@ -22265,10 +22276,15 @@ def _mission36_run_evidence(simulation_results):
     selected = _read_selected_production_fluxes(MISSION36_MODEL_ID)
     if set(selected) != set(MISSION36_REQUIRED_PRODUCTION_FLUXES) or len(selected) != 2:
         issues.append('Track exactly EX_etoh_e and EX_co2_e in Production Flux.')
-    if isinstance(production_fluxes, dict) and production_fluxes.get('error'):
-        issues.append(str(production_fluxes.get('error')))
-    if isinstance(medium_fluxes, dict) and medium_fluxes.get('error'):
-        issues.append(str(medium_fluxes.get('error')))
+    visible_simulation_failed = bool(
+        (isinstance(production_fluxes, dict) and production_fluxes.get('error'))
+        or (isinstance(medium_fluxes, dict) and medium_fluxes.get('error'))
+    )
+    if visible_simulation_failed:
+        issues.append(
+            'The visible yeast simulation failed before numeric Mission 36 evidence was produced. '
+            'Check New Results for the simulation error, then rerun the controlled reference.'
+        )
 
     values = _production_flux_value_map(production_fluxes)
     _raw, uptake, secretion = _medium_flux_maps(medium_fluxes)
@@ -22607,19 +22623,19 @@ def build_mission36_fermentation_report_text(report_data=None, include_title=Tru
     if report.get('baseline_ready') and isinstance(baseline, dict):
         lines.extend([
             'Reference recorded.',
-            f"Growth: {_mission36_format_number(baseline.get('growth'))}",
-            f"Glucose uptake: {_mission36_format_number(baseline.get('glucose_uptake'))}",
-            f"O2 uptake: {_mission36_format_number(baseline.get('oxygen_uptake'))}",
-            f"Ethanol secretion: {_mission36_format_number(baseline.get('ethanol_secretion'))}",
-            f"CO2 secretion: {_mission36_format_number(baseline.get('co2_secretion'))}",
-            f"Total absolute flux: {_mission36_format_number(baseline.get('total_absolute_flux'))}",
+            f"Predicted growth rate: {_mission36_format_number(baseline.get('growth'))} {GROWTH_RATE_UNIT}",
+            f"Glucose uptake: {_mission36_format_number(baseline.get('glucose_uptake'))} {FLUX_UNIT}",
+            f"O2 uptake: {_mission36_format_number(baseline.get('oxygen_uptake'))} {FLUX_UNIT}",
+            f"Ethanol secretion: {_mission36_format_number(baseline.get('ethanol_secretion'))} {FLUX_UNIT}",
+            f"CO2 secretion: {_mission36_format_number(baseline.get('co2_secretion'))} {FLUX_UNIT}",
+            f"Total absolute flux: {_mission36_format_number(baseline.get('total_absolute_flux'))} {AGGREGATE_FLUX_UNIT}",
         ])
     else:
         lines.append('Reference pending.')
     lines.extend(['', 'B. Glucose availability curve'])
     curve = report.get('glucose_curve')
     if isinstance(curve, dict):
-        lines.append('Glucose LB | growth | glucose uptake | O2 uptake | O2 cap binding | ethanol | CO2')
+        lines.append(f'Glucose LB ({FLUX_UNIT}) | growth rate ({GROWTH_RATE_UNIT}) | glucose uptake ({FLUX_UNIT}) | O2 uptake ({FLUX_UNIT}) | O2 cap binding | ethanol ({FLUX_UNIT}) | CO2 ({FLUX_UNIT})')
         by_bound = {
             round(float(row.get('bound_value')), 6): row
             for row in curve.get('rows') or []
@@ -22657,7 +22673,7 @@ def build_mission36_fermentation_report_text(report_data=None, include_title=Tru
     if report.get('evidence_ready'):
         lines.extend([
             'Evidence complete.',
-            'Inspect the tested rows and identify the first tested glucose lower bound where the fixed O2 uptake capacity is binding and ethanol secretion is positive.',
+            'Find the first glucose lower bound (tested) where O2 uptake caps out and ethanol secretion is positive.',
         ])
     else:
         lines.append('Evidence incomplete.')
@@ -22958,7 +22974,7 @@ def _build_mission37_data(
     if diagnostics.get('model_id') not in (None, MISSION37_MODEL_ID):
         issues.append('The visible diagnostics belong to the wrong metabolic model.')
     if growth is not None and primary is not None and abs(growth - primary) > MISSION37_NUMERIC_TOLERANCE:
-        issues.append('The visible biomass flux and primary-objective diagnostic are inconsistent.')
+        issues.append('The visible predicted growth rate and primary-objective diagnostic are inconsistent.')
     if glucose is not None and glucose <= MISSION37_FLUX_TOLERANCE:
         issues.append('The controlled default run must show positive glucose uptake.')
     if oxygen is not None and oxygen <= MISSION37_FLUX_TOLERANCE:
@@ -23109,7 +23125,7 @@ def build_mission37_fermentation_cut_set_report_text(report_data=None, include_t
         '',
         f"Runs recorded: {report.get('recorded_run_count', 0)}/{report.get('required_run_count', len(MISSION37_GENOTYPE_ORDER))}",
         '',
-        'Genotype | growth | growth retention | ethanol | ethanol retention | succinate | GPR-disabled reactions',
+        f'Genotype | growth rate ({GROWTH_RATE_UNIT}) | growth retention | ethanol ({FLUX_UNIT}) | ethanol retention | succinate ({FLUX_UNIT}) | GPR-disabled reactions',
     ])
     runs = report.get('runs') or {}
     growth_retention = report.get('growth_retention') or {}
@@ -23471,7 +23487,7 @@ def _build_mission38_data(
     if diagnostics.get('model_id') not in (None, MISSION38_MODEL_ID):
         issues.append('The visible diagnostics belong to the wrong metabolic model.')
     if growth is not None and primary is not None and abs(growth - primary) > MISSION38_NUMERIC_TOLERANCE:
-        issues.append('The visible biomass flux and primary-objective diagnostic are inconsistent.')
+        issues.append('The visible predicted growth rate and primary-objective diagnostic are inconsistent.')
     if glucose is not None and glucose <= MISSION38_FLUX_TOLERANCE:
         issues.append('The controlled default run must show positive glucose uptake.')
     if oxygen is not None and oxygen <= MISSION38_FLUX_TOLERANCE:
@@ -23613,7 +23629,7 @@ def build_mission38_background_dependency_report_text(report_data=None, include_
         '',
         f"Runs recorded: {report.get('recorded_run_count', 0)}/{report.get('required_run_count', len(MISSION38_CONDITION_ORDER))}",
         '',
-        'WT background | growth | WT growth retention | succinate | pyruvate | GPR-disabled reactions',
+        f'WT background | growth rate ({GROWTH_RATE_UNIT}) | WT growth retention | succinate ({FLUX_UNIT}) | pyruvate ({FLUX_UNIT}) | GPR-disabled reactions',
     ])
     runs = report.get('runs') or {}
     wt_retention = report.get('wt_growth_retention') or {}
@@ -23633,7 +23649,7 @@ def build_mission38_background_dependency_report_text(report_data=None, include_
 
     lines.extend([
         '',
-        'PDC-cut-set background | growth | PDC growth retention | succinate | succinate retention | pyruvate | GPR-disabled reactions',
+        f'PDC-cut-set background | growth rate ({GROWTH_RATE_UNIT}) | PDC growth retention | succinate ({FLUX_UNIT}) | succinate retention | pyruvate ({FLUX_UNIT}) | GPR-disabled reactions',
     ])
     pdc_growth_retention = report.get('pdc_growth_retention') or {}
     pdc_succinate_retention = report.get('pdc_succinate_retention') or {}
@@ -23677,7 +23693,7 @@ def build_mission38_background_dependency_report_text(report_data=None, include_
             'Identify the candidate that is nearly neutral in the WT background but, after the complete PDC cut set, retains no more than '
             f'{MISSION38_MAX_COMBINED_GROWTH_RETENTION * 100:.0f}% of the PDC-background growth, leaves no more than '
             f'{MISSION38_MAX_COMBINED_SUCCINATE_RETENTION * 100:.0f}% of its succinate secretion, and produces at least '
-            f'{MISSION38_MIN_PYRUVATE_SECRETION:.1f} of pyruvate secretion.',
+            f'{MISSION38_MIN_PYRUVATE_SECRETION:.1f} {FLUX_UNIT} of pyruvate secretion.',
         ])
     else:
         lines.append('Evidence incomplete.')
@@ -23689,7 +23705,7 @@ def build_mission38_background_dependency_report_text(report_data=None, include_
         '',
         'Interpretation note: the effect of a knockout can depend strongly on the genetic background in which it is introduced.',
         'The WT single-knockout controls distinguish a background-specific vulnerability from a generally growth-limiting gene deletion.',
-        'Succinate loss and pyruvate overflow are visible rerouting signals; the conclusion remains conditional on iMM904, pFBA, the biomass objective and the model-default medium.',
+        'Succinate loss and pyruvate overflow signal rerouting; conclusion still conditional on iMM904, pFBA, biomass objective, and default medium.',
         'All growth, product and GPR evidence shown here comes from the runs recorded in the simulator.',
     ])
     return '\n'.join(lines)
@@ -24000,7 +24016,7 @@ def _build_mission39_data(
     if diagnostics.get('model_id') not in (None, MISSION39_MODEL_ID):
         issues.append('The visible diagnostics belong to the wrong metabolic model.')
     if growth is not None and primary is not None and abs(growth - primary) > MISSION39_NUMERIC_TOLERANCE:
-        issues.append('The visible biomass flux and primary-objective diagnostic are inconsistent.')
+        issues.append('The visible predicted growth rate and primary-objective diagnostic are inconsistent.')
     if glucose is not None and glucose <= MISSION39_FLUX_TOLERANCE:
         issues.append('The controlled run must show positive glucose uptake.')
     if oxygen is not None and oxygen <= MISSION39_FLUX_TOLERANCE:
@@ -24150,7 +24166,7 @@ def build_mission39_bypass_rescue_report_text(report_data=None, include_title=Tr
         '',
         f"Runs recorded: {report.get('recorded_run_count', 0)}/{report.get('required_run_count', len(MISSION39_CONDITION_ORDER))}",
         '',
-        'Condition | growth | growth vs default | supplement uptake | ethanol | pyruvate | succinate',
+        f'Condition | growth rate ({GROWTH_RATE_UNIT}) | growth vs default | supplement uptake ({FLUX_UNIT}) | ethanol ({FLUX_UNIT}) | pyruvate ({FLUX_UNIT}) | succinate ({FLUX_UNIT})',
     ])
     runs = report.get('runs') or {}
     growth_fold = report.get('growth_fold_vs_default') or {}
@@ -24185,8 +24201,8 @@ def build_mission39_bypass_rescue_report_text(report_data=None, include_title=Tr
         lines.extend([
             'Evidence complete.',
             'Identify the tested lower-bound opening that is actually used with at least '
-            f'{MISSION39_MIN_SUPPLEMENT_UPTAKE:.1f} uptake, at least doubles predicted growth relative to the default-medium reference, and restores ethanol secretion to at least '
-            f'{MISSION39_MIN_RESCUE_ETHANOL:.1f}.',
+            f'{MISSION39_MIN_SUPPLEMENT_UPTAKE:.1f} {FLUX_UNIT} uptake, at least doubles predicted growth relative to the default-medium reference, and restores ethanol secretion to at least '
+            f'{MISSION39_MIN_RESCUE_ETHANOL:.1f} {FLUX_UNIT}.',
         ])
     else:
         lines.append('Evidence incomplete.')
@@ -24658,7 +24674,7 @@ def build_mission40_final_certification_report_text(report_data=None, include_ti
         f'- Objective: {MISSION40_GROWTH_OBJECTIVE}',
         '- Genotype: PDC1 + PDC5 + PDC6 + FRD1',
         f'- Tracked products: {MISSION40_ETHANOL_REACTION}, {MISSION40_SUCCINATE_REACTION}, {MISSION40_PYRUVATE_REACTION}',
-        f'- Sweep: {MISSION40_GLUCOSE_REACTION} lower bound at -0.5, -1, -2, -10',
+        f'- Sweep: {MISSION40_GLUCOSE_REACTION} lower bound at -0.5, -1, -2, -10 {FLUX_UNIT}',
         '- Curve A base environment: model default',
         f'- Curve B base environment: only {MISSION40_ACETALDEHYDE_REACTION} lower bound open',
         '',
@@ -24670,9 +24686,20 @@ def build_mission40_final_certification_report_text(report_data=None, include_ti
 
     paired = report.get('paired_rows') or {}
     if paired:
+        # Keep the final certification report readable in the 1280px desktop/Web
+        # mission menu.  The previous eight-column table embedded long units in
+        # every header and could extend beyond the right edge of the viewport.
+        # A/B preserve the exact same matched-row evidence in two compact tables.
         lines.extend([
             '',
-            'Glucose LB | no-rescue growth | rescue growth | matched growth | acald uptake | rescue ethanol | no-rescue pyruvate | rescue pyruvate',
+            'Matched glucose curves:',
+            'A = no-rescue curve; B = acetaldehyde-rescue curve.',
+            'Units:',
+            f'- Glucose LB and exchange fluxes: {FLUX_UNIT}',
+            f'- Growth rate: {GROWTH_RATE_UNIT}',
+            '',
+            'Growth comparison:',
+            'LB | growth A | growth B | B/A growth',
         ])
         for bound in MISSION40_SWEEP_VALUES:
             row = paired.get(str(bound))
@@ -24682,8 +24709,22 @@ def build_mission40_final_certification_report_text(report_data=None, include_ti
             lines.append(
                 f"{bound:g} | {_mission40_format(row.get('no_rescue_growth'))} | "
                 f"{_mission40_format(row.get('rescue_growth'))} | "
-                f"{_mission40_fold(row.get('matched_growth_fold'))} | "
-                f"{_mission40_format(row.get('acetaldehyde_uptake'))} | "
+                f"{_mission40_fold(row.get('matched_growth_fold'))}"
+            )
+
+        lines.extend([
+            '',
+            'Rescue fluxes:',
+            'acald = acetaldehyde',
+            'LB | acald uptake | ethanol B | pyruvate A | pyruvate B',
+        ])
+        for bound in MISSION40_SWEEP_VALUES:
+            row = paired.get(str(bound))
+            if not isinstance(row, dict):
+                lines.append(f'{bound:g} | pending')
+                continue
+            lines.append(
+                f"{bound:g} | {_mission40_format(row.get('acetaldehyde_uptake'))} | "
                 f"{_mission40_format(row.get('rescue_ethanol'))} | "
                 f"{_mission40_format(row.get('no_rescue_pyruvate'))} | "
                 f"{_mission40_format(row.get('rescue_pyruvate'))}"
@@ -24709,9 +24750,9 @@ def build_mission40_final_certification_report_text(report_data=None, include_ti
         lines.extend([
             'Evidence complete.',
             'Identify every tested glucose lower bound where the acetaldehyde-rescue curve simultaneously shows '
-            f'at least {MISSION40_MIN_ACETALDEHYDE_UPTAKE:.1f} acetaldehyde uptake, at least '
+            f'at least {MISSION40_MIN_ACETALDEHYDE_UPTAKE:.1f} {FLUX_UNIT} acetaldehyde uptake, at least '
             f'{MISSION40_MIN_MATCHED_GROWTH_FOLD:.2f}x the matched no-rescue growth, and at least '
-            f'{MISSION40_MIN_RESCUE_ETHANOL:.1f} ethanol secretion.',
+            f'{MISSION40_MIN_RESCUE_ETHANOL:.1f} {FLUX_UNIT} ethanol secretion.',
             'Enter all qualifying tested lower bounds together.',
         ])
     else:

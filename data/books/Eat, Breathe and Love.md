@@ -1,37 +1,33 @@
-# Book "Eat, Breathe and Love"
+# Eat, Breathe and Ferment
 
-This book takes you on a fun and educational journey focusing on how microorganisms eat, breathe, and multiply, highlighting their adaptability and unique characteristics.
-E. coli serves as a friendly example to help kids understand these tiny but fascinating creatures that are all around us.
+Nutrients, electron acceptors and redox balance shape metabolic behaviour. This book connects the environmental experiments in LabHero with the fermentation phenotypes explored in E. coli and yeast.
 
-## Chapter 1: Eat
+## Eat: nutrient availability
 
-### What's on the Menu for Microbes?
+Carbon sources provide atoms and reducing power, but uptake is limited by exchange bounds and by the reactions available inside the model. Supplying a nutrient does not guarantee that the network can use it.
 
-Meet our tiny friend, E. coli! Just like you enjoy your favorite foods, microorganisms have their own favorites too. They love to munch on things like glucose, a sugary treat. Imagine E. coli as a tiny snacker, always looking for something yummy to eat.
+Nutrient screens and bound sweeps should therefore be read from the optimized uptake fluxes, not from the configured bounds alone.
 
+## Breathe: oxygen as an environmental constraint
 
-### Turning Food into Energy
+Oxygen uptake can enable respiratory flux patterns with different energy and redox consequences from oxygen-limited states. In the simulator, changing EX_o2_e changes a constraint; the resulting flux distribution is then selected by the chosen method and objective.
 
-When E. coli gets a hold of glucose, it's like us enjoying a delicious meal. But here's the magic part: E. coli doesn't just eat for fun. It uses glucose to create energy, the kind of energy that keeps it alive and helps it perform all its microscopic tasks.
+A zero oxygen-uptake bound represents an anaerobic model condition. Intermediate caps can reveal transitions rather than a simple binary aerobic/anaerobic switch.
 
-## Chapter 2: Breathe
+## Ferment: balancing redox without full respiration
 
-### Breathing, Microbe-Style
+Fermentation routes can reoxidize cofactors and secrete reduced products when respiratory capacity is absent or limited. The exact products and quantitative fluxes are network- and condition-dependent.
 
-We breathe in oxygen from the air, but for E. coli and its microbe pals, it's a bit different. Some of these microorganisms love oxygen and use it to breathe, just like we do. It's like their version of taking a deep breath of fresh air.
+For E. coli, LabHero tracks products such as ethanol, acetate, formate and succinate in several missions. Their fluxes are evidence about how the optimized network redistributed carbon and redox demand.
 
-### Breathing Without Oxygen
+## Yeast and iMM904
 
-But not all microbes are oxygen fans. Some are like rebels that can live without it. They have special powers, allowing them to thrive in places where there's no oxygen at all, like deep in the soil or even inside your digestive system.
+The Golden Lab introduces Saccharomyces cerevisiae through iMM904, a larger genome-scale model. The same principles still apply: choose a method and objective, constrain exchanges, inspect fluxes and compare controlled conditions.
 
+Mission 36 uses an oxygen-cap sweep to identify the onset of a fermentative phenotype. The lesson is not that one oxygen value is universal, but that a model can be interrogated systematically for condition-dependent transitions.
 
-## Chapter 3: Love
+## Interpretation discipline
 
-### Microbial Families
+Do not infer concentrations or time-dependent growth curves from a steady-state flux alone. Do not call a permitted uptake bound an observed uptake, and do not equate a method score with predicted growth rate.
 
-Microbes might not have moms and dads, but they have their own way of growing their families. When they're happy and cozy in their environment, they start making lots and lots of baby microbes. When they're happy and the conditions are just right, they multiply.
-
-
-### Influence of the Environment
-
-The environment plays a big role in how microbes grow and make babies. If it's too hot or too cold, or the conditions aren't just right, they might slow down or even not be able to grow. But when everything's perfect, they can multiply like crazy and fill their tiny world with new microbes!
+State the model, method, objective and changed constraint when reporting a result. That makes the conclusion reproducible and scientifically meaningful.

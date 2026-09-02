@@ -1,6 +1,8 @@
 import pygame
 import pygame_menu
 
+from answer_penalty import penalize_wrong_answer
+
 from settings import *
 from save_load import *
 from timers import Timer
@@ -51,9 +53,10 @@ class Mission30_info:
             theme=mytheme,
             title='Mission 30',
             width=1280,
+        overflow=(False, True),
         )
 
-        if not is_mission30_unlocked(self.missions_completed):
+        if not self.player.is_mission_unlocked('30'):
             menu.add.vertical_margin(40)
             menu.add.label(
                 'Mission 30 is locked. Complete Mission 29 before mapping how oxygen limitation changes the phosphofructokinase redundancy pattern.',
@@ -76,6 +79,7 @@ class Mission30_info:
             theme=mytheme,
             title='Mission 30 Hint 3',
             width=1280,
+        overflow=(False, True),
         )
         hint3.add.label(
             f'Technical hint: use {MISSION30_METHOD} with objective {MISSION30_GROWTH_OBJECTIVE}. Keep the base environment completely default. In Bound Sweep Setup choose Oxygen lower bound and the dedicated PFK redundancy threshold preset ({values_text}). Record wild type, each single knockout, and the exact double knockout. No Production Flux selection is required.',
@@ -92,6 +96,7 @@ class Mission30_info:
             theme=mytheme,
             title='Mission 30 Hint 2',
             width=1280,
+        overflow=(False, True),
         )
         hint2.add.label(
             'Experimental hint: compare every oxygen capacity at the same horizontal position across the four curves. The two single knockouts are controls for preserved isoenzyme redundancy; the double knockout tests what happens after that redundancy has been removed.',
@@ -109,6 +114,7 @@ class Mission30_info:
             theme=mytheme,
             title='Mission 30 Hint 1',
             width=1280,
+        overflow=(False, True),
         )
         hint1.add.label(
             'Conceptual hint: a gene interaction observed in one medium is not automatically stable in another. Watch both numerical growth and solver status. INFEASIBLE is a distinct model outcome and must never be read as a measured growth value of zero.',
@@ -126,6 +132,7 @@ class Mission30_info:
             theme=mytheme,
             title='Mission 30 Briefing',
             width=1280,
+        overflow=(False, True),
         )
         briefing.add.label(
             f"""
@@ -213,7 +220,7 @@ class Mission30_info:
         await run_menu(menu, self.display_surface)
 
     def activate_mission30(self):
-        if not is_mission30_unlocked(self.missions_completed):
+        if not self.player.is_mission_unlocked('30'):
             self.failed.play()
             animation_text_save('Complete Mission 29 before starting Mission 30.', time=3000)
             return
@@ -232,7 +239,7 @@ class Mission30_info:
         save_file(self.player.get_save_data())
 
     def deliver_results(self, answer):
-        if not is_mission30_unlocked(self.missions_completed):
+        if not self.player.is_mission_unlocked('30'):
             self.failed.play()
             animation_text_save('Complete Mission 29 first!', time=2500)
             return
@@ -257,6 +264,7 @@ class Mission30_info:
         if not mission30_answer_matches(answer, report):
             self.failed.play()
             animation_text_save('Compare the first INFEASIBLE double-knockout row with all three controls at the same oxygen bound.', time=3600)
+            penalize_wrong_answer(self.player, '30')
             return
 
         self.success.play()

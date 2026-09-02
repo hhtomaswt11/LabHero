@@ -1,6 +1,8 @@
 import pygame
 import pygame_menu
 
+from answer_penalty import penalize_wrong_answer
+
 from settings import *
 from save_load import *
 from timers import Timer
@@ -85,11 +87,11 @@ class Mission21:
             f"Excellent work, {self.player.player_name}.",
             "Different mechanisms can produce the same recorded phenotype.",
             "Dr. Luna will continue in Mission 23.",
-            "Dr. Luna will now study how phenotypes change across perturbation levels."
+            "She studies phenotypes across controlled perturbation levels."
         ]
 
         self.input()
-        if not is_mission21_unlocked(self.missions_completed):
+        if not self.player.is_mission_unlocked('21'):
             self.menu_message(locked_dialogue, buttons=False)
         elif '22' in self.missions_completed:
             self.menu_message(completed22_dialogue, buttons=False)
@@ -164,9 +166,10 @@ class Mission21_info:
             theme=mytheme,
             title='Mission 21',
             width=1280,
+        overflow=(False, True),
         )
 
-        if not is_mission21_unlocked(self.missions_completed):
+        if not self.player.is_mission_unlocked('21'):
             menu.add.vertical_margin(40)
             menu.add.label(
                 'Mission 21 is locked. Complete Mission 20 before beginning Dr. Vega\'s comparison laboratory.',
@@ -183,6 +186,7 @@ class Mission21_info:
         hint3 = pygame_menu.Menu(
             height=720, center_content=False, onclose=pygame_menu.events.BACK,
             theme=mytheme, title='Mission 21 Hint 3', width=1280,
+        overflow=(False, True),
         )
         hint3.add.label(
             f'Technical hint: use {MISSION21_METHOD}, objective {MISSION21_GROWTH_OBJECTIVE}, every gene active and model-default glucose. Close {MISSION21_OXYGEN_REACTION} uptake in both runs. Track ' + ', '.join(MISSION21_REQUIRED_TRACKED_FLUXES) + f'. In the second run, close only the upper bound of {MISSION21_ETHANOL_EXPORT}.',
@@ -195,6 +199,7 @@ class Mission21_info:
         hint2 = pygame_menu.Menu(
             height=720, center_content=False, onclose=pygame_menu.events.BACK,
             theme=mytheme, title='Mission 21 Hint 2', width=1280,
+        overflow=(False, True),
         )
         hint2.add.label(
             'Experimental hint: calculate each tracked value as modified minus reference. The requested route is the one with the largest positive difference, not necessarily the largest final value.',
@@ -208,6 +213,7 @@ class Mission21_info:
         hint1 = pygame_menu.Menu(
             height=720, center_content=False, onclose=pygame_menu.events.BACK,
             theme=mytheme, title='Mission 21 Hint 1', width=1280,
+        overflow=(False, True),
         )
         hint1.add.label(
             'Conceptual hint: when an active export route is removed, a viable network may redirect flux through another secretion route. A controlled comparison attributes the change to the single altered bound.',
@@ -225,6 +231,7 @@ class Mission21_info:
             theme=mytheme,
             title='Mission 21 Briefing',
             width=1280,
+        overflow=(False, True),
         )
         briefing.add.label(
             f"""
@@ -308,7 +315,7 @@ class Mission21_info:
         await run_menu(menu, self.display_surface)
 
     def activate_mission21(self):
-        if not is_mission21_unlocked(self.missions_completed):
+        if not self.player.is_mission_unlocked('21'):
             self.failed.play()
             animation_text_save('Complete Mission 20 before starting Mission 21.', time=3000)
             return
@@ -327,7 +334,7 @@ class Mission21_info:
         save_file(self.player.get_save_data())
 
     def deliver_results(self, answer):
-        if not is_mission21_unlocked(self.missions_completed):
+        if not self.player.is_mission_unlocked('21'):
             self.failed.play()
             animation_text_save('Complete Mission 20 first!', time=2500)
             return
@@ -360,10 +367,12 @@ class Mission21_info:
         if len(normalise_mission21_answer(answer)) != 1:
             self.failed.play()
             animation_text_save('Enter exactly one tracked secretion route.', time=2800)
+            penalize_wrong_answer(self.player, '21')
             return
         if not mission21_answer_matches(answer, report):
             self.failed.play()
             animation_text_save('That route is not supported by the recorded before-and-after differences.', time=3000)
+            penalize_wrong_answer(self.player, '21')
             return
 
         self.success.play()

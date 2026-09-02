@@ -39,7 +39,7 @@ The completed visible pFBA run from Mission 13 may be reused as the no-knockout 
 | `b0474 / adk` | 12.915 | 92.9% | 2.712 | 10.000 | 1.458 | acetate decreases further, but formate and ethanol appear |
 | `b4151 / frdD` | 4.000 | 28.8% | 0.000 | 20.000 | 12.000 | acetate disappears, but the succinate optimum collapses and major co-products appear |
 
-All direct succinate-optimal solutions have approximately zero predicted biomass flux. They are theoretical product optima, not viable production-strain claims.
+All direct succinate-optimal solutions have approximately zero predicted growth rate. They are theoretical product optima, not viable production-strain claims.
 
 ## Operational criteria
 A candidate is a clean improvement only when it simultaneously:

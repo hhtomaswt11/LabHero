@@ -16,6 +16,10 @@ MUSIC = {
 
 MUSIC_NAME = MUSIC['Hope']
 
+# Audio defaults shared by Player and Settings UI.
+DEFAULT_MUSIC_VOLUME_PERCENT = 15
+MUSIC_VOLUME_SCALE = 0.14
+
 
 # Relative URL: the frontend hits /api/... on whatever origin it is served from,
 # which an nginx reverse proxy forwards to the backend container. For local dev
@@ -78,7 +82,14 @@ DEFAULT_PLAYER_STATE = {
     'facing': 'down',
     'status': 'down_idle',
     'skin_id': 'default',
-    'name_confirmed': False
+    'name_confirmed': False,
+    # Historic saves default safely to Normal. Fresh New Games may replace
+    # this value during Dr. Alves registration before any mission starts.
+    'campaign_mode': 'normal',
+    # STUDENT.2: the campaign-completion summary is shown once automatically.
+    'final_results_seen': False,
+    # One-time map easter egg. Historic saves safely default to not collected.
+    'golden_egg_collected': False
 }
 
 DEFAULT_INVENTORY_2 = [

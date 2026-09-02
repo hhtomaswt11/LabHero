@@ -1,6 +1,8 @@
 import pygame
 import pygame_menu
 
+from answer_penalty import penalize_wrong_answer
+
 from async_menu import run_menu
 from button import Button
 from functions import animation_text_save
@@ -70,7 +72,7 @@ class Mission02:
         ]
 
         self.input()
-        if not is_mission02_unlocked(self.missions_completed):
+        if not self.player.is_mission_unlocked('02'):
             self.menu_message(step_locked, buttons=False)
         elif '02' in self.missions_completed:
             self.menu_message(step_complete, buttons=False)
@@ -267,6 +269,7 @@ class Mission02_info:
             theme=mytheme,
             title=f'Mission 02 Hint {hint_level} - Key Substitution',
             width=1280,
+        overflow=(False, True),
         )
         confirmation.add.vertical_margin(45)
         confirmation.add.label(
@@ -336,9 +339,10 @@ class Mission02_info:
             theme=mytheme,
             title='Mission 02',
             width=1280,
+        overflow=(False, True),
         )
 
-        if not is_mission02_unlocked(self.missions_completed):
+        if not self.player.is_mission_unlocked('02'):
             menu.add.vertical_margin(40)
             menu.add.label(
                 'Mission 02 is locked. Complete Mission 01 with Dr. Martinez before beginning the carbon-source investigation.',
@@ -359,6 +363,7 @@ class Mission02_info:
             theme=mytheme,
             title='Mission 02 Briefing',
             width=1280,
+        overflow=(False, True),
         )
 
         hint_3 = pygame_menu.Menu(
@@ -368,6 +373,7 @@ class Mission02_info:
             theme=mytheme,
             title='Mission 02 Hint 3',
             width=1280,
+        overflow=(False, True),
         )
         hint_3.add.label(
             """
@@ -389,6 +395,7 @@ class Mission02_info:
             theme=mytheme,
             title='Mission 02 Hint 2',
             width=1280,
+        overflow=(False, True),
         )
         hint_2.add.label(
             """
@@ -417,6 +424,7 @@ class Mission02_info:
             theme=mytheme,
             title='Mission 02 Hint 1',
             width=1280,
+        overflow=(False, True),
         )
         hint_1.add.label(
             """
@@ -566,7 +574,7 @@ class Mission02_info:
         await run_menu(menu, self.display_surface)
 
     def activate_mission02(self):
-        if not is_mission02_unlocked(self.missions_completed):
+        if not self.player.is_mission_unlocked('02'):
             self.failed.play()
             animation_text_save('Complete Mission 01 before starting Mission 02.', time=3000)
             return
@@ -589,7 +597,7 @@ class Mission02_info:
         save_file(self.player.get_save_data())
 
     def deliver_results(self, answer):
-        if not is_mission02_unlocked(self.missions_completed):
+        if not self.player.is_mission_unlocked('02'):
             self.failed.play()
             animation_text_save('Complete Mission 01 before delivering Mission 02.', time=3000)
             return
@@ -624,11 +632,13 @@ class Mission02_info:
         if normalise_mission02_answer(answer) is None:
             self.failed.play()
             animation_text_save('Enter one candidate carbon-source name from the mission list.', time=3000)
+            penalize_wrong_answer(self.player, '02')
             return
 
         if not mission02_answer_matches(answer, report_data):
             self.failed.play()
             animation_text_save('That conclusion is not supported by the recorded growth evidence.', time=3200)
+            penalize_wrong_answer(self.player, '02')
             return
 
         self.success.play()

@@ -1,6 +1,8 @@
 import pygame
 import pygame_menu
 
+from answer_penalty import penalize_wrong_answer
+
 from settings import *
 from save_load import *
 from timers import Timer
@@ -89,7 +91,7 @@ class Mission25:
             self.menu_message(intro26_dialogue, menu_to_open=self.menu26)
         elif '25' in self.missions_activated:
             self.menu_message(active_dialogue, menu_to_open=self.menu25)
-        elif is_mission25_unlocked(self.missions_completed):
+        elif self.player.is_mission_unlocked('25'):
             self.menu_message(intro_dialogue, menu_to_open=self.menu25)
         else:
             self.menu_message(locked_dialogue, buttons=False)
@@ -153,9 +155,10 @@ class Mission25_info:
             theme=mytheme,
             title='Mission 25',
             width=1280,
+        overflow=(False, True),
         )
 
-        if not is_mission25_unlocked(self.missions_completed):
+        if not self.player.is_mission_unlocked('25'):
             menu.add.vertical_margin(40)
             menu.add.label(
                 "Mission 25 is locked. Complete Mission 24 before beginning Dr. Smith's first experiment.",
@@ -172,6 +175,7 @@ class Mission25_info:
         hint3 = pygame_menu.Menu(
             height=720, center_content=False, onclose=pygame_menu.events.BACK,
             theme=mytheme, title='Mission 25 Hint 3', width=1280,
+        overflow=(False, True),
         )
         hint3.add.label(
             f"Technical hint: use {MISSION25_METHOD} with objective {MISSION25_GROWTH_OBJECTIVE}. Keep every environmental bound at model default for the aerobic cells. For the anaerobic cells, close only the lower bound of {MISSION25_OXYGEN_REACTION}. Use either every gene active or only {MISSION25_TARGET_GENE} / {MISSION25_TARGET_GENE_NAME} knocked out.",
@@ -184,6 +188,7 @@ class Mission25_info:
         hint2 = pygame_menu.Menu(
             height=720, center_content=False, onclose=pygame_menu.events.BACK,
             theme=mytheme, title='Mission 25 Hint 2', width=1280,
+        overflow=(False, True),
         )
         hint2.add.label(
             'Experimental hint: construct four cells—wild type and knockout with oxygen available, then the same two genotypes with oxygen uptake blocked. Compare knockout growth with its own wild-type reference inside each oxygen context.',
@@ -197,6 +202,7 @@ class Mission25_info:
         hint1 = pygame_menu.Menu(
             height=720, center_content=False, onclose=pygame_menu.events.BACK,
             theme=mytheme, title='Mission 25 Hint 1', width=1280,
+        overflow=(False, True),
         )
         hint1.add.label(
             'Conceptual hint: essentiality is conditional. A gene may be dispensable when one route is available but operationally essential when the environment removes an alternative route.',
@@ -214,6 +220,7 @@ class Mission25_info:
             theme=mytheme,
             title='Mission 25 Briefing',
             width=1280,
+        overflow=(False, True),
         )
         briefing.add.label(
             f"""
@@ -294,7 +301,7 @@ class Mission25_info:
         await run_menu(menu, self.display_surface)
 
     def activate_mission25(self):
-        if not is_mission25_unlocked(self.missions_completed):
+        if not self.player.is_mission_unlocked('25'):
             self.failed.play()
             animation_text_save('Complete Mission 24 before starting Mission 25.', time=3000)
             return
@@ -312,7 +319,7 @@ class Mission25_info:
         save_file(self.player.get_save_data())
 
     def deliver_results(self, answer):
-        if not is_mission25_unlocked(self.missions_completed):
+        if not self.player.is_mission_unlocked('25'):
             self.failed.play()
             animation_text_save('Complete Mission 24 first!', time=2500)
             return
@@ -337,6 +344,7 @@ class Mission25_info:
         if not mission25_answer_matches(answer, report):
             self.failed.play()
             animation_text_save('Recompare knockout growth retention inside each oxygen context.', time=3200)
+            penalize_wrong_answer(self.player, '25')
             return
 
         self.success.play()

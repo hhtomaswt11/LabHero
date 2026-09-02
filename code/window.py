@@ -11,6 +11,7 @@ from options_values import *
 from simulation import *
 from functions import animation_text_save
 from async_menu import run_menu
+from scientific_display import GROWTH_RATE_UNIT, FLUX_UNIT, AGGREGATE_FLUX_UNIT, format_growth_rate, format_flux
 from model_registry import (
     build_ui_context,
     build_legacy_tables,
@@ -93,6 +94,25 @@ def _gene_matches_search(gene_id, search_text, gene_names=None, gene_labels=None
     )
 
 
+
+def _reaction_matches_search(reaction_id, reaction_name, search_text):
+    """Return whether an exchange reaction matches an id/name search."""
+    query = _normalise_gene_search_text(search_text)
+    if not query:
+        return True
+
+    searchable_values = (
+        reaction_id,
+        reaction_name,
+        f'{reaction_name}{reaction_id}',
+        f'{reaction_id}{reaction_name}',
+    )
+    return any(
+        query in _normalise_gene_search_text(value)
+        for value in searchable_values
+    )
+
+
 def _parse_gene_knockout_text(value, gene_ids, gene_names=None):
     """Backward-compatible UI wrapper around the model-registry parser."""
     return parse_gene_knockout_text(value, gene_ids, gene_names)
@@ -120,6 +140,26 @@ def _build_gene_summary(genes, gene_labels=None):
         f'- {_format_gene(gene_id, gene_labels)}'
         for gene_id in knocked_out_genes
     )
+
+
+
+def _build_clean_reaction_data(raw_reaction_data, reactions_table=None):
+    """Keep only scientific LB/UB toggles, excluding UI-only search fields."""
+    table = REACTIONS if reactions_table is None else reactions_table
+    raw_reaction_data = raw_reaction_data or {}
+    clean = {}
+
+    for i in range(len(table.index)):
+        lb_key = f'reaction_{i}_lb'
+        ub_key = f'reaction_{i}_ub'
+        clean[lb_key] = bool(
+            raw_reaction_data.get(lb_key, bool(table.lb.iloc[i] != 0))
+        )
+        clean[ub_key] = bool(
+            raw_reaction_data.get(ub_key, bool(table.ub.iloc[i] != 0))
+        )
+
+    return clean
 
 
 def _build_environmental_summary(reactions):
@@ -155,8 +195,8 @@ def _build_environmental_summary(reactions):
 
             changed_conditions.append(
                 f'- {reaction_name} ({reaction_id}): '
-                f'Lower Bound {"Open" if lower_bound_open else "Closed"} ({lower_bound_value}), '
-                f'Upper Bound {"Open" if upper_bound_open else "Closed"} ({upper_bound_value})'
+                f'Lower Bound {"Open" if lower_bound_open else "Closed"} ({lower_bound_value} {FLUX_UNIT}), '
+                f'Upper Bound {"Open" if upper_bound_open else "Closed"} ({upper_bound_value} {FLUX_UNIT})'
             )
 
     if not changed_conditions:
@@ -197,8 +237,8 @@ def _build_environmental_summary_for_table(reactions, reactions_table):
             )
             changed_conditions.append(
                 f'- {reaction_name} ({reaction_id}): '
-                f'Lower Bound {"Open" if lower_bound_open else "Closed"} ({lower_bound_value}), '
-                f'Upper Bound {"Open" if upper_bound_open else "Closed"} ({upper_bound_value})'
+                f'Lower Bound {"Open" if lower_bound_open else "Closed"} ({lower_bound_value} {FLUX_UNIT}), '
+                f'Upper Bound {"Open" if upper_bound_open else "Closed"} ({upper_bound_value} {FLUX_UNIT})'
             )
 
     return '\n'.join(changed_conditions) if changed_conditions else 'No environmental changes.'
@@ -262,7 +302,7 @@ def _build_production_fluxes_text(production_fluxes):
         if item.get('error'):
             lines.append(f"- {label}: not available")
         else:
-            lines.append(f"- {label}: {float(item.get('production_flux', 0.0)):.3f}")
+            lines.append(f"- {label}: {format_flux(item.get('production_flux', 0.0))}")
 
     return '\n'.join(lines)
 
@@ -302,13 +342,13 @@ def _format_exchange_flux_line(reaction_id, items_by_id):
     secretion_flux = _clean_report_number(item.get('secretion_flux', 0.0))
 
     if uptake_flux > 0.001:
-        status = f'consumed / uptake {uptake_flux:.3f}'
+        status = f'consumed / uptake {format_flux(uptake_flux)}'
     elif secretion_flux > 0.001:
-        status = f'secreted / export {secretion_flux:.3f}'
+        status = f'secreted / export {format_flux(secretion_flux)}'
     else:
         status = 'no exchange detected'
 
-    return f'- {label}: {raw_flux:.3f} -> {status}'
+    return f'- {label}: raw flux {format_flux(raw_flux)} -> {status}'
 
 
 def _build_exchange_flux_report_text(exchange_fluxes):
@@ -422,7 +462,7 @@ def _build_bound_sweep_report_text(sweep_data):
             f"Method: {sweep_data.get('method')} | Objective: {sweep_data.get('objective')}",
             'The glucose bound varies while the base oxygen bound remains fixed.', '',
             'Rows:',
-            'Glucose LB | growth | glucose uptake | O2 uptake | ethanol | CO2 | total absolute flux',
+            f'Glucose LB ({FLUX_UNIT}) | growth rate ({GROWTH_RATE_UNIT}) | glucose uptake ({FLUX_UNIT}) | O2 uptake ({FLUX_UNIT}) | ethanol ({FLUX_UNIT}) | CO2 ({FLUX_UNIT}) | total absolute flux ({AGGREGATE_FLUX_UNIT})',
         ]
         for row in rows:
             tracked = row.get('tracked_flux_values') or {}
@@ -442,9 +482,9 @@ def _build_bound_sweep_report_text(sweep_data):
                 first, last = rows[0], rows[-1]
                 lines.extend([
                     '', 'Trend summary:',
-                    f"- Growth change from first to last point: {_format_sweep_number(float(last.get('growth_value')) - float(first.get('growth_value')))}",
-                    f"- Glucose uptake change: {_format_sweep_number(float(last.get('tested_reaction_uptake')) - float(first.get('tested_reaction_uptake')))}",
-                    f"- O2 uptake change: {_format_sweep_number(float(last.get('oxygen_uptake')) - float(first.get('oxygen_uptake')))}",
+                    f"- Growth-rate change from first to last point: {format_growth_rate(float(last.get('growth_value')) - float(first.get('growth_value')))}",
+                    f"- Glucose uptake change: {format_flux(float(last.get('tested_reaction_uptake')) - float(first.get('tested_reaction_uptake')))}",
+                    f"- O2 uptake change: {format_flux(float(last.get('oxygen_uptake')) - float(first.get('oxygen_uptake')))}",
                 ])
             except Exception:
                 pass
@@ -464,7 +504,7 @@ def _build_bound_sweep_report_text(sweep_data):
         'A sweep runs the same setup several times while changing only this bound.',
         '',
         'Rows:',
-        f'{bound_value_label} | growth | {measured_label} | tracked products',
+        f'{bound_value_label} ({FLUX_UNIT}) | growth rate ({GROWTH_RATE_UNIT}) | {measured_label} ({FLUX_UNIT}) | tracked products ({FLUX_UNIT})',
     ]
 
     measured_values = []
@@ -501,8 +541,8 @@ def _build_bound_sweep_report_text(sweep_data):
             lines.extend([
                 '',
                 'Trend summary:',
-                f"- Growth change from first to last point: {_format_sweep_number(growth_drop)} drop",
-                f"- {measured_label} change from first to last point: {_format_sweep_number(measured_drop)} drop",
+                f"- Growth-rate change from first to last point: {format_growth_rate(growth_drop)} drop",
+                f"- {measured_label} change from first to last point: {format_flux(measured_drop)} drop",
             ])
         except Exception:
             pass
@@ -604,7 +644,6 @@ def _build_simulation_results_text(results):
     except Exception:
         diagnostics = {}
     method_name = diagnostics.get('method')
-    heading = 'Primary objective flux' if method_name == 'pFBA' else 'Objective flux'
     model_id = diagnostics.get('model_id')
     model_prefix = ''
     if model_id and model_id != 'ecoli_core':
@@ -613,18 +652,30 @@ def _build_simulation_results_text(results):
             model_prefix = f"Model: {context['display_name']} | {context['organism_name']}\n\n"
         except Exception:
             model_prefix = f'Model: {model_id}\n\n'
-    text = (
-        model_prefix
-        + f'{heading}:\n'
-        + f'{objective_name}: {objective_result}'
-    )
+    biomass_reaction = MISSION07_BIOMASS_OBJECTIVE
+    try:
+        biomass_reaction = (results[2] or {}).get('biomass_reaction') or biomass_reaction
+    except Exception:
+        pass
+
+    text = model_prefix + f'Primary objective:\n{objective_name}'
+    if objective_name == biomass_reaction:
+        text += f'\n{format_growth_rate(objective_result)}'
+        text = text.replace(
+            f'Primary objective:\n{objective_name}\n',
+            f'Primary objective:\n{objective_name}\nPredicted growth rate: ',
+            1,
+        )
+    else:
+        objective_heading = 'Primary objective flux' if method_name == 'pFBA' else 'Objective flux'
+        text += f'\n{objective_heading}: {format_flux(objective_result)}'
 
     if method_name == 'pFBA':
         total_flux = diagnostics.get('total_absolute_flux')
         active_count = diagnostics.get('active_reaction_count')
         text += '\n\npFBA secondary criterion:'
         if total_flux is not None:
-            text += f'\nTotal absolute flux: {_clean_report_number(total_flux):.3f}'
+            text += f'\nTotal absolute flux: {_clean_report_number(total_flux):.3f} {AGGREGATE_FLUX_UNIT}'
         else:
             text += '\nTotal absolute flux: not available'
         if active_count is not None:
@@ -634,7 +685,7 @@ def _build_simulation_results_text(results):
         adjustment = diagnostics.get('method_score')
         text += f'\n\n{LMOMA_DISPLAY_NAME} adjustment criterion:'
         if adjustment is not None:
-            text += f'\nTotal absolute flux adjustment: {_clean_report_number(adjustment):.3f}'
+            text += f'\nTotal absolute flux adjustment: {_clean_report_number(adjustment):.3f} {AGGREGATE_FLUX_UNIT}'
         else:
             text += '\nTotal absolute flux adjustment: not available'
         text += '\nThe adjustment score is not biomass; biomass is the selected reaction flux above.'
@@ -651,17 +702,23 @@ def _build_simulation_results_text(results):
         reference_target = diagnostics.get('reference_target_reaction')
         reference_target_flux = diagnostics.get('reference_target_flux')
         reference_cytbd = diagnostics.get('reference_cytbd_flux')
-        if reference_growth is not None:
-            text += f'\nReference biomass flux: {_clean_report_number(reference_growth):.3f}'
+        if objective_name == biomass_reaction:
+            if reference_growth is not None:
+                text += f'\nReference predicted growth rate: {format_growth_rate(reference_growth)}'
+            else:
+                text += '\nReference predicted growth rate: not available'
         else:
-            text += '\nReference biomass flux: not available'
+            if reference_growth is not None:
+                text += f'\nReference objective flux: {format_flux(reference_growth)}'
+            else:
+                text += '\nReference objective flux: not available'
         if reference_cytbd is not None:
-            text += f'\nReference CYTBD flux: {_clean_report_number(reference_cytbd):.3f}'
+            text += f'\nReference CYTBD flux: {format_flux(reference_cytbd)}'
         else:
             text += '\nReference CYTBD flux: not available'
         mutant_cytbd = diagnostics.get('cytbd_flux')
         if mutant_cytbd is not None:
-            text += f'\nMutant CYTBD flux: {_clean_report_number(mutant_cytbd):.3f}'
+            text += f'\nMutant CYTBD flux: {format_flux(mutant_cytbd)}'
         else:
             text += '\nMutant CYTBD flux: not available'
         same_environment = diagnostics.get('reference_uses_same_environment')
@@ -684,7 +741,7 @@ def _build_simulation_results_text(results):
         pass
     if objective_name != biomass_reaction and biomass_flux is not None:
         biomass_flux = _clean_report_number(biomass_flux)
-        text += f'\n\nPredicted biomass flux: {biomass_flux:.3f}'
+        text += f'\n\nPredicted growth rate: {format_growth_rate(biomass_flux)}'
         if biomass_flux <= MISSION07_FLUX_TOLERANCE:
             text += '\nGrowth interpretation: no predicted growth in this solution.'
 
@@ -835,8 +892,11 @@ def _build_mission01_text(compare_data):
         else 'Not ready yet. Run the aerobic baseline first, then change only oxygen.'
     )
 
-    def fmt(value):
-        return 'not available' if value is None else f'{_clean_report_number(value):.3f}'
+    def fmt_growth(value):
+        return format_growth_rate(value)
+
+    def fmt_flux(value):
+        return format_flux(value)
 
     return (
         'Mission 01 Anaerobic Growth\n\n'
@@ -844,12 +904,12 @@ def _build_mission01_text(compare_data):
         f"Objective: {compare_data.get('growth_objective')}\n"
         f"Oxygen exchange: {compare_data.get('oxygen_reaction')}\n\n"
         f"Growth comparison:\n"
-        f"- Aerobic baseline: {fmt(compare_data.get('baseline_growth'))}\n"
-        f"- Anaerobic growth: {fmt(compare_data.get('anaerobic_growth'))}\n"
-        f"- Growth decrease: {fmt(compare_data.get('growth_drop'))}\n\n"
+        f"- Aerobic baseline: {fmt_growth(compare_data.get('baseline_growth'))}\n"
+        f"- Anaerobic growth: {fmt_growth(compare_data.get('anaerobic_growth'))}\n"
+        f"- Growth-rate decrease: {fmt_growth(compare_data.get('growth_drop'))}\n\n"
         f"Oxygen uptake magnitude:\n"
-        f"- Aerobic baseline: {fmt(compare_data.get('baseline_oxygen_uptake'))}\n"
-        f"- Anaerobic run: {fmt(compare_data.get('anaerobic_oxygen_uptake'))}\n"
+        f"- Aerobic baseline: {fmt_flux(compare_data.get('baseline_oxygen_uptake'))}\n"
+        f"- Anaerobic run: {fmt_flux(compare_data.get('anaerobic_oxygen_uptake'))}\n"
         f"  (Uptake is shown as a positive magnitude; raw EX_o2_e flux is negative when oxygen is consumed.)\n\n"
         f"{baseline_status}\n"
         f"{anaerobic_status}\n"
@@ -1092,16 +1152,116 @@ class Window:
                 font_size=21,
             )
         else:
-            # Small-model mode: retain the original direct toggle interface.
+            # Small-model mode: keep the direct toggle interface, with the same
+            # search/clear/reset navigation pattern used by the Genes menu.
+            menu_reactions.add.label(
+                'Search by exchange reaction id or name. Examples: EX_o2_e, oxygen, acetate. '
+                'Reset Environment restores every lower/upper bound to the model-default state.',
+                wordwrap=True,
+                padding=(20, 20, 20, 20),
+                background_color='white',
+                font_size=24,
+            )
+            menu_reactions.add.vertical_margin(10)
+
+            reaction_widgets = {}
+            reaction_default_states = {}
+            reaction_search_input = None
+            reaction_search_status = menu_reactions.add.label(
+                f'Showing all {len(REACTIONS.index)} exchange reactions.',
+                font_size=22,
+                font_color=(20, 0, 150),
+            )
+
+            def apply_reaction_search(search_text=None, **_kwargs):
+                current_search = '' if search_text is None else str(search_text)
+                if search_text is None and reaction_search_input is not None:
+                    current_search = str(reaction_search_input.get_value())
+
+                visible_count = 0
+                for reaction_id, entry in reaction_widgets.items():
+                    if _reaction_matches_search(
+                        reaction_id,
+                        entry['name'],
+                        current_search,
+                    ):
+                        for widget in entry['widgets']:
+                            widget.show()
+                        visible_count += 1
+                    else:
+                        for widget in entry['widgets']:
+                            widget.hide()
+
+                if current_search.strip():
+                    reaction_search_status.set_title(
+                        f'Search: {current_search} | {visible_count} exchange reaction(s) found.'
+                    )
+                else:
+                    reaction_search_status.set_title(
+                        f'Showing all {len(REACTIONS.index)} exchange reactions.'
+                    )
+
+            def clear_reaction_search(*_args, **_kwargs):
+                if reaction_search_input is not None:
+                    reaction_search_input.set_value('')
+                apply_reaction_search('')
+
+            def reset_reaction_toggles(*_args, **_kwargs):
+                for reaction_id, entry in reaction_widgets.items():
+                    default_lb, default_ub = reaction_default_states[reaction_id]
+                    entry['lb'].set_value(default_lb)
+                    entry['ub'].set_value(default_ub)
+                if reaction_search_input is not None:
+                    reaction_search_input.set_value('')
+                apply_reaction_search('')
+                reaction_search_status.set_title(
+                    'Environment restored to the model-default bounds.'
+                )
+
+            reaction_search_input = menu_reactions.add.text_input(
+                'Search exchange: ',
+                default='',
+                input_underline='_',
+                maxchar=40,
+                maxwidth=40,
+                onchange=apply_reaction_search,
+                onreturn=apply_reaction_search,
+                textinput_id='reaction_search',
+                background_color='white',
+                font_color=(20, 0, 150),
+            )
+            menu_reactions.add.vertical_margin(10)
+            menu_reactions.add.button(
+                'Search / Refresh',
+                apply_reaction_search,
+                font_color='white',
+                background_color=(20, 100, 100),
+            )
+            menu_reactions.add.button(
+                'Clear Search',
+                clear_reaction_search,
+                font_color='white',
+                background_color=(70, 70, 70),
+            )
+            menu_reactions.add.button(
+                'Reset Environment',
+                reset_reaction_toggles,
+                font_color='white',
+                background_color=(150, 40, 40),
+            )
+            menu_reactions.add.vertical_margin(20)
+
             for i in range(len(REACTIONS.name)):
-                reaction_label = _format_reaction_menu_label(REACTIONS.name.iloc[i], REACTIONS.index[i])
-                menu_reactions.add.label(reaction_label, wordwrap=True)
+                reaction_id = REACTIONS.index[i]
+                reaction_name = REACTIONS.name.iloc[i]
+                reaction_label = _format_reaction_menu_label(reaction_name, reaction_id)
+                label_widget = menu_reactions.add.label(reaction_label, wordwrap=True)
                 # MEWpy's native E. coli reaction table can yield numpy.bool_
                 # from comparisons. pygame-menu 4.4.3 deliberately accepts only
                 # built-in bool/int toggle defaults, so normalise explicitly.
                 default_lb_bool = bool(REACTIONS.lb.iloc[i] != 0)
                 default_ub_bool = bool(REACTIONS.ub.iloc[i] != 0)
-                menu_reactions.add.toggle_switch(
+                lb_widget = menu_reactions.add.toggle_switch(
                     'Lower Bound',
                     default_lb_bool,
                     onchange=None,
@@ -1112,7 +1272,7 @@ class Window:
                     state_text_font_color=('black', 'black'),
                     toggleswitch_id=f'reaction_{i}_lb',
                 )
-                menu_reactions.add.toggle_switch(
+                ub_widget = menu_reactions.add.toggle_switch(
                     'Upper Bound',
                     default_ub_bool,
                     onchange=None,
@@ -1123,10 +1283,30 @@ class Window:
                     state_text_font_color=('black', 'black'),
                     toggleswitch_id=f'reaction_{i}_ub',
                 )
-                menu_reactions.add.vertical_margin(30)
+                margin_widget = menu_reactions.add.vertical_margin(30)
+
+                reaction_default_states[reaction_id] = (
+                    default_lb_bool,
+                    default_ub_bool,
+                )
+                reaction_widgets[reaction_id] = {
+                    'name': reaction_name,
+                    'label': label_widget,
+                    'lb': lb_widget,
+                    'ub': ub_widget,
+                    'margin': margin_widget,
+                    'widgets': (
+                        label_widget,
+                        lb_widget,
+                        ub_widget,
+                        margin_widget,
+                    ),
+                }
 
                 if _YIELD_ON_WEB and (i + 1) % 4 == 0:
                     await asyncio.sleep(0)
+
+            apply_reaction_search('')
         menu_reactions.add.vertical_margin(20)
         menu_reactions.add.button('Back', pygame_menu.events.BACK, background_color=(70, 70, 70))
         menu_reactions.add.vertical_margin(20)
@@ -1452,6 +1632,12 @@ class Window:
         )
 
         objective_ids = list(self.model_context.get('objective_ids') or list(REACTIONS_v0.index))
+        objective_options = list(self.model_context.get('objective_options') or [])
+        objective_labels = {
+            str(option.get('id')): str(option.get('label') or option.get('id'))
+            for option in objective_options
+            if option.get('id') is not None
+        }
         objective_text_input = None
         if self.model_context.get('objective_ui_mode') == 'text':
             menu_objective.add.label(
@@ -1485,13 +1671,22 @@ class Window:
             for i, reaction_id in enumerate(objective_ids):
                 if reaction_id == str(objective):
                     default_obj = i
-                objectives.append((reaction_id, reaction_id))
+                objectives.append((
+                    objective_labels.get(reaction_id, reaction_id),
+                    reaction_id,
+                ))
+            menu_objective.add.label(
+                'Objective reaction:',
+                font_size=28,
+                font_color=(20, 0, 150),
+            )
             menu_objective.add.dropselect(
-                title='Objective: ',
+                title='',
                 items=objectives,
                 default=default_obj,
                 selection_box_height=8,
-                selection_box_width=500,
+                selection_box_width=850,
+                font_size=20,
                 dropselect_id='objective'
             )
         # menu_objective.add.range_slider('Fraction', default=90, range_values=(0,100), increment=1, rangeslider_id='obj_fraction')
@@ -1534,7 +1729,7 @@ class Window:
         )
         menu_bound_sweep.add.vertical_margin(40)
         menu_bound_sweep.add.label(
-            "Bound Sweep tests one environmental bound at several numeric values.\nUse it when you want to read a trend instead of comparing only two simulations.",
+            f"Bound Sweep tests one environmental bound at several numeric values ({FLUX_UNIT}).\nUse it when you want to read a trend instead of comparing only two simulations.",
             wordwrap=True,
             padding=(20, 30, 20, 30),
             background_color="white",
@@ -1645,7 +1840,10 @@ class Window:
                 if environment_errors:
                     environment_input_error = '; '.join(environment_errors)
             else:
-                data_reac = menu_reactions.get_input_data()
+                data_reac = _build_clean_reaction_data(
+                    menu_reactions.get_input_data(),
+                    REACTIONS,
+                )
             raw_fluxes = menu_production_flux.get_input_data()
             data_fluxes = {reaction_id: bool(raw_fluxes.get(reaction_id, False)) for reaction_id in PRODUCTION_FLUX_REACTION_IDS}
             # Snapshot the sweep controls before yielding to a worker/network request.

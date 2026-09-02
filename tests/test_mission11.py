@@ -296,7 +296,7 @@ class Mission11RegressionTests(unittest.TestCase):
             objective_result='not numeric', production_fluxes=production, medium_fluxes=medium
         )
         self.assertFalse(missing_growth['current_run_valid'])
-        self.assertTrue(any('biomass flux' in issue for issue in missing_growth['current_issues']))
+        self.assertTrue(any('predicted growth rate' in issue for issue in missing_growth['current_issues']))
 
         production, medium = self._synthetic_flux_data()
         medium['items'] = [item for item in medium['items'] if item['reaction_id'] != simulation.MISSION11_OXYGEN_REACTION]

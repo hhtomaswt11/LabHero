@@ -63,12 +63,21 @@ class _FakeDisplay:
         return self.surface
 
 
+class _FakeDraw:
+    def __init__(self):
+        self.rect_calls = []
+
+    def rect(self, surface, color, rect, **kwargs):
+        self.rect_calls.append((surface, color, rect, dict(kwargs)))
+
+
 class _FakePygame:
     def __init__(self):
         self.font_calls = []
         self.render_calls = []
         self.font = _FakeFontModule(self)
         self.display = _FakeDisplay()
+        self.draw = _FakeDraw()
 
 
 class _FakePanel:
@@ -139,9 +148,13 @@ class IntroStaticSurfaceCacheTests(unittest.TestCase):
             ('/resource/font/LycheeSoda.ttf', 30),
         ])
         self.assertEqual(fake.render_calls, [
-            (130, 'Lab Hero', False, 'black'),
+            (130, 'LabHero', False, 'black'),
             (30, 'press ENTER to continue', False, 'red'),
             (30, 'or press SPACE to new game', False, (60, 150, 140)),
+            (30, 'Start a new game?', False, 'black'),
+            (30, 'This will erase your current saved progress.', False, (150, 40, 40)),
+            (30, 'Press SPACE again to confirm.', False, 'black'),
+            (30, 'Press ESC to go back.', False, (60, 80, 80)),
         ])
         self.assertIsNotNone(intro.text2)
 
@@ -149,9 +162,13 @@ class IntroStaticSurfaceCacheTests(unittest.TestCase):
         Intro, fake = _load_intro('emscripten')
         intro = Intro()
         self.assertEqual(fake.render_calls, [
-            (130, 'Lab Hero', False, 'black'),
+            (130, 'LabHero', False, 'black'),
             (30, 'press ENTER to continue', False, 'red'),
             (30, 'or press SPACE to new game', False, (60, 150, 140)),
+            (30, 'Start a new game?', False, 'black'),
+            (30, 'This will erase your current saved progress.', False, (150, 40, 40)),
+            (30, 'Press SPACE again to confirm.', False, 'black'),
+            (30, 'Press ESC to go back.', False, (60, 80, 80)),
         ])
         self.assertIsNotNone(intro.text2)
         self.assertEqual(intro.text_rect2.center, (640, 400))
@@ -194,6 +211,29 @@ class IntroStaticSurfaceCacheTests(unittest.TestCase):
             'Controls', 'Story', 'Controls', 'Story'
         ])
         self.assertTrue(all(button.process_calls == 1 for button in _FakeButton.created))
+
+
+    def test_new_game_confirmation_card_reuses_cached_surfaces_and_suppresses_buttons(self):
+        Intro, fake = _load_intro('linux')
+        intro = Intro()
+        intro.request_new_game_confirmation()
+        intro.run()
+
+        self.assertEqual(len(fake.draw.rect_calls), 2)
+        self.assertEqual([label for label, _center in fake.display.surface.blit_calls[-4:]], [
+            'Start a new game?',
+            'This will erase your current saved progress.',
+            'Press SPACE again to confirm.',
+            'Press ESC to go back.',
+        ])
+        self.assertEqual(len(_FakeButton.created), 0)
+
+        intro.cancel_new_game_confirmation()
+        intro.run()
+        self.assertEqual([button.args[5] for button in _FakeButton.created], [
+            'Controls', 'Story'
+        ])
+
 
 
 if __name__ == '__main__':

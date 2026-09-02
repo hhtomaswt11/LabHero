@@ -1,0 +1,10 @@
+QA scientific/UI consistency patch
+
+- M07/M08: Optional Hints are available both on the mission main screen and in the Briefing.
+- M09/M10/M13/M14/M19/M20: residual visible reaction/product flux values carry mmol gDW^-1 h^-1.
+- M15: biomass primary objective is displayed as Predicted growth rate (h^-1), not a metabolic flux.
+- Aggregate pFBA total absolute flux and lMOMA adjustment are presented in model flux units.
+- M35: removed obsolete C shortcut; Inventory with E is shown.
+- Mission Markdown mirrors use Predicted growth rate terminology.
+
+No solver values, mission validators, thresholds, objectives, bounds, GPR logic, progression, saves, map, backend or deployment behavior changed.

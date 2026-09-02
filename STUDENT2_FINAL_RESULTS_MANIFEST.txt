@@ -1,0 +1,27 @@
+STUDENT.2 — Final Results
+
+Adds a campaign-completion summary that opens automatically once per save:
+- Normal: after Mission 40, denominator 40 missions / 200 points.
+- Easy: after Mission 36, denominator 11 missions / 55 points.
+
+Displayed:
+- Student
+- Mode
+- Score
+- Missions completed
+- Hint levels unlocked
+- Missions using hints
+
+The summary filters score/hints to the active campaign route. Skipped Easy
+missions never count. Historic legacy-unscored missions are reported explicitly
+rather than receiving fabricated scores.
+
+Persistence:
+- Adds final_results_seen inside player_state only.
+- Existing six-field save payload is unchanged.
+- Old saves default to unseen and may receive the summary once if already complete.
+
+No mission scientific criteria, simulator logic, map data, backend or deployment
+files are changed.
+
+Easy Mission 36 completion dialogue now directs the student to close the dialogue to view results.

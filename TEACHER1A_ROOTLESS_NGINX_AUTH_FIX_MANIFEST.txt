@@ -1,0 +1,18 @@
+TEACHER.1A rootless nginx auth fix
+
+Cause:
+The Basic Auth password file was created with mode 0600. In rootless Podman,
+nginx validates requests in an unprivileged worker process and could not read
+the bind-mounted file, producing HTTP 500 after credential entry.
+
+Fix:
+- Keep ~/.config/labhero at mode 0700.
+- Create teacher.htpasswd with mode 0644 so the nginx worker can read the
+  mounted password hash. Other host users still cannot traverse the 0700
+  parent directory.
+- deploy.sh now performs an auth smoke test after startup:
+    unauthenticated /teacher/ -> HTTP 401
+    authenticated /teacher/   -> HTTP 200
+- Updated deployment documentation and regression test.
+
+No game runtime, mission, save, simulator, or campaign logic was changed.

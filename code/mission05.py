@@ -1,6 +1,8 @@
 import pygame
 import pygame_menu
 
+from answer_penalty import penalize_wrong_answer
+
 from async_menu import run_menu
 from button import Button
 from functions import animation_text_save
@@ -67,7 +69,7 @@ class Mission05:
         ]
 
         self.input()
-        if not is_mission05_unlocked(self.missions_completed):
+        if not self.player.is_mission_unlocked('05'):
             self.menu_message(locked, buttons=False)
         elif '05' in self.missions_completed:
             self.menu_message(step3, buttons=False)
@@ -134,9 +136,10 @@ class Mission05_info:
             theme=mytheme,
             title='Mission 05',
             width=1280,
+        overflow=(False, True),
         )
 
-        if not is_mission05_unlocked(self.missions_completed):
+        if not self.player.is_mission_unlocked('05'):
             menu.add.vertical_margin(40)
             menu.add.label(
                 'Mission 05 is locked. Complete Mission 04 with Dr. Silva before comparing production designs in a new environmental context.',
@@ -153,6 +156,7 @@ class Mission05_info:
         hint3 = pygame_menu.Menu(
             height=720, center_content=False, onclose=pygame_menu.events.BACK,
             theme=mytheme, title='Mission 05 Hint 3', width=1280,
+        overflow=(False, True),
         )
         hint3.add.label(
             'Technical hint: use FBA with biomass as the objective, make oxygen uptake unavailable while leaving the rest of the default medium unchanged, track EX_etoh_e, record an all-genes-active reference and then test exactly one highlighted candidate per run.',
@@ -163,6 +167,7 @@ class Mission05_info:
         hint2 = pygame_menu.Menu(
             height=720, center_content=False, onclose=pygame_menu.events.BACK,
             theme=mytheme, title='Mission 05 Hint 2', width=1280,
+        overflow=(False, True),
         )
         hint2.add.label(
             'Experimental hint: compare each candidate with the same anaerobic no-knockout reference. Evaluate both additional ethanol secretion and retained growth.',
@@ -174,6 +179,7 @@ class Mission05_info:
         hint1 = pygame_menu.Menu(
             height=720, center_content=False, onclose=pygame_menu.events.BACK,
             theme=mytheme, title='Mission 05 Hint 1', width=1280,
+        overflow=(False, True),
         )
         hint1.add.label(
             'Conceptual hint: a genetic perturbation that is useful when respiration is available may add nothing once the environment already prevents oxygen uptake.',
@@ -189,6 +195,7 @@ class Mission05_info:
             theme=mytheme,
             title='Mission 05 Briefing',
             width=1280,
+        overflow=(False, True),
         )
         briefing.add.label(
             f"""
@@ -260,7 +267,7 @@ class Mission05_info:
         await run_menu(menu, self.display_surface)
 
     def activate_mission05(self):
-        if not is_mission05_unlocked(self.missions_completed):
+        if not self.player.is_mission_unlocked('05'):
             self.failed.play()
             animation_text_save('Complete Mission 04 before starting Mission 05.', time=3000)
             return
@@ -281,7 +288,7 @@ class Mission05_info:
         save_file(self.player.get_save_data())
 
     def deliver_results(self, answer):
-        if not is_mission05_unlocked(self.missions_completed):
+        if not self.player.is_mission_unlocked('05'):
             self.failed.play()
             animation_text_save('Complete Mission 04 before delivering Mission 05.', time=3000)
             return
@@ -311,10 +318,12 @@ class Mission05_info:
         if normalise_mission05_answer(answer) is None:
             self.failed.play()
             animation_text_save('Enter a candidate gene id or gene name from the mission list.', time=3000)
+            penalize_wrong_answer(self.player, '05')
             return
         if not mission05_answer_matches(answer, report):
             self.failed.play()
             animation_text_save('That conclusion is not supported by the recorded anaerobic growth and ethanol evidence.', time=3300)
+            penalize_wrong_answer(self.player, '05')
             return
 
         self.success.play()

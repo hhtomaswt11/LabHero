@@ -1,0 +1,9 @@
+TEACHER.1A — protected Web access
+
+- Public query parameters can no longer activate Teacher Mode.
+- Web Teacher Mode is recognised only under /teacher/.
+- deploy/nginx.podman.conf protects /teacher/ with HTTP Basic Auth.
+- deploy.sh requires LABHERO_TEACHER_PASSWORD, hashes it with APR1 via openssl,
+  stores only the htpasswd hash outside the repository, and mounts it read-only.
+- Desktop --teacher --mission remains available for local development.
+- Student save isolation from TEACHER.1 is unchanged.

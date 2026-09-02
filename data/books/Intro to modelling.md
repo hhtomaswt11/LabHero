@@ -1,60 +1,39 @@
-# Book "Intro to Modelling"
+# Introduction to Constraint-Based Metabolic Modelling
 
+Constraint-based modelling asks which reaction-flux patterns are compatible with a metabolic network and a set of assumptions. It is powerful precisely because those assumptions are explicit and testable.
 
-This book takes you on a journey into the fascinating world of metabolic modeling, using E. coli as a guide.
-It shows how understanding metabolism is a key to solving real-world challenges and encourages young minds to explore the incredible possibilities of science.
+## Reactions, metabolites and stoichiometry
 
+A metabolic model represents reactions that consume and produce metabolites. Their stoichiometric coefficients form the matrix S, while the vector v contains reaction fluxes.
 
-## Chapter 1: The Secret Life of Cells
+Under the steady-state assumption for internal metabolites, S v = 0. This is a mass-balance constraint, not a claim that the organism is unchanging in every biological sense.
 
-### Meet the Tiny World Inside Cells
+## Bounds define the environment
 
-Did you know that every living thing, including you, is made up of millions of tiny building blocks called cells? These cells are like little factories, working day and night to keep you alive. But there's a secret world inside them that's even more amazing!
+Every reaction has a lower and upper bound. Bounds encode direction, capacity and environmental availability. Exchange-reaction bounds are therefore one of the main ways LabHero represents different media.
 
-### What's Metabolism?
+A configured bound defines what is allowed. The optimized flux tells you what the selected solution actually uses.
 
-Cells need energy to do their jobs, just like we need food to have energy. Metabolism is like the recipe book that cells use to turn food into energy. It's a super important job!
+## Objectives are hypotheses
 
+FBA needs an objective. Maximizing biomass is a useful modelling hypothesis for many growth experiments, but it is not a universal law of cellular behaviour.
 
-## Chapter 2: Meet E. coli
+Changing the objective can change the predicted flux distribution dramatically. Several LabHero missions exploit this deliberately to separate viability, product formation and optimization criteria.
 
-### Hello, E. coli!
+## Alternative optima and method choice
 
-Imagine a tiny bacterium called E. coli. It's so small you can't see it without a microscope. E. coli is like a tiny superhero because it helps scientists learn about metabolism.
+Different flux distributions can achieve the same optimal objective. pFBA adds a parsimony criterion; lMOMA and ROOM instead compare a perturbed state with a reference. These methods therefore answer related but different questions.
 
-### Why E. coli?
+Method names should never be treated as interchangeable. Before comparing numbers, ask what quantity that method optimized or minimized.
 
-Scientists love using E. coli because it's a bit like a laboratory assistant. It's simple to study, and what we learn from it can help us understand the metabolism of other living things, including humans.
+## Genes do not equal reactions
 
+GPR rules connect genes to reaction capability. A reaction may need several genes (AND) or have alternative genes (OR), so a single gene knockout does not map mechanically to a single disabled reaction.
 
-## Chapter 3: The Puzzle of Metabolic Models
+Phenotypes emerge from the remaining network and the environment. That is why LabHero tests gene essentiality, redundancy, rescue and context dependence rather than memorizing gene labels.
 
-### What Are Metabolic Models?
+## What these models do not predict directly
 
-Metabolic models are like jigsaw puzzles. Scientists use them to figure out how cells work. These models are full of tiny pieces, just like a puzzle.
+Standard FBA does not directly predict metabolite concentrations, enzyme abundances, regulatory dynamics or time courses. Fluxes are steady-state rates consistent with the constraints and objective.
 
-### Why Do We Need Metabolic Models?
-
-Imagine you're solving a big puzzle. You can't just put pieces together randomly; you need a plan. Metabolic models help scientists plan how cells use their energy and make things they need.
-
-
-## Chapter 4: The Power of Investigation
-
-### Unlocking Mysteries
-
-Investigating metabolic models is like being a detective. Scientists study E. coli's metabolism to understand how it grows, how it uses food, and how it stays healthy.
-
-### Why It Matters
-
-Understanding metabolism isn't just for fun; it's super important for our world! It can help us make medicines, create biofuels to save our planet, and even find ways to feed more people.
-
-
-## Chapter 5: Join the Adventure!
-
-### Be a Young Scientist
-
-You can be a scientist too! Learn about E. coli and metabolism. You might discover something amazing that can help the world.
-
-### Our Metabolic Future
-
-As you grow, you'll see how important metabolic models are in solving big problems like making clean energy and finding new cures for diseases. You could be the scientist who changes the world!
+Treat every result as a conditional model prediction: 'under these assumptions, this solution is feasible/optimal', not as automatic proof of what a real cell must do.

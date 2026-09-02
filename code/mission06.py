@@ -68,7 +68,7 @@ class Mission06:
         ]
 
         self.input()
-        if not is_mission06_unlocked(self.missions_completed):
+        if not self.player.is_mission_unlocked('06'):
             self.menu_message(locked, buttons=False)
         elif '06' in self.missions_completed:
             self.menu_message(step3, buttons=False)
@@ -140,9 +140,10 @@ class Mission06_info:
             theme=mytheme,
             title='Mission 06',
             width=1280,
+        overflow=(False, True),
         )
 
-        if not is_mission06_unlocked(self.missions_completed):
+        if not self.player.is_mission_unlocked('06'):
             menu.add.vertical_margin(40)
             menu.add.label(
                 'Mission 06 is locked. Complete Mission 05 with Dr. Silva before entering Dr. Carter\'s multi-knockout challenge.',
@@ -159,6 +160,7 @@ class Mission06_info:
         hint3 = pygame_menu.Menu(
             height=720, center_content=False, onclose=pygame_menu.events.BACK,
             theme=mytheme, title='Mission 06 Hint 3', width=1280,
+        overflow=(False, True),
         )
         hint3.add.label(
             f'Technical hint: use {MISSION06_METHOD} with {MISSION06_GROWTH_OBJECTIVE}, keep the default aerobic medium unchanged, track {MISSION06_TARGET_FLUX}, and test at most {MISSION06_MAX_KNOCKOUTS} highlighted genes per design.',
@@ -169,6 +171,7 @@ class Mission06_info:
         hint2 = pygame_menu.Menu(
             height=720, center_content=False, onclose=pygame_menu.events.BACK,
             theme=mytheme, title='Mission 06 Hint 2', width=1280,
+        overflow=(False, True),
         )
         hint2.add.label(
             'Experimental hint: first record an all-genes-active reference. Then compare single knockouts with two-gene combinations and verify that the second change genuinely improves the balance index.',
@@ -180,6 +183,7 @@ class Mission06_info:
         hint1 = pygame_menu.Menu(
             height=720, center_content=False, onclose=pygame_menu.events.BACK,
             theme=mytheme, title='Mission 06 Hint 1', width=1280,
+        overflow=(False, True),
         )
         hint1.add.label(
             'Conceptual hint: one knockout may create ethanol secretion while a second changes energy distribution, but every additional restriction can also reduce growth.',
@@ -195,6 +199,7 @@ class Mission06_info:
             theme=mytheme,
             title='Mission 06 Briefing',
             width=1280,
+        overflow=(False, True),
         )
         briefing.add.label(
             f"""
@@ -262,7 +267,7 @@ class Mission06_info:
         await run_menu(menu, self.display_surface)
 
     def activate_mission06(self):
-        if not is_mission06_unlocked(self.missions_completed):
+        if not self.player.is_mission_unlocked('06'):
             self.failed.play()
             animation_text_save('Complete Mission 05 before starting Mission 06.', time=3000)
             return
@@ -283,7 +288,7 @@ class Mission06_info:
         save_file(self.player.get_save_data())
 
     def deliver_results(self):
-        if not is_mission06_unlocked(self.missions_completed):
+        if not self.player.is_mission_unlocked('06'):
             self.failed.play()
             animation_text_save('Complete Mission 05 before delivering Mission 06.', time=3000)
             return

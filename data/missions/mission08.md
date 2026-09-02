@@ -20,7 +20,7 @@ Both runs must keep all genes active and track `EX_lac__D_e` in Production Flux.
 Both controlled runs produce approximately:
 
 - D-lactate secretion: `20.000`;
-- biomass flux: `0.000`;
+- predicted growth rate: `0.000`;
 - oxygen uptake: `0.000`.
 
 Closing oxygen therefore does not change the optimum for this objective. The default-medium direct D-lactate optimum already uses zero oxygen. In the constrained run, the oxygen lower bound is satisfied at equality, but the added bound does not alter the optimal product, biomass or oxygen fluxes.

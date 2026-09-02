@@ -1,6 +1,8 @@
 import pygame
 import pygame_menu
 
+from answer_penalty import penalize_wrong_answer
+
 from settings import *
 from save_load import *
 from timers import Timer
@@ -52,9 +54,10 @@ class Mission24_info:
             theme=mytheme,
             title='Mission 24',
             width=1280,
+        overflow=(False, True),
         )
 
-        if not is_mission24_unlocked(self.missions_completed):
+        if not self.player.is_mission_unlocked('24'):
             menu.add.vertical_margin(40)
             menu.add.label(
                 "Mission 24 is locked. Complete Mission 23 before beginning Dr. Luna's final sensitivity experiment.",
@@ -71,6 +74,7 @@ class Mission24_info:
         hint3 = pygame_menu.Menu(
             height=720, center_content=False, onclose=pygame_menu.events.BACK,
             theme=mytheme, title='Mission 24 Hint 3', width=1280,
+        overflow=(False, True),
         )
         hint3.add.label(
             f"Technical hint: use {MISSION24_METHOD}, objective {MISSION24_GROWTH_OBJECTIVE}, every gene active and a completely default base environment. In Bound Sweep Setup select {MISSION24_SWEEP_REACTION} upper bound and values 25, 20, 10, 0. In Production Flux select " + ', '.join(MISSION24_REQUIRED_TRACKED_FLUXES) + '.',
@@ -83,6 +87,7 @@ class Mission24_info:
         hint2 = pygame_menu.Menu(
             height=720, center_content=False, onclose=pygame_menu.events.BACK,
             theme=mytheme, title='Mission 24 Hint 2', width=1280,
+        overflow=(False, True),
         )
         hint2.add.label(
             'Experimental hint: first locate the cap that the baseline does not reach. Then find the first tighter cap that is fully used, and inspect which previously absent tracked secretion appears before another route activates at a still tighter cap.',
@@ -96,6 +101,7 @@ class Mission24_info:
         hint1 = pygame_menu.Menu(
             height=720, center_content=False, onclose=pygame_menu.events.BACK,
             theme=mytheme, title='Mission 24 Hint 1', width=1280,
+        overflow=(False, True),
         )
         hint1.add.label(
             'Conceptual hint: an upper bound is non-binding while the optimum stays below it. Once the solution reaches the cap, further restriction can force flux through compensatory export routes.',
@@ -113,6 +119,7 @@ class Mission24_info:
             theme=mytheme,
             title='Mission 24 Briefing',
             width=1280,
+        overflow=(False, True),
         )
         briefing.add.label(
             f"""
@@ -196,7 +203,7 @@ class Mission24_info:
         await run_menu(menu, self.display_surface)
 
     def activate_mission24(self):
-        if not is_mission24_unlocked(self.missions_completed):
+        if not self.player.is_mission_unlocked('24'):
             self.failed.play()
             animation_text_save('Complete Mission 23 before starting Mission 24.', time=3000)
             return
@@ -215,7 +222,7 @@ class Mission24_info:
         save_file(self.player.get_save_data())
 
     def deliver_results(self, answer):
-        if not is_mission24_unlocked(self.missions_completed):
+        if not self.player.is_mission_unlocked('24'):
             self.failed.play()
             animation_text_save('Complete Mission 23 first!', time=2500)
             return
@@ -244,10 +251,12 @@ class Mission24_info:
         if normalise_mission24_answer(answer) is None:
             self.failed.play()
             animation_text_save('Enter one unambiguous tracked secretion only.', time=2800)
+            penalize_wrong_answer(self.player, '24')
             return
         if not mission24_answer_matches(answer, report):
             self.failed.play()
             animation_text_save('That secretion is not supported as the first compensatory route in the recorded curve.', time=3000)
+            penalize_wrong_answer(self.player, '24')
             return
 
         self.success.play()

@@ -1,6 +1,8 @@
 import pygame
 import pygame_menu
 
+from answer_penalty import penalize_wrong_answer
+
 from settings import *
 from save_load import *
 from timers import Timer
@@ -91,7 +93,7 @@ class Mission27:
             self.menu_message(mission28_intro_dialogue, menu_to_open=self.menu28)
         elif '27' in self.missions_activated:
             self.menu_message(active_dialogue, menu_to_open=self.menu27)
-        elif is_mission27_unlocked(self.missions_completed):
+        elif self.player.is_mission_unlocked('27'):
             self.menu_message(intro_dialogue, menu_to_open=self.menu27)
         else:
             self.menu_message(locked_dialogue, buttons=False)
@@ -154,9 +156,10 @@ class Mission27_info:
             theme=mytheme,
             title='Mission 27',
             width=1280,
+        overflow=(False, True),
         )
 
-        if not is_mission27_unlocked(self.missions_completed):
+        if not self.player.is_mission_unlocked('27'):
             menu.add.vertical_margin(40)
             menu.add.label(
                 "Mission 27 is locked. Complete Mission 26 before beginning Dr. Ribeiro's first experiment.",
@@ -178,6 +181,7 @@ class Mission27_info:
         hint3 = pygame_menu.Menu(
             height=720, center_content=False, onclose=pygame_menu.events.BACK,
             theme=mytheme, title='Mission 27 Hint 3', width=1280,
+        overflow=(False, True),
         )
         hint3.add.label(
             f"Technical hint: use {MISSION27_METHOD} with objective {MISSION27_GROWTH_OBJECTIVE}. Record a completely default wild-type reference, then a completely default single {MISSION27_TARGET_GENE} / {MISSION27_TARGET_GENE_NAME} knockout reference. For every candidate trial keep only that knockout and open exactly one candidate lower bound; leave glucose, oxygen and every unrelated bound at model default. No Production Flux selection is required.",
@@ -190,6 +194,7 @@ class Mission27_info:
         hint2 = pygame_menu.Menu(
             height=720, center_content=False, onclose=pygame_menu.events.BACK,
             theme=mytheme, title='Mission 27 Hint 2', width=1280,
+        overflow=(False, True),
         )
         hint2.add.label(
             'Experimental hint: references and candidate trials can be recorded in any order. A candidate counts only when it is the sole manual medium change and the gltA knockout still disables citrate synthase through its GPR.',
@@ -203,6 +208,7 @@ class Mission27_info:
         hint1 = pygame_menu.Menu(
             height=720, center_content=False, onclose=pygame_menu.events.BACK,
             theme=mytheme, title='Mission 27 Hint 1', width=1280,
+        overflow=(False, True),
         )
         hint1.add.label(
             'Conceptual hint: environmental rescue does not repair a deleted gene. Look for a supplement that restores positive predicted growth while the knockout-defined reaction remains unavailable.',
@@ -220,6 +226,7 @@ class Mission27_info:
             theme=mytheme,
             title='Mission 27 Briefing',
             width=1280,
+        overflow=(False, True),
         )
         briefing.add.label(
             f"""
@@ -309,7 +316,7 @@ class Mission27_info:
         await run_menu(menu, self.display_surface)
 
     def activate_mission27(self):
-        if not is_mission27_unlocked(self.missions_completed):
+        if not self.player.is_mission_unlocked('27'):
             self.failed.play()
             animation_text_save('Complete Mission 26 before starting Mission 27.', time=3000)
             return
@@ -329,7 +336,7 @@ class Mission27_info:
         save_file(self.player.get_save_data())
 
     def deliver_results(self, answer):
-        if not is_mission27_unlocked(self.missions_completed):
+        if not self.player.is_mission_unlocked('27'):
             self.failed.play()
             animation_text_save('Complete Mission 26 first!', time=2500)
             return
@@ -354,6 +361,7 @@ class Mission27_info:
         if not mission27_answer_matches(answer, report):
             self.failed.play()
             animation_text_save('Recompare candidate growth while confirming that citrate synthase remains disabled.', time=3300)
+            penalize_wrong_answer(self.player, '27')
             return
 
         self.success.play()

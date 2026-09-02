@@ -1,6 +1,8 @@
 import pygame
 import pygame_menu
 
+from answer_penalty import penalize_wrong_answer
+
 from settings import *
 from save_load import *
 from timers import Timer
@@ -72,7 +74,7 @@ class Mission37:
             self.menu_message(completed, buttons=False)
         elif '37' in self.missions_activated:
             self.menu_message(active, menu_to_open=self.menu37)
-        elif is_mission37_unlocked(self.missions_completed):
+        elif self.player.is_mission_unlocked('37'):
             self.menu_message(intro, menu_to_open=self.menu37)
         else:
             self.menu_message(locked, buttons=False)
@@ -118,8 +120,9 @@ class Mission37_info:
         menu = pygame_menu.Menu(
             height=720, center_content=False, onclose=self.toggle_menu,
             theme=mytheme, title='Mission 37', width=1280,
+        overflow=(False, True),
         )
-        if not is_mission37_unlocked(self.missions_completed):
+        if not self.player.is_mission_unlocked('37'):
             menu.add.label(
                 'Mission 37 is locked. Complete Mission 36 first.',
                 wordwrap=True, padding=(25,25,25,25), background_color='white', font_size=30,
@@ -135,6 +138,7 @@ class Mission37_info:
         briefing = pygame_menu.Menu(
             height=720, center_content=False, onclose=pygame_menu.events.BACK,
             theme=mytheme, title='Mission 37 Briefing', width=1280,
+        overflow=(False, True),
         )
         briefing.add.label(
             f"""Controlled yeast cut-set screen
@@ -155,6 +159,7 @@ For every run, inspect growth, ethanol, succinate and the GPR-disabled reactions
         hint3 = pygame_menu.Menu(
             height=720, center_content=False, onclose=pygame_menu.events.BACK,
             theme=mytheme, title='Mission 37 Hint 3', width=1280,
+        overflow=(False, True),
         )
         hint3.add.label(
             'Technical hint:\n\nAmong the tested genotypes that disable both target PDC reactions, keep only those retaining at least 50% of WT growth while leaving ethanol at no more than 1% of the WT level. Your answer is the smallest tested knockout set that satisfies all three conditions.',
@@ -165,6 +170,7 @@ For every run, inspect growth, ethanol, succinate and the GPR-disabled reactions
         hint2 = pygame_menu.Menu(
             height=720, center_content=False, onclose=pygame_menu.events.BACK,
             theme=mytheme, title='Mission 37 Hint 2', width=1280,
+        overflow=(False, True),
         )
         hint2.add.label(
             'Experimental hint:\n\nUse WT as the reference. For each tested genotype, first check whether both target pyruvate-decarboxylase reactions are disabled by the GPR logic. Only then compare its growth retention and ethanol retention with WT; a smaller gene set is useful only if it produces the required reaction-level failure.',
@@ -176,6 +182,7 @@ For every run, inspect growth, ethanol, succinate and the GPR-disabled reactions
         hint1 = pygame_menu.Menu(
             height=720, center_content=False, onclose=pygame_menu.events.BACK,
             theme=mytheme, title='Mission 37 Hint 1', width=1280,
+        overflow=(False, True),
         )
         hint1.add.label(
             'Conceptual hint:\n\nDo not equate the number of knocked-out genes with the number of disabled reactions. Compare the GPR-disabled reaction list first, then use WT-normalised growth and ethanol retention to interpret the phenotype.',
@@ -237,7 +244,7 @@ For every run, inspect growth, ethanol, succinate and the GPR-disabled reactions
         await run_menu(menu, self.display_surface)
 
     def activate_mission37(self):
-        if not is_mission37_unlocked(self.missions_completed):
+        if not self.player.is_mission_unlocked('37'):
             self.failed.play()
             animation_text_save('Complete Mission 36 first!', time=2500)
             return
@@ -254,7 +261,7 @@ For every run, inspect growth, ethanol, succinate and the GPR-disabled reactions
         animation_text_save('Mission 37 Activated')
 
     def deliver_results(self, answer):
-        if not is_mission37_unlocked(self.missions_completed):
+        if not self.player.is_mission_unlocked('37'):
             self.failed.play()
             animation_text_save('Complete Mission 36 first!', time=2500)
             return
@@ -274,6 +281,7 @@ For every run, inspect growth, ethanol, succinate and the GPR-disabled reactions
         if not mission37_answer_matches(answer, report):
             self.failed.play()
             animation_text_save('Recheck the smallest tested cut set that satisfies every visible criterion.', time=3000)
+            penalize_wrong_answer(self.player, '37')
             return
         self.success.play()
         if '37' not in self.missions_completed:

@@ -197,8 +197,8 @@ class Mission13RegressionTests(unittest.TestCase):
             (simulation.MISSION13_TARGET_OBJECTIVE, objective, production, medium)
         )
         self.assertIn('Primary objective flux', text)
-        self.assertIn('EX_succ_e: 13.905778', text)
-        self.assertIn('Total absolute flux: 343.047', text)
+        self.assertIn('EX_succ_e: 13.906 mmol gDW^-1 h^-1', text)
+        self.assertIn('Total absolute flux: 343.047 model flux units', text)
         self.assertNotIn('EX_succ_e: 343.047', text)
 
     def test_one_run_is_insufficient_and_order_is_irrelevant(self):
@@ -265,7 +265,7 @@ class Mission13RegressionTests(unittest.TestCase):
             production_fluxes=production, medium_fluxes=medium,
         )
         self.assertFalse(missing_biomass['current_run_valid'])
-        self.assertTrue(any('biomass' in issue.lower() for issue in missing_biomass['current_issues']))
+        self.assertTrue(any('growth' in issue.lower() for issue in missing_biomass['current_issues']))
 
         objective, production, medium = self._synthetic_visible('pFBA')
         medium['items'] = [

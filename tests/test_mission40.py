@@ -230,6 +230,21 @@ class Mission40RegressionTests(unittest.TestCase):
         self.assertNotIn('answer:', text.lower())
         self.assertNotIn('| yes', text.lower())
 
+    def test_report_uses_compact_web_safe_matched_curve_tables(self):
+        text = simulation.build_mission40_final_certification_report_text(self.make_complete_report())
+        self.assertIn('A = no-rescue curve; B = acetaldehyde-rescue curve.', text)
+        self.assertIn('Growth comparison:', text)
+        self.assertIn('LB | growth A | growth B | B/A growth', text)
+        self.assertIn('Rescue fluxes:', text)
+        self.assertIn('LB | acald uptake | ethanol B | pyruvate A | pyruvate B', text)
+        self.assertNotIn('no-rescue growth rate (', text)
+
+        # Pipe-delimited rows are intentionally kept compact; ordinary prose is
+        # still handled by pygame-menu word wrapping.
+        table_lines = [line for line in text.splitlines() if '|' in line]
+        self.assertTrue(table_lines)
+        self.assertLessEqual(max(map(len, table_lines)), 70)
+
     def test_landing_report_title_can_be_suppressed_contextually(self):
         report = simulation._mission40_empty_report()
         self.assertNotIn('Mission 40 Final', simulation.build_mission40_final_certification_report_text(report, include_title=False))

@@ -306,6 +306,7 @@ class Mission_info:
             theme=mytheme,
             title=f'Mission 01 Hint {hint_level} - Key Substitution',
             width=1280,
+        overflow=(False, True),
         )
         confirmation.add.vertical_margin(45)
         confirmation.add.label(
@@ -376,6 +377,7 @@ class Mission_info:
             theme=mytheme,
             title='Mission 01',
             width=1280,
+        overflow=(False, True),
         )
 
         menu_text = pygame_menu.Menu(
@@ -385,6 +387,7 @@ class Mission_info:
             theme=mytheme,
             title='Mission 01 Briefing',
             width=1280,
+        overflow=(False, True),
         )
 
         hint_3 = pygame_menu.Menu(
@@ -394,6 +397,7 @@ class Mission_info:
             theme=mytheme,
             title='Mission 01 Hint 3',
             width=1280,
+        overflow=(False, True),
         )
         hint_3.add.label(
             """
@@ -415,6 +419,7 @@ class Mission_info:
             theme=mytheme,
             title='Mission 01 Hint 2',
             width=1280,
+        overflow=(False, True),
         )
         hint_2.add.label(
             """
@@ -443,6 +448,7 @@ class Mission_info:
             theme=mytheme,
             title='Mission 01 Hint 1',
             width=1280,
+        overflow=(False, True),
         )
         hint_1.add.label(
             """

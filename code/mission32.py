@@ -1,6 +1,8 @@
 import pygame
 import pygame_menu
 
+from answer_penalty import penalize_wrong_answer
+
 from settings import *
 from save_load import *
 from timers import Timer
@@ -108,7 +110,7 @@ class Mission32:
             self.menu_message(mission33_intro_dialogue, menu_to_open=self.menu33)
         elif '32' in self.missions_activated:
             self.menu_message(active_dialogue, menu_to_open=self.menu32)
-        elif is_mission32_unlocked(self.missions_completed):
+        elif self.player.is_mission_unlocked('32'):
             self.menu_message(intro_dialogue, menu_to_open=self.menu32)
         else:
             self.menu_message(locked_dialogue, buttons=False)
@@ -171,9 +173,10 @@ class Mission32_info:
             theme=mytheme,
             title='Mission 32',
             width=1280,
+        overflow=(False, True),
         )
 
-        if not is_mission32_unlocked(self.missions_completed):
+        if not self.player.is_mission_unlocked('32'):
             menu.add.vertical_margin(40)
             menu.add.label(
                 "Mission 32 is locked. Complete Mission 31 before beginning Dr. Chen's GPR-architecture programme.",
@@ -199,6 +202,7 @@ class Mission32_info:
             theme=mytheme,
             title='Mission 32 Hint 3',
             width=1280,
+        overflow=(False, True),
         )
         hint3.add.label(
             f'Technical hint: use {MISSION32_METHOD} with objective {MISSION32_GROWTH_OBJECTIVE}. Keep every environmental bound at model default. Record exactly the six highlighted genotypes. No Production Flux selection is required; use the visible Exchange Flux Report and the GPR-disabled reactions.',
@@ -215,6 +219,7 @@ class Mission32_info:
             theme=mytheme,
             title='Mission 32 Hint 2',
             width=1280,
+        overflow=(False, True),
         )
         hint2.add.label(
             'Experimental hint: compare the two branch states with measured oxygen uptake. A branch can be broken while the complete reaction remains available through the alternative branch.',
@@ -232,6 +237,7 @@ class Mission32_info:
             theme=mytheme,
             title='Mission 32 Hint 1',
             width=1280,
+        overflow=(False, True),
         )
         hint1.add.label(
             'Conceptual hint: each respiratory branch uses AND logic between its subunits, while the two complete branches are linked by OR. The full GPR fails only when both alternatives are broken.',
@@ -249,6 +255,7 @@ class Mission32_info:
             theme=mytheme,
             title='Mission 32 Briefing',
             width=1280,
+        overflow=(False, True),
         )
         briefing.add.label(
             f"""
@@ -338,7 +345,7 @@ class Mission32_info:
         await run_menu(menu, self.display_surface)
 
     def activate_mission32(self):
-        if not is_mission32_unlocked(self.missions_completed):
+        if not self.player.is_mission_unlocked('32'):
             self.failed.play()
             animation_text_save('Complete Mission 31 before starting Mission 32.', time=3000)
             return
@@ -356,7 +363,7 @@ class Mission32_info:
         save_file(self.player.get_save_data())
 
     def deliver_results(self, answer):
-        if not is_mission32_unlocked(self.missions_completed):
+        if not self.player.is_mission_unlocked('32'):
             self.failed.play()
             animation_text_save('Complete Mission 31 first!', time=2500)
             return
@@ -381,6 +388,7 @@ class Mission32_info:
         if not mission32_answer_matches(answer, report):
             self.failed.play()
             animation_text_save('Compare the two branch states and the complete CYTBD GPR.', time=3000)
+            penalize_wrong_answer(self.player, '32')
             return
 
         self.success.play()

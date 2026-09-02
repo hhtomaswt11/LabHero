@@ -73,7 +73,7 @@ Compare this direct product optimum with the `b0114` biomass-objective result al
 Inspect both:
 
 - the direct formate objective flux;
-- the biomass flux in that same visible solution.
+- the predicted growth rate in that same visible solution.
 
 A theoretical product maximum is not automatically a growth-compatible design.
 

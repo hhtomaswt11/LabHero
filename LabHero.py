@@ -13,6 +13,7 @@ from intro import Intro
 from save_load import *
 from functions import animation_text_save, drain_animations
 from utils import *
+from teacher_mode import get_teacher_request, build_teacher_save_data
 
 
 class Game:
@@ -20,39 +21,74 @@ class Game:
 		pygame.init()
 		self.screen = pygame.display.set_mode((SCREEN_WIDTH,SCREEN_HEIGHT))
 		pygame.display.set_icon(pygame.image.load(get_resource_path('LabHero-icon.png')))
-		pygame.display.set_caption('Lab Hero')
+		pygame.display.set_caption('LabHero')
 		self.clock = pygame.time.Clock()
 		self.intro = Intro()
 		self.web_autosave_elapsed = 0.0
+		self.teacher_request = get_teacher_request()
+		if self.teacher_request is not None:
+			# Keep every teacher artefact/save in a separate namespace.  A fresh
+			# jump starts from clean evidence and never touches normal student data.
+			set_save_namespace('teacher')
+			clear_active_persistent_storage()
 
 
 	async def intro_run(self):
+		# TEACHER.1 URLs/CLI flags bypass the student title/registration flow and
+		# open the requested mission directly with isolated preview state.
+		if self.teacher_request is not None:
+			mission_id = self.teacher_request['mission_id']
+			self.level = Level(
+				copy.deepcopy(build_teacher_save_data(mission_id)),
+				teacher_target_mission=mission_id,
+			)
+			await self.run()
+			# Back to Title ends the preview without changing the student's
+			# normal persistence namespace.
+			set_save_namespace(None)
+			clear_memstore()
+			self.teacher_request = None
+
 		while True:
 			for event in pygame.event.get():
 				if event.type == pygame.QUIT:
 					pygame.quit()
 					sys.exit()
 
-				if pygame.key.get_pressed()[pygame.K_RETURN]:
+				if event.type != pygame.KEYDOWN:
+					continue
+
+				# A fresh campaign destroys the current save, so SPACE is deliberately
+				# a two-step action.  While the confirmation card is open, only a
+				# second SPACE confirms and ESC cancels back to the untouched title.
+				if self.intro.new_game_confirmation_pending:
+					if event.key == pygame.K_ESCAPE:
+						self.intro.cancel_new_game_confirmation()
+					elif event.key == pygame.K_SPACE:
+						self.intro.cancel_new_game_confirmation()
+						# New Game is the one explicit action that must discard durable
+						# browser progress. Back to Title and page refresh preserve it.
+						if sys.platform == 'emscripten':
+							clear_web_persistent_storage()
+						else:
+							for filename in ('data.txt', 'results.txt', 'simulation_file.txt'):
+								path = get_save_path(filename)
+								if os.path.exists(path):
+									os.remove(path)
+						self.level = Level(copy.deepcopy(DEFAULT_INVENTORY_2))
+						self.web_autosave_elapsed = 0.0
+						await self.run()
+					continue
+
+				if event.key == pygame.K_RETURN:
 					try:
 						data = load_file(get_save_path('data'))
 						self.level = Level(copy.deepcopy(data))
 					except FileNotFoundError:
 						self.level = Level(copy.deepcopy(DEFAULT_INVENTORY_2))
 					await self.run()
-				elif pygame.key.get_pressed()[pygame.K_SPACE]:
-					# New Game is the one explicit action that must discard durable
-					# browser progress. Back to Title and page refresh preserve it.
-					if sys.platform == 'emscripten':
-						clear_web_persistent_storage()
-					else:
-						for filename in ('data.txt', 'results.txt', 'simulation_file.txt'):
-							path = get_save_path(filename)
-							if os.path.exists(path):
-								os.remove(path)
-					self.level = Level(copy.deepcopy(DEFAULT_INVENTORY_2))
-					self.web_autosave_elapsed = 0.0
-					await self.run()
+				elif event.key == pygame.K_SPACE:
+					self.intro.request_new_game_confirmation()
 
 			self.intro.run()
 			if self.intro.pending is not None:
@@ -81,7 +117,7 @@ class Game:
 			# A five-second web autosave keeps position/profile/reward progress
 			# current even when the player refreshes or closes the tab. Mission
 			# evidence artifacts are persisted immediately by save_load.py.
-			if sys.platform == 'emscripten':
+			if sys.platform == 'emscripten' and self.teacher_request is None:
 				self.web_autosave_elapsed += dt
 				if self.web_autosave_elapsed >= 5.0:
 					save_file(self.level.player.get_save_data())

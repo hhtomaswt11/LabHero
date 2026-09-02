@@ -1,0 +1,19 @@
+EASY.2A — regression-test contract alignment
+
+Purpose:
+Align legacy source-inspection/layout tests with the current runtime contracts
+introduced by Student identity and EASY.2A.
+
+Runtime files changed: NONE.
+
+Updated tests:
+- Generic dialogue cache now counts Alves as an additional named NPC.
+- Generic dialogue layout measures prepare_dialogue_text(...) output, matching
+  the actual renderer's long-name compaction.
+- Mission 02/16/21/23 and generic M03-M14 source-contract tests now expect the
+  central Player/CampaignContext progression guard:
+      self.player.is_mission_unlocked("XX")
+  instead of the legacy simulation helper call.
+
+No mission thresholds, solvers, objectives, bounds, GPRs, saves, map data,
+campaign logic, UI runtime code, backend, or deployment files were modified.

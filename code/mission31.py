@@ -1,6 +1,8 @@
 import pygame
 import pygame_menu
 
+from answer_penalty import penalize_wrong_answer
+
 from settings import *
 from save_load import *
 from timers import Timer
@@ -53,9 +55,10 @@ class Mission31_info:
             theme=mytheme,
             title='Mission 31',
             width=1280,
+        overflow=(False, True),
         )
 
-        if not is_mission31_unlocked(self.missions_completed):
+        if not self.player.is_mission_unlocked('31'):
             menu.add.vertical_margin(40)
             menu.add.label(
                 'Mission 31 is locked. Complete Mission 30 before beginning Dr. Li\'s final environmental-suppression experiment.',
@@ -81,6 +84,7 @@ class Mission31_info:
             theme=mytheme,
             title='Mission 31 Hint 3',
             width=1280,
+        overflow=(False, True),
         )
         hint3.add.label(
             f'Technical hint: use {MISSION31_METHOD} with objective {MISSION31_GROWTH_OBJECTIVE}. Close the lower bound of EX_glc__D_e and open exactly one highlighted replacement source. Keep oxygen and every unrelated bound at model default. For each source, record wild type and the exact {MISSION31_GENE_A} + {MISSION31_GENE_B} double knockout. No Production Flux selection is required.',
@@ -97,6 +101,7 @@ class Mission31_info:
             theme=mytheme,
             title='Mission 31 Hint 2',
             width=1280,
+        overflow=(False, True),
         )
         hint2.add.label(
             'Experimental hint: compare each double knockout only with the wild-type run using the same replacement source. A positive uptake proves that the source enters the model, but it does not prove that biomass production has been rescued.',
@@ -114,6 +119,7 @@ class Mission31_info:
             theme=mytheme,
             title='Mission 31 Hint 1',
             width=1280,
+        overflow=(False, True),
         )
         hint1.add.label(
             'Conceptual hint: synthetic lethality is conditional on the tested environment. Look for a carbon-entry route that restores strong growth even though both aconitase reactions remain disabled by the same double knockout.',
@@ -131,6 +137,7 @@ class Mission31_info:
             theme=mytheme,
             title='Mission 31 Briefing',
             width=1280,
+        overflow=(False, True),
         )
         briefing.add.label(
             f"""
@@ -220,7 +227,7 @@ class Mission31_info:
         await run_menu(menu, self.display_surface)
 
     def activate_mission31(self):
-        if not is_mission31_unlocked(self.missions_completed):
+        if not self.player.is_mission_unlocked('31'):
             self.failed.play()
             animation_text_save('Complete Mission 30 before starting Mission 31.', time=3000)
             return
@@ -238,7 +245,7 @@ class Mission31_info:
         save_file(self.player.get_save_data())
 
     def deliver_results(self, answer):
-        if not is_mission31_unlocked(self.missions_completed):
+        if not self.player.is_mission_unlocked('31'):
             self.failed.play()
             animation_text_save('Complete Mission 30 first!', time=2500)
             return
@@ -263,6 +270,7 @@ class Mission31_info:
         if not mission31_answer_matches(answer, report):
             self.failed.play()
             animation_text_save('Compare matched growth, uptake and disabled aconitase reactions.', time=3200)
+            penalize_wrong_answer(self.player, '31')
             return
 
         self.success.play()

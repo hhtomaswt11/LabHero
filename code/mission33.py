@@ -1,6 +1,8 @@
 import pygame
 import pygame_menu
 
+from answer_penalty import penalize_wrong_answer
+
 from settings import *
 from save_load import *
 from timers import Timer
@@ -57,9 +59,10 @@ class Mission33_info:
             theme=mytheme,
             title='Mission 33',
             width=1280,
+        overflow=(False, True),
         )
 
-        if not is_mission33_unlocked(self.missions_completed):
+        if not self.player.is_mission_unlocked('33'):
             menu.add.vertical_margin(40)
             menu.add.label(
                 'Mission 33 is locked. Complete Mission 32 before beginning the ROOM reference-state experiment.',
@@ -89,6 +92,7 @@ class Mission33_info:
             theme=mytheme,
             title='Mission 33 Hint 3',
             width=1280,
+        overflow=(False, True),
         )
         hint3.add.label(
             f'Technical hint: use {MISSION33_REFERENCE_METHOD} with all genes active for each reference. Use {MISSION33_MUTANT_METHOD} with exactly {MISSION33_TARGET_GENES[0]} + {MISSION33_TARGET_GENES[1]} for each mutant. Keep objective {MISSION33_GROWTH_OBJECTIVE}. The oxygen-closed context changes only the EX_o2_e lower bound. No Production Flux selection is required.',
@@ -105,6 +109,7 @@ class Mission33_info:
             theme=mytheme,
             title='Mission 33 Hint 2',
             width=1280,
+        overflow=(False, True),
         )
         hint2.add.label(
             'Experimental hint: match every ROOM result to the visible wild-type pFBA reference from the same environment. Compare the reference CYTBD flux with the ROOM significant-change score, not only with mutant biomass.',
@@ -122,6 +127,7 @@ class Mission33_info:
             theme=mytheme,
             title='Mission 33 Hint 1',
             width=1280,
+        overflow=(False, True),
         )
         hint1.add.label(
             'Conceptual hint: a genetic deletion can disable a reaction without forcing a new flux adjustment when that reaction was already unused in the matched reference state.',
@@ -139,6 +145,7 @@ class Mission33_info:
             theme=mytheme,
             title='Mission 33 Briefing',
             width=1280,
+        overflow=(False, True),
         )
         briefing.add.label(
             f"""
@@ -230,7 +237,7 @@ class Mission33_info:
         await run_menu(menu, self.display_surface)
 
     def activate_mission33(self):
-        if not is_mission33_unlocked(self.missions_completed):
+        if not self.player.is_mission_unlocked('33'):
             self.failed.play()
             animation_text_save('Complete Mission 32 before starting Mission 33.', time=3000)
             return
@@ -248,7 +255,7 @@ class Mission33_info:
         save_file(self.player.get_save_data())
 
     def deliver_results(self, answer):
-        if not is_mission33_unlocked(self.missions_completed):
+        if not self.player.is_mission_unlocked('33'):
             self.failed.play()
             animation_text_save('Complete Mission 32 first!', time=2500)
             return
@@ -273,6 +280,7 @@ class Mission33_info:
         if not mission33_answer_matches(answer, report):
             self.failed.play()
             animation_text_save('Enter the one-word functional state of CYTBD in the zero-score reference.', time=3000)
+            penalize_wrong_answer(self.player, '33')
             return
 
         self.success.play()

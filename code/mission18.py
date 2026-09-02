@@ -1,6 +1,8 @@
 import pygame
 import pygame_menu
 
+from answer_penalty import penalize_wrong_answer
+
 from settings import *
 from save_load import *
 from timers import Timer
@@ -53,9 +55,10 @@ class Mission18_info:
             theme=mytheme,
             title='Mission 18',
             width=1280,
+        overflow=(False, True),
         )
 
-        if not is_mission18_unlocked(self.missions_completed):
+        if not self.player.is_mission_unlocked('18'):
             menu.add.vertical_margin(40)
             menu.add.label(
                 'Mission 18 is locked. Complete Mission 17 before beginning the export-constraint screen.',
@@ -72,6 +75,7 @@ class Mission18_info:
         hint3 = pygame_menu.Menu(
             height=720, center_content=False, onclose=pygame_menu.events.BACK,
             theme=mytheme, title='Mission 18 Hint 3', width=1280,
+        overflow=(False, True),
         )
         hint3.add.label(
             f'Technical hint: use {MISSION18_METHOD}, objective {MISSION18_GROWTH_OBJECTIVE}, all genes active, and close only the oxygen lower bound for the baseline. Track ' + ', '.join(MISSION18_REQUIRED_TRACKED_FLUXES) + '. Then close separately the upper bound of ' + ' and '.join(MISSION18_CANDIDATE_EXPORTS) + '.',
@@ -84,6 +88,7 @@ class Mission18_info:
         hint2 = pygame_menu.Menu(
             height=720, center_content=False, onclose=pygame_menu.events.BACK,
             theme=mytheme, title='Mission 18 Hint 2', width=1280,
+        overflow=(False, True),
         )
         hint2.add.label(
             'Experimental hint: compare an upper-bound closure on an export that is active in the baseline with a closure on an export that is already zero. A binding constraint must change the feasible optimum, not merely appear in the setup.',
@@ -97,6 +102,7 @@ class Mission18_info:
         hint1 = pygame_menu.Menu(
             height=720, center_content=False, onclose=pygame_menu.events.BACK,
             theme=mytheme, title='Mission 18 Hint 1', width=1280,
+        overflow=(False, True),
         )
         hint1.add.label(
             'Conceptual hint: an upper bound restricts positive export. It only becomes binding when the unconstrained baseline needs flux in that direction.',
@@ -110,6 +116,7 @@ class Mission18_info:
         briefing = pygame_menu.Menu(
             height=720, center_content=False, onclose=pygame_menu.events.BACK,
             theme=mytheme, title='Mission 18 Briefing', width=1280,
+        overflow=(False, True),
         )
         briefing.add.label(
             f"""
@@ -194,7 +201,7 @@ class Mission18_info:
         await run_menu(menu, self.display_surface)
 
     def activate_mission18(self):
-        if not is_mission18_unlocked(self.missions_completed):
+        if not self.player.is_mission_unlocked('18'):
             self.failed.play()
             animation_text_save('Complete Mission 17 before starting Mission 18.', time=3000)
             return
@@ -212,7 +219,7 @@ class Mission18_info:
         save_file(self.player.get_save_data())
 
     def deliver_results(self, answer):
-        if not is_mission18_unlocked(self.missions_completed):
+        if not self.player.is_mission_unlocked('18'):
             self.failed.play()
             animation_text_save('Complete Mission 17 first!', time=2500)
             return
@@ -245,10 +252,12 @@ class Mission18_info:
         if len(normalise_mission18_answer(answer)) != 1:
             self.failed.play()
             animation_text_save('Enter exactly one candidate export route.', time=2800)
+            penalize_wrong_answer(self.player, '18')
             return
         if not mission18_answer_matches(answer, report):
             self.failed.play()
             animation_text_save('That route is not supported by the recorded baseline and trials.', time=3000)
+            penalize_wrong_answer(self.player, '18')
             return
 
         self.success.play()

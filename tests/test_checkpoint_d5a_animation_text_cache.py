@@ -156,7 +156,7 @@ class AnimationTextCacheTests(unittest.TestCase):
             ('/resource/font/LycheeSoda.ttf', 30),
         ])
         self.assertEqual(fake.render_calls, [
-            (100, 'Lab Hero', False, 'black'),
+            (100, 'LabHero', False, 'black'),
             (30, 'Loading...', False, 'black'),
         ])
         self.assertEqual(fake.display.surface.fill_calls, ['gold'])

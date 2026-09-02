@@ -1,6 +1,8 @@
 import pygame
 import pygame_menu
 
+from answer_penalty import penalize_wrong_answer
+
 from async_menu import run_menu
 from button import Button
 from functions import animation_text_save
@@ -67,7 +69,7 @@ class Mission04:
         ]
 
         self.input()
-        if not is_mission04_unlocked(self.missions_completed):
+        if not self.player.is_mission_unlocked('04'):
             self.menu_message(locked, buttons=False)
         elif '04' in self.missions_completed:
             self.menu_message(step3, buttons=False)
@@ -134,9 +136,10 @@ class Mission04_info:
             theme=mytheme,
             title='Mission 04',
             width=1280,
+        overflow=(False, True),
         )
 
-        if not is_mission04_unlocked(self.missions_completed):
+        if not self.player.is_mission_unlocked('04'):
             menu.add.vertical_margin(40)
             menu.add.label(
                 'Mission 04 is locked. Complete Mission 03 with Dr. Silva before investigating production knockouts.',
@@ -153,6 +156,7 @@ class Mission04_info:
         hint3 = pygame_menu.Menu(
             height=720, center_content=False, onclose=pygame_menu.events.BACK,
             theme=mytheme, title='Mission 04 Hint 3', width=1280,
+        overflow=(False, True),
         )
         hint3.add.label(
             'Technical hint: use FBA with biomass as the objective, keep the default environment unchanged, track EX_etoh_e in Production Flux, record a no-knockout reference and then test exactly one highlighted candidate per run.',
@@ -163,6 +167,7 @@ class Mission04_info:
         hint2 = pygame_menu.Menu(
             height=720, center_content=False, onclose=pygame_menu.events.BACK,
             theme=mytheme, title='Mission 04 Hint 2', width=1280,
+        overflow=(False, True),
         )
         hint2.add.label(
             'Experimental hint: compare each candidate with the same viable reference. A lower growth value alone is not proof that carbon was redirected to ethanol; inspect the product flux directly.',
@@ -174,6 +179,7 @@ class Mission04_info:
         hint1 = pygame_menu.Menu(
             height=720, center_content=False, onclose=pygame_menu.events.BACK,
             theme=mytheme, title='Mission 04 Hint 1', width=1280,
+        overflow=(False, True),
         )
         hint1.add.label(
             'Conceptual hint: look for growth-coupled production—a perturbation that causes ethanol secretion while the model still predicts viable growth in the same environment.',
@@ -189,6 +195,7 @@ class Mission04_info:
             theme=mytheme,
             title='Mission 04 Briefing',
             width=1280,
+        overflow=(False, True),
         )
         briefing.add.label(
             f"""
@@ -260,7 +267,7 @@ class Mission04_info:
         await run_menu(menu, self.display_surface)
 
     def activate_mission04(self):
-        if not is_mission04_unlocked(self.missions_completed):
+        if not self.player.is_mission_unlocked('04'):
             self.failed.play()
             animation_text_save('Complete Mission 03 before starting Mission 04.', time=3000)
             return
@@ -281,7 +288,7 @@ class Mission04_info:
         save_file(self.player.get_save_data())
 
     def deliver_results(self, answer):
-        if not is_mission04_unlocked(self.missions_completed):
+        if not self.player.is_mission_unlocked('04'):
             self.failed.play()
             animation_text_save('Complete Mission 03 before delivering Mission 04.', time=3000)
             return
@@ -311,10 +318,12 @@ class Mission04_info:
         if normalise_mission04_answer(answer) is None:
             self.failed.play()
             animation_text_save('Enter a candidate gene id or gene name from the mission list.', time=3000)
+            penalize_wrong_answer(self.player, '04')
             return
         if not mission04_answer_matches(answer, report):
             self.failed.play()
             animation_text_save('That conclusion is not supported by the recorded growth and ethanol evidence.', time=3300)
+            penalize_wrong_answer(self.player, '04')
             return
 
         self.success.play()

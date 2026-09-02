@@ -7,6 +7,12 @@ from math import ceil
 from utils import *
 from hint_system import HintSystem, create_reward_state
 from student_identity import infer_name_confirmed, validate_student_name
+from save_load import save_file
+from campaign import (
+    CampaignContext,
+    STUDENT_CAMPAIGN_MODES,
+    normalize_campaign_mode,
+)
 
 
 # Maximum distance advanced before checking collisions again.  Keeping this
@@ -51,6 +57,12 @@ class Player(pygame.sprite.Sprite):
         self.rect = self.image.get_rect(center = pos)
         self.z = LAYERS['main']
 
+        # Canonical map spawnpoint. Keep the Tiled ``Start`` position supplied
+        # by Level before a persisted save is allowed to restore the player
+        # elsewhere. Settings -> Back to Spawnpoint always returns here, so
+        # moving the Start object in Tiled automatically updates the feature.
+        self.spawnpoint = pygame.math.Vector2(pos)
+
         # movement 
         self.direction = pygame.math.Vector2()
         self.pos = pygame.math.Vector2(self.rect.center)
@@ -67,6 +79,14 @@ class Player(pygame.sprite.Sprite):
         self.timers = {
             'tool_use': Timer(350, self.use_tool)
         }
+
+        # ENTER interaction release guard.  Player interaction historically
+        # used pygame.key.get_pressed(), so the same physical ENTER that
+        # confirmed/closed another screen could leak into the first map frame
+        # and immediately trigger a nearby NPC/simulator/coffee interaction.
+        # Start locked so ENTER used on the title-screen Continue action must be
+        # released once before it can interact with the map.
+        self.interaction_enter_locked = True
 
         self.item_inventory = DEFAULT_INVENTORY[0]
 
@@ -86,6 +106,21 @@ class Player(pygame.sprite.Sprite):
             self.missions_completed,
             self.player_state,
             DEFAULT_INVENTORY_2[0],
+        )
+        # Campaign mode lives inside player_state so the six-field save schema
+        # remains unchanged. Historic saves have no key and therefore migrate
+        # safely to Normal.
+        self.campaign_mode = normalize_campaign_mode(
+            self.player_state.get('campaign_mode', 'normal')
+            if isinstance(self.player_state, dict) else 'normal'
+        )
+        self.final_results_seen = bool(
+            self.player_state.get('final_results_seen', False)
+            if isinstance(self.player_state, dict) else False
+        )
+        self.golden_egg_collected = bool(
+            self.player_state.get('golden_egg_collected', False)
+            if isinstance(self.player_state, dict) else False
         )
         self._apply_player_state(self.player_state)
 
@@ -125,16 +160,11 @@ class Player(pygame.sprite.Sprite):
 
         	
         # music/audio
-        # DEFAULT
-        # self.music_bg = pygame.mixer.Sound(MUSIC_NAME)
-        # self.music_bg.set_volume(0.07)
-        # # self.music_bg.set_volume(0)
-        # self.music_bg.play(loops = -1)
-
-
-        # TURN OFF AUDIO
+        # Keep the runtime level aligned with the Settings slider default.
         self.music_bg = pygame.mixer.Sound(MUSIC_NAME)
-        self.music_bg.set_volume(0)
+        self.music_bg.set_volume(
+            (DEFAULT_MUSIC_VOLUME_PERCENT / 100.0) * MUSIC_VOLUME_SCALE
+        )
         self.music_bg.play(loops = -1)
 
         coffee_path = get_resource_path('audio/coffee.ogg')
@@ -221,6 +251,51 @@ class Player(pygame.sprite.Sprite):
         self.update_interaction_area()
         self.get_target_pos()
 
+    def return_to_spawnpoint(self):
+        """Return safely to the canonical Tiled Start position.
+
+        This changes only the player's map position/orientation. Campaign
+        progress, rewards, skin and every other save field remain untouched.
+        """
+        if not hasattr(self, 'spawnpoint'):
+            return False
+
+        self.pos.update(self.spawnpoint.x, self.spawnpoint.y)
+        self.rect.center = (round(self.pos.x), round(self.pos.y))
+        self.hitbox.center = self.rect.center
+        self.direction.update(0, 0)
+
+        # A deterministic idle facing mirrors a fresh New Game at Start and
+        # avoids carrying a mid-walk animation across the teleport.
+        if 'down_idle' in self.animations:
+            self.status = 'down_idle'
+        else:
+            facing = self._safe_facing(self.status)
+            idle_status = f'{facing}_idle'
+            if idle_status in self.animations:
+                self.status = idle_status
+        self.frame_index = 0
+        if self.status in self.animations and self.animations[self.status]:
+            self.image = self.animations[self.status][0]
+
+        self.character = None
+        self.update_interaction_area()
+        self.get_target_pos()
+        return True
+
+
+    def get_campaign_context(self):
+        """Return the current campaign policy without duplicating progression rules."""
+        return CampaignContext(mode=self.campaign_mode)
+
+    def is_mission_in_campaign(self, mission_id):
+        return self.get_campaign_context().includes_mission(mission_id)
+
+    def is_mission_unlocked(self, mission_id):
+        return self.get_campaign_context().is_mission_unlocked(
+            mission_id, self.missions_completed
+        )
+
     def get_player_state(self):
         facing = self._safe_facing(self.status)
         return {
@@ -230,7 +305,10 @@ class Player(pygame.sprite.Sprite):
             'facing': facing,
             'status': self.status,
             'skin_id': self.current_skin_id,
-            'name_confirmed': bool(self.name_confirmed)
+            'name_confirmed': bool(self.name_confirmed),
+            'campaign_mode': self.campaign_mode,
+            'final_results_seen': bool(self.final_results_seen),
+            'golden_egg_collected': bool(self.golden_egg_collected)
         }
 
     def get_save_data(self):
@@ -254,16 +332,42 @@ class Player(pygame.sprite.Sprite):
 
 
 
-    def register_student_name(self, value):
-        """Confirm the student identity once for this campaign."""
-        if self.name_confirmed:
+    def collect_golden_egg(self):
+        """Collect the one-time Golden Egg reward and persist it immediately."""
+        if self.golden_egg_collected:
+            return False
+
+        self.golden_egg_collected = True
+        self.hint_system.award_keys('gold', 3)
+        self.reward_state = self.hint_system.state
+        save_file(self.get_save_data())
+        animation_text_save(
+            'Golden Egg discovered! You found 3 Gold Keys.',
+            time=3200,
+        )
+        return True
+
+    def register_student_campaign(self, value, campaign_mode):
+        """Atomically lock student identity and student-facing campaign mode.
+
+        Registration is only allowed before a campaign has started.  This keeps
+        both the name and Normal/Easy route immutable for the lifetime of the
+        save while preserving historic saves that were already registered.
+        """
+        if self.name_confirmed or self.missions_activated or self.missions_completed:
             return False
         valid, normalized, _error = validate_student_name(value)
-        if not valid:
+        mode = normalize_campaign_mode(campaign_mode)
+        if not valid or mode not in STUDENT_CAMPAIGN_MODES:
             return False
         self.player_name = normalized
+        self.campaign_mode = mode
         self.name_confirmed = True
         return True
+
+    def register_student_name(self, value):
+        """Backwards-compatible Normal registration helper used by older tests/code."""
+        return self.register_student_campaign(value, self.campaign_mode)
 
     def use_tool(self):
         for tree in self.tree_sprites.sprites():
@@ -317,6 +421,26 @@ class Player(pygame.sprite.Sprite):
         if self.frame_index >= len(self.animations[self.status]):
             self.frame_index = 0
         self.image = self.animations[self.status][int(self.frame_index)]
+
+    def block_interaction_until_enter_release(self):
+        """Ignore map ENTER interactions until RETURN/KP_ENTER are released.
+
+        Menus may use ENTER to confirm a choice while Player.update() is paused.
+        Level calls this guard when returning from a modal so that confirmation
+        key cannot be reused as a world interaction on the next frame.
+        """
+        self.interaction_enter_locked = True
+
+    def _interaction_enter_pressed_once(self, keys):
+        """Return True only for a fresh map-interaction ENTER press."""
+        enter_pressed = bool(keys[pygame.K_RETURN] or keys[pygame.K_KP_ENTER])
+        if not enter_pressed:
+            self.interaction_enter_locked = False
+            return False
+        if self.interaction_enter_locked:
+            return False
+        self.interaction_enter_locked = True
+        return True
 
     def update_interaction_area(self):
         # Posiciona a área de interação ligeiramente à frente do jogador com base na direção
@@ -373,8 +497,9 @@ class Player(pygame.sprite.Sprite):
             #     self.talk_2()
 
 
-            # interaction
-            if keys[pygame.K_RETURN] or keys[pygame.K_KP_ENTER]:
+            # interaction: edge-triggered and release-gated so ENTER used
+            # to leave another screen cannot leak into the world interaction.
+            if self._interaction_enter_pressed_once(keys):
                 # timer for tool use
                 self.timers['tool_use'].activate()
                 self.direction = pygame.math.Vector2()
@@ -386,6 +511,14 @@ class Player(pygame.sprite.Sprite):
                     if interaction_name in MISSION_START_INTERACTIONS and not self.name_confirmed:
                         animation_text_save(
                             'Please register your name with Dr. Alves before starting missions.'
+                        )
+                    elif (
+                        interaction_name in MISSION_START_INTERACTIONS
+                        and not self.get_campaign_context().interaction_is_available(interaction_name)
+                    ):
+                        animation_text_save(
+                            'This researcher is not part of your Easy campaign route.',
+                            time=2500,
                         )
                     elif interaction_name == 'Alves':
                         if self.name_confirmed:
@@ -429,6 +562,9 @@ class Player(pygame.sprite.Sprite):
                         self.talk_39()
                     elif collided_interaction_sprite[0].name == 'Mortis':
                         self.talk_40()
+                    elif interaction_name == 'GoldenEgg':
+                        if self.collect_golden_egg():
+                            collided_interaction_sprite[0].kill()
                     elif collided_interaction_sprite[0].name == 'Desk':
                         animation_text_save('... please wait ...', time=100)
                         self.desk_menu()

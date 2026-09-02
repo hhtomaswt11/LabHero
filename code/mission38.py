@@ -1,6 +1,8 @@
 import pygame
 import pygame_menu
 
+from answer_penalty import penalize_wrong_answer
+
 from settings import *
 from save_load import *
 from timers import Timer
@@ -77,7 +79,7 @@ class Mission38:
             self.menu_message(completed, buttons=False)
         elif '38' in self.missions_activated:
             self.menu_message(active, menu_to_open=self.menu38)
-        elif is_mission38_unlocked(self.missions_completed):
+        elif self.player.is_mission_unlocked('38'):
             self.menu_message(intro, menu_to_open=self.menu38)
         else:
             self.menu_message(locked, buttons=False)
@@ -123,8 +125,9 @@ class Mission38_info:
         menu = pygame_menu.Menu(
             height=720, center_content=False, onclose=self.toggle_menu,
             theme=mytheme, title='Mission 38', width=1280,
+        overflow=(False, True),
         )
-        if not is_mission38_unlocked(self.missions_completed):
+        if not self.player.is_mission_unlocked('38'):
             menu.add.label(
                 'Mission 38 is locked. Complete Mission 37 first.',
                 wordwrap=True, padding=(25,25,25,25), background_color='white', font_size=30,
@@ -140,6 +143,7 @@ class Mission38_info:
         briefing = pygame_menu.Menu(
             height=720, center_content=False, onclose=pygame_menu.events.BACK,
             theme=mytheme, title='Mission 38 Briefing', width=1280,
+        overflow=(False, True),
         )
         briefing.add.label(
             f"""Controlled yeast dependency matrix
@@ -160,6 +164,7 @@ Use WT to judge whether each candidate is generally growth-limiting. Then use th
         hint3 = pygame_menu.Menu(
             height=720, center_content=False, onclose=pygame_menu.events.BACK,
             theme=mytheme, title='Mission 38 Hint 3', width=1280,
+        overflow=(False, True),
         )
         hint3.add.label(
             'Technical hint:\n\nThe qualifying candidate must retain at least 95% of WT growth when knocked out alone, but in the PDC-cut-set background its growth must fall to at most 60% of the matched reference, succinate to at most 10%, while pyruvate secretion reaches at least 1.0. Apply all criteria to the same candidate.',
@@ -170,6 +175,7 @@ Use WT to judge whether each candidate is generally growth-limiting. Then use th
         hint2 = pygame_menu.Menu(
             height=720, center_content=False, onclose=pygame_menu.events.BACK,
             theme=mytheme, title='Mission 38 Hint 2', width=1280,
+        overflow=(False, True),
         )
         hint2.add.label(
             'Experimental hint:\n\nFor FRD1 and MAE1, make two matched comparisons: candidate alone versus WT, and PDC cut set plus candidate versus the PDC-cut-set reference. Track growth in both comparisons, then use succinate and pyruvate to decide whether the large effect is specific to the altered background.',
@@ -181,6 +187,7 @@ Use WT to judge whether each candidate is generally growth-limiting. Then use th
         hint1 = pygame_menu.Menu(
             height=720, center_content=False, onclose=pygame_menu.events.BACK,
             theme=mytheme, title='Mission 38 Hint 1', width=1280,
+        overflow=(False, True),
         )
         hint1.add.label(
             'Conceptual hint:\n\nCompare the same candidate in two backgrounds. A useful background-specific vulnerability should be nearly neutral by itself, but should cause a much larger change after the PDC cut set is already present. Do not judge from a single genotype in isolation.',
@@ -242,7 +249,7 @@ Use WT to judge whether each candidate is generally growth-limiting. Then use th
         await run_menu(menu, self.display_surface)
 
     def activate_mission38(self):
-        if not is_mission38_unlocked(self.missions_completed):
+        if not self.player.is_mission_unlocked('38'):
             self.failed.play()
             animation_text_save('Complete Mission 37 first!', time=2500)
             return
@@ -259,7 +266,7 @@ Use WT to judge whether each candidate is generally growth-limiting. Then use th
         animation_text_save('Mission 38 Activated')
 
     def deliver_results(self, answer):
-        if not is_mission38_unlocked(self.missions_completed):
+        if not self.player.is_mission_unlocked('38'):
             self.failed.play()
             animation_text_save('Complete Mission 37 first!', time=2500)
             return
@@ -279,6 +286,7 @@ Use WT to judge whether each candidate is generally growth-limiting. Then use th
         if not mission38_answer_matches(answer, report):
             self.failed.play()
             animation_text_save('Recheck which candidate changes specifically in the PDC-cut-set background.', time=3000)
+            penalize_wrong_answer(self.player, '38')
             return
         self.success.play()
         if '38' not in self.missions_completed:

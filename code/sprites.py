@@ -19,6 +19,20 @@ class Interaction(Generic):
         super().__init__(pos, surf, groups)
         self.name = name
         
+class GoldenEgg(Generic):
+    """One-time visible/interactable easter egg loaded from Tiled."""
+
+    def __init__(self, pos, surf, groups, player):
+        self.player = player
+        super().__init__(pos, surf, groups, LAYERS['main'])
+        self.name = 'GoldenEgg'
+        self.hitbox = self.rect.copy().inflate(-12, -12)
+
+    def update(self, dt):
+        if getattr(self.player, 'golden_egg_collected', False):
+            self.kill()
+
+
 class ProgressionGate(Generic):
     """Visible/collidable barrier removed when its required mission is complete."""
 

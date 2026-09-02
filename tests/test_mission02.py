@@ -329,7 +329,7 @@ class Mission02RegressionTests(unittest.TestCase):
         # Compatibility dialogue, setup, activation and delivery each enforce
         # the prerequisite instead of relying only on the normal NPC path.
         self.assertGreaterEqual(
-            source.count('if not is_mission02_unlocked(self.missions_completed):'),
+            source.count("if not self.player.is_mission_unlocked('02'):"),
             4,
         )
         self.assertIn('Mission 02 is locked. Complete Mission 01', source)

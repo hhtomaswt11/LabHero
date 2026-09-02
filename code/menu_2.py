@@ -10,6 +10,7 @@ from timers import Timer
 from functions import animation_text_save
 from utils import *
 from async_menu import run_menu
+from book_ui import populate_book_menu
 
 
 class Menu:
@@ -28,10 +29,8 @@ class Menu:
         self.index = 0
         self.timer = Timer(200)
 
-        #music volume
-        # DEFAULT 
-        # self.volume = 0.5
-        self.volume = 0
+        # Music state mirrors the actual Player startup volume.
+        self.volume = DEFAULT_MUSIC_VOLUME_PERCENT / 100.0
         self.music_val = 0
 
 
@@ -41,17 +40,37 @@ class Menu:
         # editable from Settings during the campaign.
         save_file(self.player.get_save_data())
         animation_text_save('Game saved')
+
+    def back_to_spawnpoint(self, menu):
+        """Teleport to the canonical map Start point and persist it."""
+        if not self.player.return_to_spawnpoint():
+            animation_text_save('Spawnpoint is not available.', time=1800)
+            return
+
+        # Persist immediately so browser autosave/refresh cannot restore the
+        # pre-teleport position. No mission, reward or profile data is reset.
+        save_file(self.player.get_save_data())
+        animation_text_save('Returned to spawnpoint.', time=1800)
+
+        # Close Settings so the player immediately sees the destination.
+        self.toggle_menu()
+        menu.disable()
     
 
 
     async def setup(self):
-        menu = pygame_menu.Menu('Lab Hero Settings', 1280, 720,
+        menu = pygame_menu.Menu('LabHero Settings', 1280, 720,
                         onclose=self.toggle_menu,
                         theme=mytheme)
         
-        menu_how_to_play = pygame_menu.Menu('How to Play', 1280, 720,
-                        onclose=self.toggle_menu,
-                        theme=tutorial_theme)
+        menu_how_to_play = pygame_menu.Menu(
+            'How to Play',
+            1280,
+            720,
+            onclose=self.toggle_menu,
+            theme=mytheme,
+            column_max_width=1280,
+        )
         
         menu_credits = pygame_menu.Menu('Credits', 1280, 720,
                         onclose=self.toggle_menu,
@@ -79,7 +98,7 @@ class Menu:
         # menu_credits.add.url('', 'Assets by João Leiras and Gabriela Barbosa', font_color='black')
         menu_credits.add.label('Assets by Joao Leiras and Gabriela Barbosa', font_color='black')
         menu_credits.add.vertical_margin(20)
-        menu_credits.add.label('Game developed by Monica Leiras', font_color='black')
+        menu_credits.add.label('Game developed by Monica Leiras and Tomas Melo', font_color='black')
         # menu_credits.add.url('', 'Game developed by Mónica Leiras', font_color='black')
         menu_credits.add.vertical_margin(50)
         menu_credits.add.button('Back', pygame_menu.events.BACK, background_color=(70, 70, 70))
@@ -89,99 +108,8 @@ class Menu:
 
         
         
-        menu_how_to_play.add.vertical_margin(50)
-        menu_how_to_play.add.label(
-            """Moving""",
-            max_char=-1,
-            wordwrap=True,
-            align=pygame_menu.locals.ALIGN_LEFT,
-            margin=(100, 0),
-            background_color = (60, 150, 140),
-            font_color = 'white',
-            font_size = 30,
-            padding = (25,25,25,25)
-        )
-        menu_how_to_play.add.label(
-            """
-            Use arrows (up, down, left, righ) or WASD keys to move the character.
-            """,
-            max_char=-1,
-            wordwrap=True,
-            align=pygame_menu.locals.ALIGN_LEFT,
-            margin=(0, 0)
-        )
-        menu_how_to_play.add.vertical_margin(50)
-        menu_how_to_play.add.label(
-            """Interacting""",
-            max_char=-1,
-            wordwrap=True,
-            align=pygame_menu.locals.ALIGN_LEFT,
-            margin=(100, 0),
-            background_color = (60, 150, 140),
-            font_color = 'white',
-            font_size = 30,
-            padding = (25,25,25,25)
-        )
-        menu_how_to_play.add.label(
-            """
-            Use ENTER key to open the dialogue when close to another character (scientists).
-
-            Use ENTER key to open the simulation window when close to your desk.
-
-            Use ENTER key to consult books when close to the library.
-
-            Use ENTER key to take an apple from a tree ("An apple a day keeps the doctor away").
-            """,
-            max_char=-1,
-            wordwrap=True,
-            align=pygame_menu.locals.ALIGN_LEFT,
-            margin=(0, 0)
-        )
-        menu_how_to_play.add.vertical_margin(50)
-        menu_how_to_play.add.label(
-            """Buttons""",
-            max_char=-1,
-            wordwrap=True,
-            align=pygame_menu.locals.ALIGN_LEFT,
-            margin=(100, 0),
-            background_color = (60, 150, 140),
-            font_color = 'white',
-            font_size = 30,
-            padding = (25,25,25,25)
-        )
-        menu_how_to_play.add.label(
-            """
-            Use the Mouse to click on the buttons of the dialogues.
-            """,
-            max_char=-1,
-            wordwrap=True,
-            align=pygame_menu.locals.ALIGN_LEFT,
-            margin=(0, 0)
-        )
-        menu_how_to_play.add.vertical_margin(50)
-        menu_how_to_play.add.label(
-            """Main Menu""",
-            max_char=-1,
-            wordwrap=True,
-            align=pygame_menu.locals.ALIGN_LEFT,
-            margin=(100, 0),
-            background_color = (60, 150, 140),
-            font_color = 'white',
-            font_size = 30,
-            padding = (25,25,25,25)
-        )
-        menu_how_to_play.add.label(
-            """
-            Use M key to open the Main Menu to control the music/volume, save/exit the game and to see this tutorial again.
-            """,
-            max_char=-1,
-            wordwrap=True,
-            align=pygame_menu.locals.ALIGN_LEFT,
-            margin=(0, 0)
-        )
-        menu_how_to_play.add.vertical_margin(50)
-        menu_how_to_play.add.button('Back', pygame_menu.events.BACK, background_color=(70, 70, 70))
-        menu_how_to_play.add.vertical_margin(50)
+        # Use the same canonical How to Play content as the library.
+        populate_book_menu(menu_how_to_play, 'how_to_play')
 
         student_label = self.player.player_name if self.player.name_confirmed else 'Not registered'
         # pygame-menu's bundled Munro font does not contain common accented
@@ -192,10 +120,12 @@ class Menu:
             f'Student: {student_label}',
             font_name=self.font_path,
         )
+        menu.add.label(f'Mode: {self.player.campaign_mode.title()}')
         menu.add.selector('Music: ', [('Hope', 0), ('Serene', 1),  ('Happy', 2), ('Surf', 3)], default=self.music_val, onchange=self.set_music)
         menu.add.range_slider('Volume', self.volume*100, (0, 100), 1, onchange=self.set_volume,
                       rangeslider_id='volume_music',
                       value_format=lambda x: str(int(x)))
+        menu.add.button('Back to Spawnpoint', self.back_to_spawnpoint, menu)
         menu.add.button('How to Play', action=menu_how_to_play)
         if sys.platform != 'emscripten':
             menu.add.button('Save Game', self.save_game, menu)

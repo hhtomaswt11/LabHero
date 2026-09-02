@@ -1,0 +1,19 @@
+TEACHER.1 — isolated mission jump
+
+Web entry:
+  ?teacher=1&mission=17
+
+Desktop entry:
+  python3 LabHero.py --teacher --mission 17
+
+Behaviour:
+- Bypasses title/student registration and opens the requested Mission 01-40 menu.
+- Missions numerically before the target exist only inside the isolated teacher
+  preview and are marked completed/activated there for coherent NPC progression.
+- Physical progression gates are bypassed by CampaignContext('teacher').
+- Press T in the world to reopen the requested mission menu.
+- Student Final Results are disabled during teacher previews.
+- Teacher writes use a separate persistence namespace and a fresh namespace is
+  cleared when the preview starts. Normal student saves/localStorage are untouched.
+- No mission thresholds, validation logic, scientific constants, map objects,
+  backend API or deployment configuration were changed.

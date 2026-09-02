@@ -1,0 +1,19 @@
+EASY.1A — Campaign mode architecture
+
+Purpose
+- Make campaign mode a first-class, persisted piece of campaign state.
+- Preserve the current Normal campaign exactly.
+- Prepare Easy/Teacher metadata without exposing an unfinished Easy mode.
+
+Runtime changes
+- code/campaign.py: central Normal/Easy/Teacher sequences and helper APIs.
+- code/settings.py: campaign_mode defaults to "normal" in player_state.
+- code/player.py: restores and serializes campaign_mode inside player_state.
+- code/level.py: progression gates use the restored campaign context.
+
+Important
+- Six-field save schema is unchanged.
+- Historic saves without campaign_mode migrate to Normal.
+- Easy mission selection is intentionally NOT configured in EASY.1A.
+- No mission validator, scientific logic, score/hint logic, TMX, or deploy file changed.
+- EASY.2 will choose the pedagogical Easy mission sequence.

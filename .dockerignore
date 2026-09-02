@@ -1,0 +1,13 @@
+
+# Local development files - never copy into container build context
+.venv/
+venv/
+env/
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+.mypy_cache/
+.git/
+*.zip
+*.bak

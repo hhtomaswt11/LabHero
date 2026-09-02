@@ -1,6 +1,8 @@
 import pygame
 import pygame_menu
 
+from answer_penalty import penalize_wrong_answer
+
 from settings import *
 from save_load import *
 from timers import Timer
@@ -51,9 +53,10 @@ class Mission20_info:
             theme=mytheme,
             title='Mission 20',
             width=1280,
+        overflow=(False, True),
         )
 
-        if not is_mission20_unlocked(self.missions_completed):
+        if not self.player.is_mission_unlocked('20'):
             menu.add.vertical_margin(40)
             menu.add.label(
                 'Mission 20 is locked. Complete Mission 19 before beginning the final context-robustness matrix.',
@@ -70,6 +73,7 @@ class Mission20_info:
         hint3 = pygame_menu.Menu(
             height=720, center_content=False, onclose=pygame_menu.events.BACK,
             theme=mytheme, title='Mission 20 Hint 3', width=1280,
+        overflow=(False, True),
         )
         hint3.add.label(
             f'Technical hint: use {MISSION20_TARGET_METHOD}, objective {MISSION20_GROWTH_OBJECTIVE}, all genes active and model-default glucose. Track ' + ', '.join(MISSION20_REQUIRED_TRACKED_FLUXES) + f'. Record all four combinations of {MISSION20_OXYGEN_REACTION} lower bound open/closed and {MISSION20_ACETATE_EXPORT} upper bound open/closed.',
@@ -82,6 +86,7 @@ class Mission20_info:
         hint2 = pygame_menu.Menu(
             height=720, center_content=False, onclose=pygame_menu.events.BACK,
             theme=mytheme, title='Mission 20 Hint 2', width=1280,
+        overflow=(False, True),
         )
         hint2.add.label(
             'Experimental hint: compare acetate-open versus acetate-closed within each oxygen context. Look at growth, acetate, the remaining export profile and the pFBA diagnostics before comparing the two contexts.',
@@ -95,6 +100,7 @@ class Mission20_info:
         hint1 = pygame_menu.Menu(
             height=720, center_content=False, onclose=pygame_menu.events.BACK,
             theme=mytheme, title='Mission 20 Hint 1', width=1280,
+        overflow=(False, True),
         )
         hint1.add.label(
             'Conceptual hint: the same upper-bound closure can be silent in one feasible optimum and influential in another. Robustness must therefore be evaluated across controlled environmental contexts.',
@@ -108,6 +114,7 @@ class Mission20_info:
         briefing = pygame_menu.Menu(
             height=720, center_content=False, onclose=pygame_menu.events.BACK,
             theme=mytheme, title='Mission 20 Briefing', width=1280,
+        overflow=(False, True),
         )
         briefing.add.label(
             f"""
@@ -195,7 +202,7 @@ class Mission20_info:
         await run_menu(menu, self.display_surface)
 
     def activate_mission20(self):
-        if not is_mission20_unlocked(self.missions_completed):
+        if not self.player.is_mission_unlocked('20'):
             self.failed.play()
             animation_text_save('Complete Mission 19 before starting Mission 20.', time=3000)
             return
@@ -213,7 +220,7 @@ class Mission20_info:
         save_file(self.player.get_save_data())
 
     def deliver_results(self, answer):
-        if not is_mission20_unlocked(self.missions_completed):
+        if not self.player.is_mission_unlocked('20'):
             self.failed.play()
             animation_text_save('Complete Mission 19 first!', time=2500)
             return
@@ -246,10 +253,12 @@ class Mission20_info:
         if len(normalise_mission20_answer(answer)) != 1:
             self.failed.play()
             animation_text_save('Enter exactly one oxygen context.', time=2800)
+            penalize_wrong_answer(self.player, '20')
             return
         if not mission20_answer_matches(answer, report):
             self.failed.play()
             animation_text_save('That context is not supported by the recorded before/after comparisons.', time=3000)
+            penalize_wrong_answer(self.player, '20')
             return
 
         self.success.play()

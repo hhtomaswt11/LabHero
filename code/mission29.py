@@ -1,6 +1,8 @@
 import pygame
 import pygame_menu
 
+from answer_penalty import penalize_wrong_answer
+
 from settings import *
 from save_load import *
 from timers import Timer
@@ -108,7 +110,7 @@ class Mission29:
             self.menu_message(mission30_intro_dialogue, menu_to_open=self.menu30)
         elif '29' in self.missions_activated:
             self.menu_message(active_dialogue, menu_to_open=self.menu29)
-        elif is_mission29_unlocked(self.missions_completed):
+        elif self.player.is_mission_unlocked('29'):
             self.menu_message(intro_dialogue, menu_to_open=self.menu29)
         else:
             self.menu_message(locked_dialogue, buttons=False)
@@ -171,9 +173,10 @@ class Mission29_info:
             theme=mytheme,
             title='Mission 29',
             width=1280,
+        overflow=(False, True),
         )
 
-        if not is_mission29_unlocked(self.missions_completed):
+        if not self.player.is_mission_unlocked('29'):
             menu.add.vertical_margin(40)
             menu.add.label(
                 "Mission 29 is locked. Complete Mission 28 before beginning Dr. Li's network-robustness programme.",
@@ -197,6 +200,7 @@ class Mission29_info:
         hint3 = pygame_menu.Menu(
             height=720, center_content=False, onclose=pygame_menu.events.BACK,
             theme=mytheme, title='Mission 29 Hint 3', width=1280,
+        overflow=(False, True),
         )
         hint3.add.label(
             f"Technical hint: use {MISSION29_METHOD} with objective {MISSION29_GROWTH_OBJECTIVE}. Keep the environmental medium completely default. Record one wild-type reference, every highlighted gene as an individual knockout, and each exact matched two-gene pair. No Production Flux selection is required.",
@@ -209,6 +213,7 @@ class Mission29_info:
         hint2 = pygame_menu.Menu(
             height=720, center_content=False, onclose=pygame_menu.events.BACK,
             theme=mytheme, title='Mission 29 Hint 2', width=1280,
+        overflow=(False, True),
         )
         hint2.add.label(
             'Experimental hint: compare each double knockout with both of its own single knockouts, not only with wild type. A redundant partner can mask the effect of the first deletion until both alternatives are unavailable.',
@@ -222,6 +227,7 @@ class Mission29_info:
         hint1 = pygame_menu.Menu(
             height=720, center_content=False, onclose=pygame_menu.events.BACK,
             theme=mytheme, title='Mission 29 Hint 1', width=1280,
+        overflow=(False, True),
         )
         hint1.add.label(
             'Conceptual hint: synthetic lethality is a non-additive relationship. Look for a pair in which either single knockout retains growth, but removing both matched alternatives abolishes the phenotype.',
@@ -239,6 +245,7 @@ class Mission29_info:
             theme=mytheme,
             title='Mission 29 Briefing',
             width=1280,
+        overflow=(False, True),
         )
         briefing.add.label(
             f"""
@@ -322,7 +329,7 @@ class Mission29_info:
         await run_menu(menu, self.display_surface)
 
     def activate_mission29(self):
-        if not is_mission29_unlocked(self.missions_completed):
+        if not self.player.is_mission_unlocked('29'):
             self.failed.play()
             animation_text_save('Complete Mission 28 before starting Mission 29.', time=3000)
             return
@@ -341,7 +348,7 @@ class Mission29_info:
         save_file(self.player.get_save_data())
 
     def deliver_results(self, answer):
-        if not is_mission29_unlocked(self.missions_completed):
+        if not self.player.is_mission_unlocked('29'):
             self.failed.play()
             animation_text_save('Complete Mission 28 first!', time=2500)
             return
@@ -366,6 +373,7 @@ class Mission29_info:
         if not mission29_answer_matches(answer, report):
             self.failed.play()
             animation_text_save('Recompare both single knockouts, the matched double knockout and the GPR-disabled reactions.', time=3400)
+            penalize_wrong_answer(self.player, '29')
             return
 
         self.success.play()

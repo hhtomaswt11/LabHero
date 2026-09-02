@@ -1,0 +1,16 @@
+EASY.2A — Curated Easy progression
+
+Curated route:
+01 -> 03 -> 06 -> 07 -> 13 -> 18 -> 21 -> 23 -> 25 -> 27 -> 36
+
+Scope:
+- EASY_MISSIONS configured with the reviewed 11-mission classroom route.
+- CampaignContext owns per-mode prerequisites and score maximum (Easy = 55).
+- Skipped missions remain absent from missions_completed and are not playable in Easy.
+- Legacy Tiled milestone 35 maps to Easy milestone 27 for progression gates.
+- Yeast simulator unlock can use campaign context, so Easy reaches iMM904 after M27
+  while Normal still requires M35.
+- Mission 02-40 controllers use Player campaign-aware unlock checks, so skipped Easy missions cannot be activated accidentally.
+- No Normal mission validator/scientific criteria changed.
+- No Tiled map changes.
+- No Normal/Easy selection UI yet; that belongs to EASY.2B.

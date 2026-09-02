@@ -21,16 +21,21 @@ def unlock_requirement(kind, item_id):
     return UNLOCK_RULES.get(f'{kind}:{item_id}')
 
 
-def mission_requirement_met(required_mission, missions_completed):
+def mission_requirement_met(required_mission, missions_completed, campaign_context=None):
     if not required_mission:
         return True
+    if campaign_context is not None:
+        return campaign_context.is_progression_requirement_met(
+            required_mission, missions_completed
+        )
     return str(required_mission) in _completed_set(missions_completed)
 
 
-def is_unlock_available(kind, item_id, missions_completed):
+def is_unlock_available(kind, item_id, missions_completed, campaign_context=None):
     return mission_requirement_met(
         unlock_requirement(kind, item_id),
         missions_completed,
+        campaign_context=campaign_context,
     )
 
 
@@ -42,8 +47,11 @@ def is_area_unlocked(area_id, missions_completed):
     return is_unlock_available('area', area_id, missions_completed)
 
 
-def is_model_unlocked(model_id, missions_completed):
-    return is_unlock_available('model', model_id, missions_completed)
+def is_model_unlocked(model_id, missions_completed, campaign_context=None):
+    return is_unlock_available(
+        'model', model_id, missions_completed,
+        campaign_context=campaign_context,
+    )
 
 
 def mission35_reward_state(missions_completed):

@@ -1,6 +1,8 @@
 import pygame
 import pygame_menu
 
+from answer_penalty import penalize_wrong_answer
+
 from settings import *
 from save_load import *
 from timers import Timer
@@ -71,7 +73,7 @@ class Mission36:
             self.menu_message(completed, buttons=False)
         elif '36' in self.missions_activated:
             self.menu_message(active, menu_to_open=self.menu36)
-        elif is_mission36_unlocked(self.missions_completed):
+        elif self.player.is_mission_unlocked('36'):
             self.menu_message(intro, menu_to_open=self.menu36)
         else:
             self.menu_message(locked, buttons=False)
@@ -114,8 +116,8 @@ class Mission36_info:
         self.failed.set_volume(1.2)
 
     async def setup(self):
-        menu = pygame_menu.Menu(height=720, center_content=False, onclose=self.toggle_menu, theme=mytheme, title='Mission 36', width=1280)
-        if not is_mission36_unlocked(self.missions_completed):
+        menu = pygame_menu.Menu(height=720, center_content=False, onclose=self.toggle_menu, theme=mytheme, title='Mission 36', width=1280, overflow=(False, True))
+        if not self.player.is_mission_unlocked('36'):
             menu.add.label('Mission 36 is locked. Complete Mission 35 first.', wordwrap=True, padding=(25,25,25,25), background_color='white', font_size=30)
             menu.add.button('Back', pygame_menu.events.BACK, background_color=(70,70,70))
             await run_menu(menu, self.display_surface)
@@ -123,7 +125,7 @@ class Mission36_info:
 
         values = ', '.join(f'{v:g}' for v in MISSION36_SWEEP_VALUES)
         products = ', '.join(MISSION36_REQUIRED_PRODUCTION_FLUXES)
-        briefing = pygame_menu.Menu(height=720, center_content=False, onclose=pygame_menu.events.BACK, theme=mytheme, title='Mission 36 Briefing', width=1280)
+        briefing = pygame_menu.Menu(height=720, center_content=False, onclose=pygame_menu.events.BACK, theme=mytheme, title='Mission 36 Briefing', width=1280, overflow=(False, True))
         briefing.add.label(
             f"""A — Default yeast reference\n- Method: {MISSION36_METHOD}\n- Objective: {MISSION36_GROWTH_OBJECTIVE}\n- Genotype: wild type\n- Environment: completely model-default\n- Production Flux: exactly {products}\n\nB — Glucose availability curve\n- Keep the same method, objective, genotype and base environment\n- Bound Sweep: EX_glc__D_e lower bound\n- Dedicated yeast preset: {values}\n\nUse the visible rows to determine when the fixed oxygen capacity first becomes binding at the same tested point where ethanol secretion is positive.""",
             wordwrap=True, padding=(20,20,20,20), font_size=24,
@@ -133,6 +135,7 @@ class Mission36_info:
         hint3 = pygame_menu.Menu(
             height=720, center_content=False, onclose=pygame_menu.events.BACK,
             theme=mytheme, title='Mission 36 Hint 3', width=1280,
+        overflow=(False, True),
         )
         hint3.add.label(
             "Technical hint:\n\nRead the sweep rows in tested order. The qualifying row is the first one where realised O2 uptake reaches the displayed oxygen-capacity limit and ethanol secretion is positive at that same glucose setting. Report that row's glucose lower bound, not the oxygen value or the ethanol flux.",
@@ -143,6 +146,7 @@ class Mission36_info:
         hint2 = pygame_menu.Menu(
             height=720, center_content=False, onclose=pygame_menu.events.BACK,
             theme=mytheme, title='Mission 36 Hint 2', width=1280,
+        overflow=(False, True),
         )
         hint2.add.label(
             'Experimental hint:\n\nA configured bound is not automatically active. Compare the realised O2 uptake in each row with the fixed O2 uptake capacity, then inspect when ethanol changes from zero to positive.',
@@ -154,6 +158,7 @@ class Mission36_info:
         hint1 = pygame_menu.Menu(
             height=720, center_content=False, onclose=pygame_menu.events.BACK,
             theme=mytheme, title='Mission 36 Hint 1', width=1280,
+        overflow=(False, True),
         )
         hint1.add.label(
             'Conceptual hint:\n\nAs glucose availability rises while oxygen capacity stays fixed, respiration cannot scale indefinitely. Look for the transition from spare oxygen capacity to oxygen limitation, and ask whether ethanol appears at that same transition.',
@@ -209,7 +214,7 @@ class Mission36_info:
         await run_menu(menu, self.display_surface)
 
     def activate_mission36(self):
-        if not is_mission36_unlocked(self.missions_completed):
+        if not self.player.is_mission_unlocked('36'):
             self.failed.play(); animation_text_save('Complete Mission 35 first!', time=2500); return
         if '36' in self.missions_completed:
             return
@@ -223,7 +228,7 @@ class Mission36_info:
         animation_text_save('Mission 36 Activated')
 
     def deliver_results(self, answer):
-        if not is_mission36_unlocked(self.missions_completed):
+        if not self.player.is_mission_unlocked('36'):
             self.failed.play(); animation_text_save('Complete Mission 35 first!', time=2500); return
         if '36' not in self.missions_activated:
             self.failed.play(); animation_text_save('Activate Mission 36 first.', time=2500); return
@@ -233,7 +238,10 @@ class Mission36_info:
         if not report.get('ready_to_deliver'):
             self.failed.play(); animation_text_save('Complete the reference and glucose curve first.', time=3000); return
         if not mission36_answer_matches(answer, report):
-            self.failed.play(); animation_text_save('Recheck the first tested row where both conditions are satisfied.', time=3000); return
+            self.failed.play()
+            animation_text_save('Recheck the first tested row where both conditions are satisfied.', time=3000)
+            penalize_wrong_answer(self.player, '36')
+            return
         self.success.play()
         if '36' not in self.missions_completed:
             self.missions_completed.insert(0, '36')

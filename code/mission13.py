@@ -1,6 +1,8 @@
 import pygame
 import pygame_menu
 
+from answer_penalty import penalize_wrong_answer
+
 from settings import *
 from save_load import *
 from timers import Timer
@@ -55,9 +57,10 @@ class Mission13_info:
             theme=mytheme,
             title='Mission 13',
             width=1280,
+        overflow=(False, True),
         )
 
-        if not is_mission13_unlocked(self.missions_completed):
+        if not self.player.is_mission_unlocked('13'):
             menu.add.vertical_margin(40)
             menu.add.label(
                 'Mission 13 is locked. Complete Mission 12 before comparing FBA with pFBA.',
@@ -74,6 +77,7 @@ class Mission13_info:
         hint3 = pygame_menu.Menu(
             height=720, center_content=False, onclose=pygame_menu.events.BACK,
             theme=mytheme, title='Mission 13 Hint 3', width=1280,
+        overflow=(False, True),
         )
         hint3.add.label(
             f'Technical hint: use objective {MISSION13_TARGET_OBJECTIVE}, close only the lower bound of EX_o2_e, keep all genes active and track ' + ', '.join(MISSION13_REQUIRED_TRACKED_FLUXES) + f'. Record one {MISSION13_BASELINE_METHOD} run and one {MISSION13_TARGET_METHOD} run. The order is irrelevant.',
@@ -86,6 +90,7 @@ class Mission13_info:
         hint2 = pygame_menu.Menu(
             height=720, center_content=False, onclose=pygame_menu.events.BACK,
             theme=mytheme, title='Mission 13 Hint 2', width=1280,
+        overflow=(False, True),
         )
         hint2.add.label(
             'Experimental hint: method must be the only variable that changes. Compare the primary succinate flux, the complete external fingerprint, biomass, medium uptake, total absolute flux and active-reaction count.',
@@ -99,6 +104,7 @@ class Mission13_info:
         hint1 = pygame_menu.Menu(
             height=720, center_content=False, onclose=pygame_menu.events.BACK,
             theme=mytheme, title='Mission 13 Hint 1', width=1280,
+        overflow=(False, True),
         )
         hint1.add.label(
             'Conceptual hint: pFBA first preserves the primary optimum. Its extra number belongs to a secondary criterion and must not be interpreted as extra product formation.',
@@ -112,10 +118,11 @@ class Mission13_info:
         briefing = pygame_menu.Menu(
             height=720, center_content=False, onclose=pygame_menu.events.BACK,
             theme=mytheme, title='Mission 13 Briefing', width=1280,
+        overflow=(False, True),
         )
         briefing.add.label(
             f"""
-            Dr. Almeida wants a controlled method comparison. Keep the same anaerobic succinate-optimisation problem from Mission 12, but compare {MISSION13_BASELINE_METHOD} with {MISSION13_TARGET_METHOD}.
+            {('Dr. Almeida wants a controlled method comparison. Use an anaerobic succinate-optimisation setup and compare ' + MISSION13_BASELINE_METHOD + ' with ' + MISSION13_TARGET_METHOD + '.') if self.player.campaign_mode == 'easy' else ('Dr. Almeida wants a controlled method comparison. Keep the same anaerobic succinate-optimisation problem from Mission 12, but compare ' + MISSION13_BASELINE_METHOD + ' with ' + MISSION13_TARGET_METHOD + '.')}
 
             Determine what remains unchanged in the primary objective and external exchange fingerprint. Then interpret what the additional pFBA criterion minimises. A lower total flux is possible, but equality is also scientifically valid when the FBA solver already returned a parsimonious optimum.
 
@@ -182,7 +189,7 @@ class Mission13_info:
         await run_menu(menu, self.display_surface)
 
     def activate_mission13(self):
-        if not is_mission13_unlocked(self.missions_completed):
+        if not self.player.is_mission_unlocked('13'):
             self.failed.play()
             animation_text_save('Complete Mission 12 before starting Mission 13.', time=3000)
             return
@@ -203,7 +210,7 @@ class Mission13_info:
         save_file(self.player.get_save_data())
 
     def deliver_results(self, answer):
-        if not is_mission13_unlocked(self.missions_completed):
+        if not self.player.is_mission_unlocked('13'):
             self.failed.play()
             animation_text_save('Complete Mission 12 first!', time=2500)
             return
@@ -224,10 +231,12 @@ class Mission13_info:
         if normalise_mission13_answer(answer) is None:
             self.failed.play()
             animation_text_save('Enter the quantity minimised by the pFBA secondary criterion.', time=3000)
+            penalize_wrong_answer(self.player, '13')
             return
         if not mission13_answer_matches(answer, report):
             self.failed.play()
             animation_text_save('That answer confuses the primary product objective with the secondary pFBA criterion.', time=3400)
+            penalize_wrong_answer(self.player, '13')
             return
 
         self.success.play()

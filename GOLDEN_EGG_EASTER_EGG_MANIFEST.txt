@@ -1,0 +1,34 @@
+Golden Egg easter egg
+
+Tiled assets authored by the user
+--------------------------------
+- graphics/objects/egg.png
+- Player object: GoldenEgg
+- ProgressionGates rectangle: EggGate
+- EggGate property: unlock_after = 35
+
+Runtime behaviour
+-----------------
+- GoldenEgg is visible only while the current save has not collected it.
+- It is not a collision object.
+- ENTER in a padded interaction area collects it.
+- Reward: +3 Gold Keys.
+- Mission score, hint usage and score denominators are unchanged.
+- Collection sets player_state.golden_egg_collected = true.
+- Save happens immediately.
+- Refresh / Continue therefore keep the egg absent and keys awarded exactly once.
+
+Progression
+-----------
+EggGate reuses the existing campaign milestone 35:
+- Normal: opens after Mission 35.
+- Easy: campaign policy maps milestone 35 to Mission 27.
+- Teacher: progression gates are bypassed.
+
+Save compatibility
+------------------
+The existing six-field save schema is unchanged. The boolean is added only
+inside player_state; historic saves default to false.
+
+No mission science, validators, objectives, model data, score rules, backend,
+deployment or Tiled coordinates were changed by this code patch.

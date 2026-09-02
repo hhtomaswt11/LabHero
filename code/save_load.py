@@ -2,6 +2,7 @@ import json
 import os
 import sys
 import copy
+import shutil
 
 from utils import *
 from settings import DEFAULT_PLAYER_STATE
@@ -42,8 +43,15 @@ def _browser_local_storage():
         return None
 
 
+def _active_web_storage_prefix():
+    namespace = get_save_namespace()
+    if namespace:
+        return f'labhero:{namespace}:v1:'
+    return _WEB_STORAGE_PREFIX
+
+
 def _web_storage_key(mem_key):
-    return f'{_WEB_STORAGE_PREFIX}{mem_key}'
+    return f'{_active_web_storage_prefix()}{mem_key}'
 
 
 def _warn_web_storage_once(operation, error):
@@ -102,8 +110,7 @@ def _web_store_delete(mem_key):
         _warn_web_storage_once('delete', exc)
 
 
-def clear_web_persistent_storage():
-    """Erase only LabHero browser saves/artifacts (used by explicit New Game)."""
+def _clear_web_prefix(prefix):
     _MEMSTORE.clear()
     storage = _browser_local_storage()
     if storage is None:
@@ -112,12 +119,39 @@ def clear_web_persistent_storage():
         keys_to_remove = []
         for index in range(int(storage.length)):
             key = storage.key(index)
-            if key is not None and str(key).startswith(_WEB_STORAGE_PREFIX):
+            if key is not None and str(key).startswith(prefix):
                 keys_to_remove.append(str(key))
         for key in keys_to_remove:
             storage.removeItem(key)
     except Exception as exc:
         _warn_web_storage_once('clear', exc)
+
+
+def clear_web_persistent_storage():
+    """Erase only the normal LabHero browser namespace (explicit New Game)."""
+    _clear_web_prefix(_WEB_STORAGE_PREFIX)
+
+
+def clear_active_persistent_storage():
+    """Clear the currently selected persistence namespace.
+
+    TEACHER.1 calls this after selecting the ``teacher`` namespace so every
+    preview starts from clean evidence without touching the student's normal
+    save/localStorage.
+    """
+    _MEMSTORE.clear()
+    if _IS_WEB:
+        _clear_web_prefix(_active_web_storage_prefix())
+        return
+
+    namespace = get_save_namespace()
+    if not namespace:
+        return
+    try:
+        namespace_dir = os.path.dirname(get_save_path('data.txt'))
+        shutil.rmtree(namespace_dir, ignore_errors=True)
+    except Exception:
+        pass
 
 
 def get_web_storage_status():
@@ -127,7 +161,7 @@ def get_web_storage_status():
         'is_web': bool(_IS_WEB),
         'local_storage_available': storage is not None,
         'cached_keys': sorted(_MEMSTORE),
-        'namespace': _WEB_STORAGE_PREFIX,
+        'namespace': _active_web_storage_prefix(),
     }
 
 
@@ -252,14 +286,26 @@ def save_file(data):
         json.dump(data, test_file)
 
 def load_file(filename):
+    """Load one persisted artifact without applying the player-save schema to it.
+
+    Only ``data`` is the six-field player save that needs
+    :func:`normalize_save_data`.  Other artifacts can legitimately be lists as
+    well.  In particular ``simulation_file`` stores six fields whose last item
+    is ``{'model_id': ...}``; normalising that list as if it were player data
+    rewrites the model metadata into reward-state data and silently falls back
+    multi-model simulations to E. coli.
+    """
+    key = _memkey(filename)
+    is_player_save = key == 'data'
+
     if _IS_WEB:
-        key = _memkey(filename)
         stored = _web_store_get(key)
         if stored is not None:
-            return normalize_save_data(stored)
+            return normalize_save_data(stored) if is_player_save else stored
+
     with open(f'{filename}.txt') as test_file:
         data = json.load(test_file)
-        return normalize_save_data(data)
+        return normalize_save_data(data) if is_player_save else data
 
 
 def save_simulation_file(data):

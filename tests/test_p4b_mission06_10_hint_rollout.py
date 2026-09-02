@@ -15,8 +15,8 @@ from hint_system import HintSystem, TRACKED_HINT_MISSIONS  # noqa: E402
 EXPECTED_TRACKED = frozenset(f'{mission:02d}' for mission in range(1, 41))
 EXPECTED_OPTIONAL_ENTRY_POINTS = {
     '06': 2,
-    '07': 1,
-    '08': 1,
+    '07': 2,
+    '08': 2,
     '09': 2,
     '10': 2,
 }

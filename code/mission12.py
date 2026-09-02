@@ -1,6 +1,8 @@
 import pygame
 import pygame_menu
 
+from answer_penalty import penalize_wrong_answer
+
 from settings import *
 from save_load import *
 from timers import Timer
@@ -60,9 +62,10 @@ class Mission12_info:
             theme=mytheme,
             title='Mission 12',
             width=1280,
+        overflow=(False, True),
         )
 
-        if not is_mission12_unlocked(self.missions_completed):
+        if not self.player.is_mission_unlocked('12'):
             menu.add.vertical_margin(40)
             menu.add.label(
                 'Mission 12 is locked. Complete Mission 11 before comparing constraint-driven byproduct fingerprints.',
@@ -79,6 +82,7 @@ class Mission12_info:
         hint3 = pygame_menu.Menu(
             height=720, center_content=False, onclose=pygame_menu.events.BACK,
             theme=mytheme, title='Mission 12 Hint 3', width=1280,
+        overflow=(False, True),
         )
         hint3.add.label(
             f'Technical hint: use {MISSION12_METHOD} with objective {MISSION12_TARGET_OBJECTIVE}, keep all genes active and {MISSION12_GLUCOSE_REACTION} at its default bound, track ' + ', '.join(MISSION12_REQUIRED_TRACKED_FLUXES) + f', then compare the fully default medium with a second run in which only the lower bound of {MISSION12_OXYGEN_REACTION} is closed.',
@@ -91,6 +95,7 @@ class Mission12_info:
         hint2 = pygame_menu.Menu(
             height=720, center_content=False, onclose=pygame_menu.events.BACK,
             theme=mytheme, title='Mission 12 Hint 2', width=1280,
+        overflow=(False, True),
         )
         hint2.add.label(
             'Experimental hint: make the two runs identical in method, objective, genes, glucose supply and tracked panel. Oxygen availability must be the only changed condition, so any target or co-product difference can be attributed to that constraint.',
@@ -104,6 +109,7 @@ class Mission12_info:
         hint1 = pygame_menu.Menu(
             height=720, center_content=False, onclose=pygame_menu.events.BACK,
             theme=mytheme, title='Mission 12 Hint 1', width=1280,
+        overflow=(False, True),
         )
         hint1.add.label(
             'Conceptual hint: a constraint is binding when it removes possibilities needed by the previous optimum. Compare both the target flux and the complete byproduct fingerprint before deciding what changed.',
@@ -117,6 +123,7 @@ class Mission12_info:
         briefing = pygame_menu.Menu(
             height=720, center_content=False, onclose=pygame_menu.events.BACK,
             theme=mytheme, title='Mission 12 Briefing', width=1280,
+        overflow=(False, True),
         )
         briefing.add.label(
             f"""
@@ -187,7 +194,7 @@ class Mission12_info:
         await run_menu(menu, self.display_surface)
 
     def activate_mission12(self):
-        if not is_mission12_unlocked(self.missions_completed):
+        if not self.player.is_mission_unlocked('12'):
             self.failed.play()
             animation_text_save('Complete Mission 11 before starting Mission 12.', time=3000)
             return
@@ -208,7 +215,7 @@ class Mission12_info:
         save_file(self.player.get_save_data())
 
     def deliver_results(self, answer):
-        if not is_mission12_unlocked(self.missions_completed):
+        if not self.player.is_mission_unlocked('12'):
             self.failed.play()
             animation_text_save('Complete Mission 11 first!', time=2500)
             return
@@ -229,10 +236,12 @@ class Mission12_info:
         if normalise_mission12_answer(answer) is None:
             self.failed.play()
             animation_text_save('Enter the new co-product name or its exchange-reaction id.', time=3000)
+            penalize_wrong_answer(self.player, '12')
             return
         if not mission12_answer_matches(answer, report):
             self.failed.play()
             animation_text_save('That co-product is not supported by the recorded comparison.', time=3200)
+            penalize_wrong_answer(self.player, '12')
             return
 
         self.success.play()

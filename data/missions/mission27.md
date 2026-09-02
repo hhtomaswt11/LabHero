@@ -38,7 +38,7 @@ No Production Flux selection is required. The mission uses growth, medium exchan
 
 ## Expected scientific pattern
 
-Approximate primary biomass fluxes:
+Approximate primary predicted growth ratees:
 
 | Condition | Growth |
 |---|---:|

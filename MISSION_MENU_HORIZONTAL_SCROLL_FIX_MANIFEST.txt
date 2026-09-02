@@ -1,0 +1,31 @@
+Mission menu horizontal-scroll containment
+
+Observed QA bug
+---------------
+Mission screens could be dragged horizontally far beyond their visible green
+menu panel, exposing a large grey area. pygame-menu enables horizontal and
+vertical overflow by default.
+
+Fix
+---
+Every pygame_menu.Menu created inside code/mission01.py through mission40.py now
+uses:
+
+    overflow=(False, True)
+
+This disables horizontal overflow while preserving vertical scrolling. Mission
+labels already rely on word wrapping for long prose, so the player no longer
+needs to pan the whole mission canvas sideways.
+
+Scope
+-----
+- 40 mission modules only.
+- 202 mission menu/submenu constructors updated.
+- Books, simulator, Settings, inventory and other menus are unchanged.
+- No mission logic, validator, scientific value, save state, map, backend or
+  deployment behaviour changed.
+
+Regression guard
+----------------
+tests/test_mission_menu_horizontal_overflow.py verifies every mission menu keeps
+horizontal overflow disabled.

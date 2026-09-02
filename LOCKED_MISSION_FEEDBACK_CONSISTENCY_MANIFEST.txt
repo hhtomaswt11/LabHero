@@ -1,0 +1,19 @@
+Locked mission feedback consistency
+
+Normal M36-M40:
+- Interacting with a scientist before the required previous mission no longer opens
+  the scientist dialogue panel.
+- A transient white animation_text_save message is shown instead:
+  Complete Mission XX first!
+- The NPC interaction closes immediately after queuing the message.
+
+Easy campaign:
+- Locked curated-route NPCs use the same transient feedback pattern, with the
+  predecessor resolved from CampaignContext.
+
+Teacher mode:
+- Unchanged. Teacher missions are effectively unlocked, so these locked branches
+  are not used.
+
+No mission validator, evidence, objective, threshold, save schema, map, simulator,
+backend or deployment logic was changed.

@@ -1,6 +1,8 @@
 import pygame
 import pygame_menu
 
+from answer_penalty import penalize_wrong_answer
+
 from async_menu import run_menu
 from functions import animation_text_save
 from hint_ui import MissionHintAccess
@@ -48,9 +50,10 @@ class Mission10_info:
         menu = pygame_menu.Menu(
             height=720, center_content=False, onclose=self.toggle_menu,
             theme=mytheme, title='Mission 10', width=1280,
+        overflow=(False, True),
         )
 
-        if not is_mission10_unlocked(self.missions_completed):
+        if not self.player.is_mission_unlocked('10'):
             menu.add.vertical_margin(40)
             menu.add.label(
                 'Mission 10 is locked. Complete Mission 09 before beginning the two-gene redundancy investigation.',
@@ -61,14 +64,14 @@ class Mission10_info:
             await run_menu(menu, self.display_surface)
             return
 
-        hint3 = pygame_menu.Menu(height=720, center_content=False, onclose=pygame_menu.events.BACK, theme=mytheme, title='Mission 10 Hint 3', width=1280)
+        hint3 = pygame_menu.Menu(height=720, center_content=False, onclose=pygame_menu.events.BACK, theme=mytheme, title='Mission 10 Hint 3', width=1280, overflow=(False, True))
         hint3.add.label(
             f'Technical hint: use {MISSION10_METHOD} with {MISSION10_GROWTH_OBJECTIVE}, keep the default glucose supply, close only the lower bound of {MISSION10_OXYGEN_REACTION}, track {MISSION10_TARGET_FLUX} and {MISSION10_COMPETING_FLUX}, record a no-knockout reference, then test every listed two-gene pair.',
             wordwrap=True, align=pygame_menu.locals.ALIGN_LEFT, padding=(20, 20, 20, 20),
         )
         hint3.add.button('Back', pygame_menu.events.BACK, background_color=(70, 70, 70))
 
-        hint2 = pygame_menu.Menu(height=720, center_content=False, onclose=pygame_menu.events.BACK, theme=mytheme, title='Mission 10 Hint 2', width=1280)
+        hint2 = pygame_menu.Menu(height=720, center_content=False, onclose=pygame_menu.events.BACK, theme=mytheme, title='Mission 10 Hint 2', width=1280, overflow=(False, True))
         hint2.add.label(
             'Experimental hint: keep the objective, environment and tracked fluxes identical. Reset all genes between runs, then disable exactly two highlighted candidates so each pair is isolated.',
             wordwrap=True, align=pygame_menu.locals.ALIGN_LEFT, padding=(20, 20, 20, 20),
@@ -76,7 +79,7 @@ class Mission10_info:
         hint2.add.button('Reveal technical hint (Gold Key if locked)', self.hint_access.request, 3, hint2, hint3, background_color=(255, 215, 0), font_color='black')
         hint2.add.button('Back', pygame_menu.events.BACK, background_color=(70, 70, 70))
 
-        hint1 = pygame_menu.Menu(height=720, center_content=False, onclose=pygame_menu.events.BACK, theme=mytheme, title='Mission 10 Hint 1', width=1280)
+        hint1 = pygame_menu.Menu(height=720, center_content=False, onclose=pygame_menu.events.BACK, theme=mytheme, title='Mission 10 Hint 1', width=1280, overflow=(False, True))
         hint1.add.label(
             'Conceptual hint: in an OR-type GPR, eliminating one gene may leave the reaction functional through an alternative gene. A carefully chosen pair can reveal a phenotype that neither single knockout would produce.',
             wordwrap=True, align=pygame_menu.locals.ALIGN_LEFT, padding=(20, 20, 20, 20),
@@ -84,7 +87,7 @@ class Mission10_info:
         hint1.add.button('Reveal next hint (Silver Key if locked)', self.hint_access.request, 2, hint1, hint2, background_color=(255, 215, 0), font_color='black')
         hint1.add.button('Back', pygame_menu.events.BACK, background_color=(70, 70, 70))
 
-        briefing = pygame_menu.Menu(height=720, center_content=False, onclose=pygame_menu.events.BACK, theme=mytheme, title='Mission 10 Briefing', width=1280)
+        briefing = pygame_menu.Menu(height=720, center_content=False, onclose=pygame_menu.events.BACK, theme=mytheme, title='Mission 10 Briefing', width=1280, overflow=(False, True))
         briefing.add.label(
             """
             Dr. Nova's final challenge investigates genetic redundancy. Some reactions remain active after one knockout because an alternative gene satisfies the same OR-type GPR.
@@ -134,7 +137,7 @@ class Mission10_info:
         await run_menu(menu, self.display_surface)
 
     def activate_mission10(self):
-        if not is_mission10_unlocked(self.missions_completed):
+        if not self.player.is_mission_unlocked('10'):
             self.failed.play()
             animation_text_save('Complete Mission 09 before starting Mission 10.', time=3000)
             return
@@ -155,7 +158,7 @@ class Mission10_info:
         save_file(self.player.get_save_data())
 
     def deliver_results(self, answer):
-        if not is_mission10_unlocked(self.missions_completed):
+        if not self.player.is_mission_unlocked('10'):
             self.failed.play()
             animation_text_save('Complete Mission 09 first!', time=2500)
             return
@@ -180,10 +183,12 @@ class Mission10_info:
         if normalise_mission10_answer(answer) is None:
             self.failed.play()
             animation_text_save('Enter two candidate gene ids or gene names from the mission list.', time=3000)
+            penalize_wrong_answer(self.player, '10')
             return
         if not mission10_answer_matches(answer, report):
             self.failed.play()
             animation_text_save('That pair is not supported by the recorded growth, ethanol and acetate evidence.', time=3300)
+            penalize_wrong_answer(self.player, '10')
             return
 
         self.success.play()

@@ -403,7 +403,7 @@ class Mission21RegressionTests(unittest.TestCase):
         source = (CODE_DIR / 'mission21.py').read_text()
         self.assertIn('is_mission21_unlocked', source)
         npc_source = source.split('class Mission21_info:', 1)[0]
-        self.assertIn('if not is_mission21_unlocked(self.missions_completed):', npc_source)
+        self.assertIn("if not self.player.is_mission_unlocked('21'):", npc_source)
         self.assertIn('self.menu_message(locked_dialogue, buttons=False)', npc_source)
         self.assertIn("if '21' in self.missions_completed", source)
         self.assertIn("if '21' in self.missions_activated", source)

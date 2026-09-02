@@ -53,17 +53,35 @@ class StudentStartNpcIntegrationTests(unittest.TestCase):
         )
         alves = [obj for obj in player_layer.findall("object") if obj.get("name") == "Alves"]
         self.assertEqual(len(alves), 1)
-        self.assertEqual(alves[0].get("gid"), "241")
+        self.assertGreater(int(alves[0].get("gid")), 0)
 
     def test_secondary_character_gid_resolves_to_start_png(self):
         root = ET.parse(ROOT / "data" / "map_lb.tmx").getroot()
+        player_layer = next(
+            layer for layer in root.findall("objectgroup")
+            if layer.get("name") == "Player"
+        )
+        alves = next(obj for obj in player_layer.findall("object") if obj.get("name") == "Alves")
+        alves_gid = int(alves.get("gid"))
+
         secondary = next(
             ts for ts in root.findall("tileset")
             if ts.get("source") == "Tilesets/Secondary Characters.tsx"
         )
-        self.assertEqual(int(secondary.get("firstgid")), 209)
+        secondary_firstgid = int(secondary.get("firstgid"))
+        later_firstgids = sorted(
+            int(ts.get("firstgid"))
+            for ts in root.findall("tileset")
+            if int(ts.get("firstgid")) > secondary_firstgid
+        )
+        next_firstgid = later_firstgids[0] if later_firstgids else None
+        self.assertGreaterEqual(alves_gid, secondary_firstgid)
+        if next_firstgid is not None:
+            self.assertLess(alves_gid, next_firstgid)
+
+        local_tile_id = alves_gid - secondary_firstgid
         tileset = ET.parse(ROOT / "data" / "Tilesets" / "Secondary Characters.tsx").getroot()
-        tile = tileset.find("./tile[@id='32']")
+        tile = tileset.find(f"./tile[@id='{local_tile_id}']")
         self.assertIsNotNone(tile)
         self.assertTrue(tile.find("image").get("source").endswith("graphics/sec-characters/start.png"))
 

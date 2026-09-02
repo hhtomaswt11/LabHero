@@ -1,0 +1,58 @@
+CONTENT.1 — Scientific labels and units
+
+Canonical player-visible terminology
+------------------------------------
+Predicted growth rate
+  Unit: h^-1
+  Meaning: flux through the model biomass reaction, used as the model's
+  predicted specific growth-rate proxy under the selected assumptions.
+
+Reaction / exchange flux
+  Unit: mmol gDW^-1 h^-1
+
+Configured reaction / exchange bound
+  Unit: mmol gDW^-1 h^-1
+
+Total absolute flux
+  Unit: mmol gDW^-1 h^-1
+  Meaning: sum of absolute flux magnitudes in the returned flux vector.
+
+lMOMA total absolute flux adjustment
+  Unit: mmol gDW^-1 h^-1
+  Meaning: flux-adjustment magnitude relative to the explicit reference.
+
+No flux unit is attached to:
+- solver status
+- active-reaction counts
+- ROOM significant-change score/count
+- percentages
+- fold changes
+- GPR-disabled-reaction counts
+- ROOM delta / epsilon parameters
+
+Objective-display rule
+----------------------
+If the selected objective is the biomass reaction:
+  display the objective result as Predicted growth rate (h^-1).
+
+If the selected objective is not the biomass reaction:
+  keep Objective flux / Primary objective flux in mmol gDW^-1 h^-1 and show
+  Predicted growth rate separately when biomass-reaction flux is available.
+
+Scope
+-----
+Updated consistently across:
+- main simulation result
+- Production Flux
+- Exchange Flux Report
+- environmental summaries
+- Bound Sweep setup and reports
+- mission evidence reports
+- yeast/iMM904 reports
+- mission 19 wording
+- in-game scientific books and Markdown mirrors
+- regression tests
+
+Scientific solver values, mission validators, thresholds, genes, GPR logic,
+objectives, bounds, model files, save format, progression, backend and map data
+were not changed.

@@ -3,6 +3,22 @@ import os
 
 APP_NAME = 'LabHero'
 
+# Optional persistence namespace used by isolated runtime sessions such as
+# TEACHER.1. Normal gameplay keeps this unset and therefore preserves every
+# historic save path exactly.
+_SAVE_NAMESPACE = None
+
+
+def set_save_namespace(namespace=None):
+    global _SAVE_NAMESPACE
+    value = str(namespace or '').strip()
+    _SAVE_NAMESPACE = value or None
+
+
+def get_save_namespace():
+    return _SAVE_NAMESPACE
+
+
 def get_resource_path(relative_path):
     """ Get the absolute path to a read-only resource bundled with the game."""
     if hasattr(sys, '_MEIPASS'):
@@ -23,6 +39,9 @@ def get_save_path(filename):
     else:
         xdg = os.environ.get('XDG_DATA_HOME')
         base = os.path.join(xdg, APP_NAME) if xdg else os.path.join(os.path.expanduser('~'), '.local', 'share', APP_NAME)
+    namespace = get_save_namespace()
+    if namespace:
+        base = os.path.join(base, namespace)
     os.makedirs(base, exist_ok=True)
     return os.path.join(base, filename)
 

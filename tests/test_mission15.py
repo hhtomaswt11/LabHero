@@ -324,7 +324,7 @@ class Mission15RegressionTests(unittest.TestCase):
             production_fluxes=no_biomass, medium_fluxes=medium,
         )
         self.assertFalse(report['current_run_valid'])
-        self.assertTrue(any('biomass' in issue.lower() for issue in report['current_issues']))
+        self.assertTrue(any('growth' in issue.lower() for issue in report['current_issues']))
 
         report = self._record(
             'growth_optimal', objective_result=objective,
@@ -365,7 +365,7 @@ class Mission15RegressionTests(unittest.TestCase):
             production_fluxes=altered, medium_fluxes=medium,
         )
         self.assertFalse(report['current_run_valid'])
-        self.assertTrue(any('measured biomass' in issue.lower() for issue in report['current_issues']))
+        self.assertTrue(any('predicted growth rate' in issue.lower() for issue in report['current_issues']))
 
     def test_repeated_run_updates_without_creating_extra_state(self):
         report = self._record('growth_optimal', import_product=True)
@@ -455,7 +455,7 @@ class Mission15RegressionTests(unittest.TestCase):
         text = simulation.build_mission15_viability_report_text(report)
         self.assertIn('Product-priority optimum', text)
         self.assertIn('Growth-priority optimum', text)
-        self.assertIn('Biomass in the product-priority optimum: 0.000', text)
+        self.assertIn('Predicted growth rate in the product-priority optimum: 0.000 h^-1', text)
         self.assertIn('Succinate in the growth-priority optimum: 0.000', text)
         self.assertIn('Evidence complete', text)
         self.assertIn('Submit the relationship supported by both controlled optima', text)

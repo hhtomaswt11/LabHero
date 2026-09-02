@@ -1,0 +1,36 @@
+BOOKS.1 — mission-aligned scientific library revision
+
+Scope
+-----
+- Rewrote the six in-game books for the current 40-mission / Normal+Easy game.
+- Added a canonical pygame-free content module: code/book_content.py.
+- Simplified code/books.py to render that canonical content generically.
+- Mirrored the six visible books in data/books.
+- Replaced the unused "How to Date a Model.md" mirror with "How to Play.md".
+- Added tests/test_books1_content.py.
+
+Scientific alignment
+--------------------
+- Distinguishes primary objective flux, biomass flux and method-specific score.
+- Corrects pFBA interpretation: the secondary parsimony quantity is not
+  "higher is better".
+- Documents FBA, pFBA, lMOMA and ROOM, including ROOM pre-knockout reference,
+  same-environment comparison, delta/epsilon tolerance and integer ROOM score.
+- Explains exchange-bound sign convention, configured vs binding constraints,
+  GPR AND/OR logic, context-dependent essentiality and controlled sweeps.
+- Adds yeast/iMM904 and Mission 36 context.
+- Removes claims that every optimization result is a biological growth rate.
+- Makes model limitations explicit: standard steady-state FBA does not directly
+  predict concentrations, regulatory dynamics or time courses.
+
+Gameplay alignment
+------------------
+- Documents Dr. Alves registration and locked campaign identity/mode.
+- Documents Normal (40 missions) and Easy (11 missions).
+- Documents M/E/ENTER controls, hint keys and 5/3/2/1 mission scoring.
+- Documents browser-local save behavior.
+
+Not changed
+-----------
+- No mission validator, threshold, solver, model, map, progression, save schema,
+  score algorithm, backend, Podman or deployment runtime behavior changed.

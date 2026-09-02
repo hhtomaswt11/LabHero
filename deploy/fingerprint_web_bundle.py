@@ -17,6 +17,49 @@ import sys
 _HASH_LENGTH = 16
 _VERSIONED_ARCHIVE_RE = re.compile(r"src\.[0-9a-f]{16}\.tar\.gz")
 
+# Pygbag's default page can become horizontally scrollable in some browser/
+# zoom combinations.  When that happens the *whole canvas* moves and exposes
+# the template's grey page background, which looks like an infinite mission
+# scrollbar even though the pygame-menu viewport itself is fine.
+_LABHERO_VIEWPORT_GUARD_ID = "labhero-viewport-x-lock"
+_LABHERO_VIEWPORT_GUARD = f"""\
+<style id="{_LABHERO_VIEWPORT_GUARD_ID}">
+html, body {{
+    overflow-x: hidden !important;
+    overscroll-behavior-x: none;
+}}
+canvas {{
+    touch-action: pan-y;
+}}
+</style>
+<script id="{_LABHERO_VIEWPORT_GUARD_ID}-script">
+(() => {{
+    const lockHorizontalViewport = () => {{
+        if (window.scrollX !== 0) window.scrollTo(0, window.scrollY);
+    }};
+    window.addEventListener("load", lockHorizontalViewport, {{passive: true}});
+    window.addEventListener("scroll", lockHorizontalViewport, {{passive: true}});
+    lockHorizontalViewport();
+}})();
+</script>
+"""
+
+
+def _inject_viewport_guard(html: str) -> str:
+    """Prevent the browser page from horizontally panning the Pygbag canvas."""
+    if _LABHERO_VIEWPORT_GUARD_ID in html:
+        return html
+
+    lower = html.lower()
+    head_end = lower.find("</head>")
+    if head_end >= 0:
+        return html[:head_end] + _LABHERO_VIEWPORT_GUARD + html[head_end:]
+
+    # Pygbag templates are valid even when they omit an explicit <head>.  In
+    # that case prepending style/script is safe and keeps this helper robust to
+    # template changes across 0.9.x builds.
+    return _LABHERO_VIEWPORT_GUARD + html
+
 
 def _sha256(path: Path) -> str:
     digest = hashlib.sha256()
@@ -42,6 +85,10 @@ def fingerprint_web_bundle(web_dir: Path) -> Path:
         raise FileNotFoundError(f"Pygbag index not found: {index_path}")
 
     html = index_path.read_text(encoding="utf-8")
+    guarded_html = _inject_viewport_guard(html)
+    if guarded_html != html:
+        index_path.write_text(guarded_html, encoding="utf-8")
+    html = guarded_html
 
     if not source_archive.is_file():
         matches = sorted(set(_VERSIONED_ARCHIVE_RE.findall(html)))

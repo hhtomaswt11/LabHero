@@ -1,6 +1,8 @@
 import pygame
 import pygame_menu
 
+from answer_penalty import penalize_wrong_answer
+
 from settings import *
 from save_load import *
 from timers import Timer
@@ -75,7 +77,7 @@ class Mission40:
             self.menu_message(completed, buttons=False)
         elif '40' in self.missions_activated:
             self.menu_message(active, menu_to_open=self.menu40)
-        elif is_mission40_unlocked(self.missions_completed):
+        elif self.player.is_mission_unlocked('40'):
             self.menu_message(intro, menu_to_open=self.menu40)
         else:
             self.menu_message(locked, buttons=False)
@@ -121,8 +123,9 @@ class Mission40_info:
         menu = pygame_menu.Menu(
             height=720, center_content=False, onclose=self.toggle_menu,
             theme=mytheme, title='Mission 40', width=1280,
+        overflow=(False, True),
         )
-        if not is_mission40_unlocked(self.missions_completed):
+        if not self.player.is_mission_unlocked('40'):
             menu.add.label(
                 'Mission 40 is locked. Complete Mission 39 first.',
                 wordwrap=True, padding=(25,25,25,25), background_color='white', font_size=30,
@@ -136,6 +139,7 @@ class Mission40_info:
         briefing = pygame_menu.Menu(
             height=720, center_content=False, onclose=pygame_menu.events.BACK,
             theme=mytheme, title='Mission 40 Briefing', width=1280,
+        overflow=(False, True),
         )
         briefing.add.label(
             f"""Final matched rescue certification
@@ -160,6 +164,7 @@ The glucose sweep must be identical between the two curves. Compare acetaldehyde
         hint3 = pygame_menu.Menu(
             height=720, center_content=False, onclose=pygame_menu.events.BACK,
             theme=mytheme, title='Mission 40 Hint 3', width=1280,
+        overflow=(False, True),
         )
         hint3.add.label(
             f'Technical hint:\n\nCompare rows horizontally between the two curves. A qualifying rescue row needs acetaldehyde uptake >= {MISSION40_MIN_ACETALDEHYDE_UPTAKE:.1f}, rescue growth >= {MISSION40_MIN_MATCHED_GROWTH_FOLD:.2f}x the matched no-rescue growth, and ethanol secretion >= {MISSION40_MIN_RESCUE_ETHANOL:.1f}. Not every glucose context needs to qualify.',
@@ -170,6 +175,7 @@ The glucose sweep must be identical between the two curves. Compare acetaldehyde
         hint2 = pygame_menu.Menu(
             height=720, center_content=False, onclose=pygame_menu.events.BACK,
             theme=mytheme, title='Mission 40 Hint 2', width=1280,
+        overflow=(False, True),
         )
         hint2.add.label(
             'Experimental hint:\n\nPair the two curves row-by-row using the exact same glucose lower bound. For each pair, first confirm that the rescue row actually takes up acetaldehyde; then compare rescue growth with the matched no-rescue growth and inspect rescue ethanol secretion.',
@@ -181,6 +187,7 @@ The glucose sweep must be identical between the two curves. Compare acetaldehyde
         hint1 = pygame_menu.Menu(
             height=720, center_content=False, onclose=pygame_menu.events.BACK,
             theme=mytheme, title='Mission 40 Hint 1', width=1280,
+        overflow=(False, True),
         )
         hint1.add.label(
             'Conceptual hint:\n\nThis is a matched robustness test, not a search for the single best rescue row. Compare the rescue and no-rescue curves at the same glucose context so that acetaldehyde availability is the only intended difference between each pair.',
@@ -242,7 +249,7 @@ The glucose sweep must be identical between the two curves. Compare acetaldehyde
         await run_menu(menu, self.display_surface)
 
     def activate_mission40(self):
-        if not is_mission40_unlocked(self.missions_completed):
+        if not self.player.is_mission_unlocked('40'):
             self.failed.play()
             animation_text_save('Complete Mission 39 first!', time=2500)
             return
@@ -259,7 +266,7 @@ The glucose sweep must be identical between the two curves. Compare acetaldehyde
         animation_text_save('Mission 40 Activated')
 
     def deliver_results(self, answer):
-        if not is_mission40_unlocked(self.missions_completed):
+        if not self.player.is_mission_unlocked('40'):
             self.failed.play()
             animation_text_save('Complete Mission 39 first!', time=2500)
             return
@@ -279,6 +286,7 @@ The glucose sweep must be identical between the two curves. Compare acetaldehyde
         if not mission40_answer_matches(answer, report):
             self.failed.play()
             animation_text_save('Recheck every tested bound against all three certification criteria.', time=3000)
+            penalize_wrong_answer(self.player, '40')
             return
         self.success.play()
         if '40' not in self.missions_completed:

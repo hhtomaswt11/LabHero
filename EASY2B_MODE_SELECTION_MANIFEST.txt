@@ -1,0 +1,25 @@
+EASY.2B — Student Normal/Easy selection + curated NPC routing
+
+Purpose
+- Expose Normal/Easy choice only during Dr. Alves registration for a New Game.
+- Lock student name and campaign mode together after explicit final confirmation.
+- Persist campaign_mode in the existing player_state save field.
+- Route Easy NPC entry points directly to the 11 curated missions.
+- Prevent Normal-only NPC entry points from leaking skipped missions into Easy.
+- Keep every original Normal multi-mission controller available and unchanged.
+
+Easy route
+01 -> 03 -> 06 -> 07 -> 13 -> 18 -> 21 -> 23 -> 25 -> 27 -> 36
+Maximum score: 55.
+
+Implementation notes
+- New code/easy_mission_npc.py presents one selected mission per retained scientist.
+- CampaignContext maps historic Tiled interaction names to mode-specific mission IDs.
+- Level refreshes its CampaignContext and existing progression gates immediately after
+  registration, so Gate35 correctly resolves to M27 in Easy.
+- Mission 13's Easy briefing is self-contained and no longer assumes M12 was played;
+  Normal keeps the original M12-linked wording.
+- Teacher remains internal/reserved and is not student-selectable.
+
+No scientific validator thresholds, solver settings, model files, TMX geometry,
+mission scoring rules, hint prices, backend API, or Podman deployment logic changed.

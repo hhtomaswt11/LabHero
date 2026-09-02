@@ -93,6 +93,29 @@ class Mission36Tests(unittest.TestCase):
             'sweep_values': 'yeast_glucose_fermentation_threshold',
         }
 
+    def test_failed_visible_simulation_uses_pedagogical_issue_not_raw_keyerror(self):
+        genes = {}
+        production = {
+            'error': "Backend error: 'BIOMASS_SC5_notrace'",
+            'items': [],
+            'selected_ids': ['EX_etoh_e', 'EX_co2_e'],
+        }
+        medium = {
+            'error': "Backend error: 'BIOMASS_SC5_notrace'",
+            'items': [],
+        }
+        visible = ('BIOMASS_SC5_notrace', "Error: 'BIOMASS_SC5_notrace'", production, medium)
+        with patch.object(simulation, '_read_simulation_model_id', return_value='yeast_iMM904'), \
+             patch.object(simulation, '_read_simulation_file', return_value=('pFBA', 'BIOMASS_SC5_notrace', genes, {})), \
+             patch.object(simulation, '_model_environment_is_default', return_value=True), \
+             patch.object(simulation, '_read_selected_production_fluxes', return_value=['EX_etoh_e', 'EX_co2_e']):
+            evidence, issues = simulation._mission36_run_evidence(visible)
+
+        self.assertIsNone(evidence)
+        joined = '\n'.join(issues)
+        self.assertIn('visible yeast simulation failed', joined)
+        self.assertNotIn("Backend error: 'BIOMASS_SC5_notrace'", joined)
+
     def test_invalid_adh1_sweep_is_recorded_as_rejected_without_erasing_evidence(self):
         existing = self.make_report()
         genes = {'YOL086C': False}

@@ -45,7 +45,7 @@ The only changed configuration is the lower bound of `EX_o2_e`.
 ## Interpretation
 Disabling oxygen uptake reduces the theoretical succinate maximum and introduces acetate as a predicted co-product. The oxygen constraint is therefore binding for this objective under these model conditions.
 
-Both direct product-optimal solutions predict zero biomass flux. They are theoretical optima, not claims about a viable production strain.
+Both direct product-optimal solutions predict zero predicted growth rate. They are theoretical optima, not claims about a viable production strain.
 
 ## Required conclusion
 After both runs have been recorded, submit:

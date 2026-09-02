@@ -1,6 +1,8 @@
 import pygame
 import pygame_menu
 
+from answer_penalty import penalize_wrong_answer
+
 from settings import *
 from save_load import *
 from timers import Timer
@@ -51,9 +53,10 @@ class Mission34_info:
             theme=mytheme,
             title='Mission 34',
             width=1280,
+        overflow=(False, True),
         )
 
-        if not is_mission34_unlocked(self.missions_completed):
+        if not self.player.is_mission_unlocked('34'):
             menu.add.vertical_margin(40)
             menu.add.label(
                 'Mission 34 is locked. Complete Mission 33 before beginning Dr. Chen\'s final equivalence audit.',
@@ -83,6 +86,7 @@ class Mission34_info:
             theme=mytheme,
             title='Mission 34 Hint 3',
             width=1280,
+        overflow=(False, True),
         )
         hint3.add.label(
             f'Technical hint: use {MISSION34_METHOD} with objective {MISSION34_GROWTH_OBJECTIVE}. Keep every environmental bound at model default. Record exactly the six highlighted genotypes. No Production Flux selection is required; the report uses visible exchange fluxes and GPR-disabled reactions.',
@@ -99,6 +103,7 @@ class Mission34_info:
             theme=mytheme,
             title='Mission 34 Hint 2',
             width=1280,
+        overflow=(False, True),
         )
         hint2.add.label(
             'Experimental hint: first compare the disabled-reaction sets. Then confirm whether growth, oxygen uptake, formate, pFBA total flux and active-reaction count also match.',
@@ -116,6 +121,7 @@ class Mission34_info:
             theme=mytheme,
             title='Mission 34 Hint 1',
             width=1280,
+        overflow=(False, True),
         )
         hint1.add.label(
             'Conceptual hint: gene count and reaction impact are different. One shared subunit can disable two reactions, while two subunits from the same complex may still disable only one reaction.',
@@ -133,6 +139,7 @@ class Mission34_info:
             theme=mytheme,
             title='Mission 34 Briefing',
             width=1280,
+        overflow=(False, True),
         )
         briefing.add.label(
             f"""
@@ -221,7 +228,7 @@ class Mission34_info:
         await run_menu(menu, self.display_surface)
 
     def activate_mission34(self):
-        if not is_mission34_unlocked(self.missions_completed):
+        if not self.player.is_mission_unlocked('34'):
             self.failed.play()
             animation_text_save('Complete Mission 33 before starting Mission 34.', time=3000)
             return
@@ -239,7 +246,7 @@ class Mission34_info:
         save_file(self.player.get_save_data())
 
     def deliver_results(self, answer):
-        if not is_mission34_unlocked(self.missions_completed):
+        if not self.player.is_mission_unlocked('34'):
             self.failed.play()
             animation_text_save('Complete Mission 33 first!', time=2500)
             return
@@ -264,6 +271,7 @@ class Mission34_info:
         if not mission34_answer_matches(answer, report):
             self.failed.play()
             animation_text_save('Classify the reaction-level relationship shown by the matched pair.', time=3000)
+            penalize_wrong_answer(self.player, '34')
             return
 
         self.success.play()

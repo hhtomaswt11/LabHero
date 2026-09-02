@@ -1,6 +1,8 @@
 import pygame
 import pygame_menu
 
+from answer_penalty import penalize_wrong_answer
+
 from settings import *
 from save_load import *
 from timers import Timer
@@ -54,9 +56,10 @@ class Mission19_info:
             theme=mytheme,
             title='Mission 19',
             width=1280,
+        overflow=(False, True),
         )
 
-        if not is_mission19_unlocked(self.missions_completed):
+        if not self.player.is_mission_unlocked('19'):
             menu.add.vertical_margin(40)
             menu.add.label(
                 'Mission 19 is locked. Complete Mission 18 before beginning the method-comparison experiment.',
@@ -73,6 +76,7 @@ class Mission19_info:
         hint3 = pygame_menu.Menu(
             height=720, center_content=False, onclose=pygame_menu.events.BACK,
             theme=mytheme, title='Mission 19 Hint 3', width=1280,
+        overflow=(False, True),
         )
         hint3.add.label(
             f'Technical hint: record a wild-type {MISSION19_BASELINE_METHOD} baseline, then use the single knockout {MISSION19_TARGET_GENE} / {MISSION19_TARGET_GENE_NAME} under FBA and {LMOMA_DISPLAY_NAME}. Keep the default medium, biomass objective and the full product panel unchanged.',
@@ -85,6 +89,7 @@ class Mission19_info:
         hint2 = pygame_menu.Menu(
             height=720, center_content=False, onclose=pygame_menu.events.BACK,
             theme=mytheme, title='Mission 19 Hint 2', width=1280,
+        overflow=(False, True),
         )
         hint2.add.label(
             'Experimental hint: isolate method choice. The two mutant runs must use the same gene, objective, medium and tracked fluxes; only FBA versus Linear MOMA (lMOMA) may change.',
@@ -98,6 +103,7 @@ class Mission19_info:
         hint1 = pygame_menu.Menu(
             height=720, center_content=False, onclose=pygame_menu.events.BACK,
             theme=mytheme, title='Mission 19 Hint 1', width=1280,
+        overflow=(False, True),
         )
         hint1.add.label(
             'Conceptual hint: FBA re-optimises the selected objective after a perturbation. Linear MOMA (lMOMA) instead minimises total absolute flux adjustment from a reference state, so its method score is not biomass.',
@@ -111,6 +117,7 @@ class Mission19_info:
         briefing = pygame_menu.Menu(
             height=720, center_content=False, onclose=pygame_menu.events.BACK,
             theme=mytheme, title='Mission 19 Briefing', width=1280,
+        overflow=(False, True),
         )
         briefing.add.label(
             f"""
@@ -123,7 +130,7 @@ class Mission19_info:
             Disable only {MISSION19_TARGET_GENE} / {MISSION19_TARGET_GENE_NAME}. Keep every other setting unchanged and use FBA.
 
             Phase C — minimally adjusted mutant:
-            Repeat the same knockout and setup with {LMOMA_DISPLAY_NAME}. The visible report must include both biomass flux and the lMOMA adjustment score. The adjustment score is not biomass.
+            Repeat the same knockout and setup with {LMOMA_DISPLAY_NAME}. The visible report must include both predicted growth rate and the lMOMA adjustment score. The adjustment score is not the predicted growth rate.
 
             Compare the two mutant biomass predictions and answer with one method name. No hidden simulation is used.
             """,
@@ -192,7 +199,7 @@ class Mission19_info:
         await run_menu(menu, self.display_surface)
 
     def activate_mission19(self):
-        if not is_mission19_unlocked(self.missions_completed):
+        if not self.player.is_mission_unlocked('19'):
             self.failed.play()
             animation_text_save('Complete Mission 18 before starting Mission 19.', time=3000)
             return
@@ -210,7 +217,7 @@ class Mission19_info:
         save_file(self.player.get_save_data())
 
     def deliver_results(self, answer):
-        if not is_mission19_unlocked(self.missions_completed):
+        if not self.player.is_mission_unlocked('19'):
             self.failed.play()
             animation_text_save('Complete Mission 18 first!', time=2500)
             return
@@ -243,10 +250,12 @@ class Mission19_info:
         if len(normalise_mission19_answer(answer)) != 1:
             self.failed.play()
             animation_text_save('Enter exactly one simulation method.', time=2800)
+            penalize_wrong_answer(self.player, '19')
             return
         if not mission19_answer_matches(answer, report):
             self.failed.play()
             animation_text_save('That method is not supported by the recorded biomass comparison.', time=3000)
+            penalize_wrong_answer(self.player, '19')
             return
 
         self.success.play()

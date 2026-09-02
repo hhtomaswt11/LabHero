@@ -1,6 +1,8 @@
 import pygame
 import pygame_menu
 
+from answer_penalty import penalize_wrong_answer
+
 from async_menu import run_menu
 from button import Button
 from functions import animation_text_save
@@ -86,7 +88,7 @@ class Mission03:
         ]
 
         self.input()
-        if not is_mission03_unlocked(self.missions_completed):
+        if not self.player.is_mission_unlocked('03'):
             self.menu_message(locked, buttons=False)
         elif '03' in self.missions_completed and '04' in self.missions_completed and '05' in self.missions_completed:
             self.menu_message(step7, buttons=False)
@@ -166,9 +168,10 @@ class Mission03_info:
             theme=mytheme,
             title='Mission 03',
             width=1280,
+        overflow=(False, True),
         )
 
-        if not is_mission03_unlocked(self.missions_completed):
+        if not self.player.is_mission_unlocked('03'):
             menu.add.vertical_margin(40)
             menu.add.label(
                 'Mission 03 is locked. Complete Mission 02 with Dr. Martinez before beginning the genetic investigation.',
@@ -189,16 +192,17 @@ class Mission03_info:
             theme=mytheme,
             title='Mission 03 Briefing',
             width=1280,
+        overflow=(False, True),
         )
 
-        hint3 = pygame_menu.Menu(height=720, center_content=False, onclose=pygame_menu.events.BACK, theme=mytheme, title='Mission 03 Hint 3', width=1280)
+        hint3 = pygame_menu.Menu(height=720, center_content=False, onclose=pygame_menu.events.BACK, theme=mytheme, title='Mission 03 Hint 3', width=1280, overflow=(False, True))
         hint3.add.label(
             'Technical hint: use FBA with the biomass objective and the unchanged default medium. Record one run with every gene active, then switch off exactly one highlighted candidate per run.',
             wordwrap=True, align=pygame_menu.locals.ALIGN_LEFT, padding=(20, 20, 20, 20)
         )
         hint3.add.button('Back', pygame_menu.events.BACK, background_color=(70, 70, 70))
 
-        hint2 = pygame_menu.Menu(height=720, center_content=False, onclose=pygame_menu.events.BACK, theme=mytheme, title='Mission 03 Hint 2', width=1280)
+        hint2 = pygame_menu.Menu(height=720, center_content=False, onclose=pygame_menu.events.BACK, theme=mytheme, title='Mission 03 Hint 2', width=1280, overflow=(False, True))
         hint2.add.label(
             'Experimental hint: isolate one genetic perturbation at a time. Several simultaneous knockouts cannot reveal which gene caused the observed change.',
             wordwrap=True, align=pygame_menu.locals.ALIGN_LEFT, padding=(20, 20, 20, 20)
@@ -206,7 +210,7 @@ class Mission03_info:
         hint2.add.button('Reveal technical hint (Gold Key if locked)', self.hint_access.request, 3, hint2, hint3, background_color=(255, 215, 0), font_color='black')
         hint2.add.button('Back', pygame_menu.events.BACK, background_color=(70, 70, 70))
 
-        hint1 = pygame_menu.Menu(height=720, center_content=False, onclose=pygame_menu.events.BACK, theme=mytheme, title='Mission 03 Hint 1', width=1280)
+        hint1 = pygame_menu.Menu(height=720, center_content=False, onclose=pygame_menu.events.BACK, theme=mytheme, title='Mission 03 Hint 1', width=1280, overflow=(False, True))
         hint1.add.label(
             'Conceptual hint: the impact of a knockout needs a viable all-genes-active reference. Keep the biological context comparable so the growth difference can be attributed to the gene.',
             wordwrap=True, align=pygame_menu.locals.ALIGN_LEFT, padding=(20, 20, 20, 20)
@@ -276,7 +280,7 @@ class Mission03_info:
         await run_menu(menu, self.display_surface)
 
     def activate_mission03(self):
-        if not is_mission03_unlocked(self.missions_completed):
+        if not self.player.is_mission_unlocked('03'):
             self.failed.play()
             animation_text_save('Complete Mission 02 before starting Mission 03.', time=3000)
             return
@@ -297,7 +301,7 @@ class Mission03_info:
         save_file(self.player.get_save_data())
 
     def deliver_results(self, answer):
-        if not is_mission03_unlocked(self.missions_completed):
+        if not self.player.is_mission_unlocked('03'):
             self.failed.play()
             animation_text_save('Complete Mission 02 before delivering Mission 03.', time=3000)
             return
@@ -327,10 +331,12 @@ class Mission03_info:
         if normalise_mission03_answer(answer) is None:
             self.failed.play()
             animation_text_save('Enter a candidate gene id or gene name from the mission list.', time=3000)
+            penalize_wrong_answer(self.player, '03')
             return
         if not mission03_answer_matches(answer, report):
             self.failed.play()
             animation_text_save('That conclusion is not supported by the recorded growth ratios.', time=3200)
+            penalize_wrong_answer(self.player, '03')
             return
 
         self.success.play()

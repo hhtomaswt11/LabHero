@@ -1,6 +1,8 @@
 import pygame
 import pygame_menu
 
+from answer_penalty import penalize_wrong_answer
+
 from settings import *
 from save_load import *
 from timers import Timer
@@ -142,7 +144,7 @@ class Mission11:
         ]
 
         self.input()
-        if not is_mission11_unlocked(self.missions_completed):
+        if not self.player.is_mission_unlocked('11'):
             self.menu_message(locked, buttons=False)
         elif '15' in self.missions_completed:
             self.menu_message(self.m15_step2, buttons=False)
@@ -237,9 +239,10 @@ class Mission11_info:
         menu = pygame_menu.Menu(
             height=720, center_content=False, onclose=self.toggle_menu,
             theme=mytheme, title='Mission 11', width=1280,
+        overflow=(False, True),
         )
 
-        if not is_mission11_unlocked(self.missions_completed):
+        if not self.player.is_mission_unlocked('11'):
             menu.add.vertical_margin(40)
             menu.add.label(
                 'Mission 11 is locked. Complete Mission 10 before beginning Dr. Almeida\'s flux-diagnostics training.',
@@ -250,14 +253,14 @@ class Mission11_info:
             await run_menu(menu, self.display_surface)
             return
 
-        hint3 = pygame_menu.Menu(height=720, center_content=False, onclose=pygame_menu.events.BACK, theme=mytheme, title='Mission 11 Hint 3', width=1280)
+        hint3 = pygame_menu.Menu(height=720, center_content=False, onclose=pygame_menu.events.BACK, theme=mytheme, title='Mission 11 Hint 3', width=1280, overflow=(False, True))
         hint3.add.label(
             f'Technical hint: use {MISSION11_METHOD} with {MISSION11_GROWTH_OBJECTIVE}, keep all genes active and the default glucose supply unchanged, close only the lower bound of {MISSION11_OXYGEN_REACTION}, and track ' + ', '.join(MISSION11_REQUIRED_TRACKED_FLUXES) + '.',
             wordwrap=True, align=pygame_menu.locals.ALIGN_LEFT, padding=(20, 20, 20, 20),
         )
         hint3.add.button('Back', pygame_menu.events.BACK, background_color=(70, 70, 70))
 
-        hint2 = pygame_menu.Menu(height=720, center_content=False, onclose=pygame_menu.events.BACK, theme=mytheme, title='Mission 11 Hint 2', width=1280)
+        hint2 = pygame_menu.Menu(height=720, center_content=False, onclose=pygame_menu.events.BACK, theme=mytheme, title='Mission 11 Hint 2', width=1280, overflow=(False, True))
         hint2.add.label(
             'Experimental hint: keep the strain, objective and default carbon supply fixed. Introduce only the anaerobic constraint, then make sure every requested exchange flux is numerically present in the visible result.',
             wordwrap=True, align=pygame_menu.locals.ALIGN_LEFT, padding=(20, 20, 20, 20),
@@ -265,7 +268,7 @@ class Mission11_info:
         hint2.add.button('Reveal technical hint (Gold Key if locked)', self.hint_access.request, 3, hint2, hint3, background_color=(255, 215, 0), font_color='black')
         hint2.add.button('Back', pygame_menu.events.BACK, background_color=(70, 70, 70))
 
-        hint1 = pygame_menu.Menu(height=720, center_content=False, onclose=pygame_menu.events.BACK, theme=mytheme, title='Mission 11 Hint 1', width=1280)
+        hint1 = pygame_menu.Menu(height=720, center_content=False, onclose=pygame_menu.events.BACK, theme=mytheme, title='Mission 11 Hint 1', width=1280, overflow=(False, True))
         hint1.add.label(
             'Conceptual hint: the biomass objective tells you about the predicted growth optimum. Exchange fluxes answer a separate question: which compounds this particular solution predicts are secreted.',
             wordwrap=True, align=pygame_menu.locals.ALIGN_LEFT, padding=(20, 20, 20, 20),
@@ -273,7 +276,7 @@ class Mission11_info:
         hint1.add.button('Reveal next hint (Silver Key if locked)', self.hint_access.request, 2, hint1, hint2, background_color=(255, 215, 0), font_color='black')
         hint1.add.button('Back', pygame_menu.events.BACK, background_color=(70, 70, 70))
 
-        briefing = pygame_menu.Menu(height=720, center_content=False, onclose=pygame_menu.events.BACK, theme=mytheme, title='Mission 11 Briefing', width=1280)
+        briefing = pygame_menu.Menu(height=720, center_content=False, onclose=pygame_menu.events.BACK, theme=mytheme, title='Mission 11 Briefing', width=1280, overflow=(False, True))
         briefing.add.label(
             """
             Dr. Almeida wants a diagnostic fingerprint rather than another strain design. Build one controlled anaerobic solution that still maximises biomass, measure a defined panel of exchange reactions, and distinguish positive predicted secretion from zero flux.
@@ -326,7 +329,7 @@ class Mission11_info:
         await run_menu(menu, self.display_surface)
 
     def activate_mission11(self):
-        if not is_mission11_unlocked(self.missions_completed):
+        if not self.player.is_mission_unlocked('11'):
             self.failed.play()
             animation_text_save('Complete Mission 10 before starting Mission 11.', time=3000)
             return
@@ -347,7 +350,7 @@ class Mission11_info:
         save_file(self.player.get_save_data())
 
     def deliver_results(self, answer):
-        if not is_mission11_unlocked(self.missions_completed):
+        if not self.player.is_mission_unlocked('11'):
             self.failed.play()
             animation_text_save('Complete Mission 10 first!', time=2500)
             return
@@ -371,10 +374,12 @@ class Mission11_info:
         if normalise_mission11_answer(answer) is None:
             self.failed.play()
             animation_text_save('Enter the dominant product name or its exchange-reaction id.', time=3000)
+            penalize_wrong_answer(self.player, '11')
             return
         if not mission11_answer_matches(answer, report):
             self.failed.play()
             animation_text_save('That product is not supported as dominant by the recorded fingerprint.', time=3200)
+            penalize_wrong_answer(self.player, '11')
             return
 
         self.success.play()

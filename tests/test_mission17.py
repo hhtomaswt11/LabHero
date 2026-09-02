@@ -301,7 +301,7 @@ class Mission17RegressionTests(unittest.TestCase):
     def test_report_presents_evidence_without_printing_the_answer_pair(self):
         report = self._complete_screen()
         text = simulation.build_mission17_essential_routes_report_text(report)
-        self.assertIn('Baseline growth: 0.874', text)
+        self.assertIn('Baseline predicted growth rate: 0.874 h^-1', text)
         self.assertIn('Candidate trials recorded: 5/5', text)
         self.assertIn('Trials at or below 1.0% of baseline growth: 2', text)
         self.assertIn('Which two candidate uptake routes', text)
@@ -327,9 +327,9 @@ class Mission17RegressionTests(unittest.TestCase):
         trial['growth'] = -0.0
         trial['closed_route_uptake'] = -0.0
         text = simulation.build_mission17_essential_routes_report_text(report)
-        self.assertNotIn('growth -0.000', text)
+        self.assertNotIn('predicted growth rate -0.000', text)
         self.assertNotIn('closed-route uptake -0.000', text)
-        self.assertIn('growth 0.000', text)
+        self.assertIn('predicted growth rate 0.000 h^-1', text)
         self.assertIn('closed-route uptake 0.000', text)
 
     def test_solver_and_web_contract_normalise_negative_zero(self):
