@@ -14,6 +14,7 @@ from save_load import *
 from functions import animation_text_save, drain_animations
 from utils import *
 from teacher_mode import get_teacher_request, build_teacher_save_data
+from teacher_access import TeacherAccessMenu
 
 
 class Game:
@@ -24,29 +25,62 @@ class Game:
 		pygame.display.set_caption('LabHero')
 		self.clock = pygame.time.Clock()
 		self.intro = Intro()
+		self.teacher_access = TeacherAccessMenu(self.screen)
 		self.web_autosave_elapsed = 0.0
 		self.teacher_request = get_teacher_request()
-		if self.teacher_request is not None:
-			# Keep every teacher artefact/save in a separate namespace.  A fresh
-			# jump starts from clean evidence and never touches normal student data.
-			set_save_namespace('teacher')
+		self.teacher_preview_active = False
+
+
+	async def run_teacher_preview(self, request):
+		"""Run an authenticated Teacher session with isolated mission previews.
+
+		A professor may switch targets from Settings without returning to the
+		title screen or authenticating again. Every switch still rebuilds a fresh
+		teacher save payload and clears the disposable teacher namespace, so one
+		preview cannot leak evidence into the next and student progress remains
+		untouched.
+		"""
+		set_save_namespace('teacher')
+		self.teacher_preview_active = True
+		self.web_autosave_elapsed = 0.0
+		current_request = request
+		try:
+			while current_request is not None:
+				mission_id = current_request['mission_id']
+				campaign_mode = current_request.get('campaign_mode', 'normal')
+
+				# A mission switch is a new preview, not a continuation of the
+				# previous teacher evidence state.
+				clear_active_persistent_storage()
+				clear_memstore()
+				self.level = Level(
+					copy.deepcopy(build_teacher_save_data(mission_id, campaign_mode)),
+					teacher_target_mission=mission_id,
+					teacher_preview=True,
+				)
+				await self.run()
+
+				# Settings can request another canonical Normal/Easy target. If no
+				# switch was requested, run() returned because the professor chose
+				# Exit Teacher Preview and we go back to the title screen.
+				current_request = getattr(
+					self.level.player,
+					'teacher_switch_request',
+					None,
+				)
+		finally:
 			clear_active_persistent_storage()
+			set_save_namespace(None)
+			clear_memstore()
+			self.teacher_preview_active = False
+			self.web_autosave_elapsed = 0.0
 
 
 	async def intro_run(self):
-		# TEACHER.1 URLs/CLI flags bypass the student title/registration flow and
-		# open the requested mission directly with isolated preview state.
+		# Protected teacher URLs/CLI flags remain a direct administrative fallback.
+		# The normal user-facing teacher entry is hidden behind SHIFT+T below.
 		if self.teacher_request is not None:
-			mission_id = self.teacher_request['mission_id']
-			self.level = Level(
-				copy.deepcopy(build_teacher_save_data(mission_id)),
-				teacher_target_mission=mission_id,
-			)
-			await self.run()
-			# Back to Title ends the preview without changing the student's
-			# normal persistence namespace.
-			set_save_namespace(None)
-			clear_memstore()
+			await self.run_teacher_preview(self.teacher_request)
 			self.teacher_request = None
 
 		while True:
@@ -89,6 +123,12 @@ class Game:
 					await self.run()
 				elif event.key == pygame.K_SPACE:
 					self.intro.request_new_game_confirmation()
+				elif event.key == pygame.K_t and (event.mod & pygame.KMOD_SHIFT):
+					# Hidden teacher access is intentionally available only from the title
+					# screen.  It cannot replace a live student's runtime state mid-mission.
+					request = await self.teacher_access.update()
+					if request is not None:
+						await self.run_teacher_preview(request)
 
 			self.intro.run()
 			if self.intro.pending is not None:
@@ -117,7 +157,7 @@ class Game:
 			# A five-second web autosave keeps position/profile/reward progress
 			# current even when the player refreshes or closes the tab. Mission
 			# evidence artifacts are persisted immediately by save_load.py.
-			if sys.platform == 'emscripten' and self.teacher_request is None:
+			if sys.platform == 'emscripten' and not self.teacher_preview_active:
 				self.web_autosave_elapsed += dt
 				if self.web_autosave_elapsed >= 5.0:
 					save_file(self.level.player.get_save_data())

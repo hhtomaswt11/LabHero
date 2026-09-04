@@ -11,6 +11,7 @@ from functions import animation_text_save
 from utils import *
 from async_menu import run_menu
 from book_ui import populate_book_menu
+from teacher_mode import build_teacher_request, teacher_missions_for_mode
 
 
 class Menu:
@@ -131,15 +132,108 @@ class Menu:
             menu.add.button('Save Game', self.save_game, menu)
         menu.add.button('Credits', action=menu_credits)
 
-        if sys.platform == 'emscripten':
-            def back_to_title():
-                # Preserve durable browser progress when returning to the title.
-                # Only the hot RAM cache is cleared; Continue reloads localStorage.
-                save_file(self.player.get_save_data())
-                clear_memstore()
+        def back_to_title():
+            # Save into the currently active namespace. During Teacher Preview
+            # that namespace is disposable and is cleared by Game afterwards;
+            # normal Web progress remains durable for Continue.
+            save_file(self.player.get_save_data())
+            clear_memstore()
+            self.player.teacher_switch_request = None
+            self.player.restart_to_intro = True
+            self.toggle_menu()
+            menu.disable()
+
+        if getattr(self.player, 'teacher_preview', False):
+            # Mission switching uses a text input too. Re-arm Pygbag text input
+            # because the previous Teacher auth/switch form deliberately stops
+            # it before returning to the world.
+            try:
+                pygame.key.start_text_input()
+            except Exception:
+                pass
+
+            teacher_switch = pygame_menu.Menu(
+                'Change Teacher Mission',
+                1280,
+                720,
+                onclose=pygame_menu.events.BACK,
+                theme=mytheme,
+            )
+            teacher_switch.add.label(
+                'Teacher session already authenticated. Switch preview without returning to the title screen.',
+                max_char=-1,
+                wordwrap=True,
+                font_size=25,
+            )
+            teacher_switch.add.label(
+                f'Current preview: {self.player.campaign_mode.title()} - Mission {self.player.teacher_target_mission}',
+                max_char=-1,
+                wordwrap=True,
+                font_size=25,
+            )
+            teacher_switch.add.vertical_margin(15)
+            teacher_mission_widget = teacher_switch.add.text_input(
+                'Mission number: ',
+                default=str(self.player.teacher_target_mission or '1'),
+                maxchar=2,
+                input_type=pygame_menu.locals.INPUT_INT,
+                textinput_id='teacher_switch_mission',
+            )
+            teacher_switch_error = teacher_switch.add.label(
+                '',
+                max_char=-1,
+                wordwrap=True,
+                font_color='firebrick',
+                font_size=23,
+            )
+
+            def switch_teacher_mission(mode):
+                mission_value = teacher_mission_widget.get_value()
+                request = build_teacher_request(
+                    mission_value,
+                    mode,
+                    source='preview',
+                )
+                if request is None:
+                    available = ', '.join(teacher_missions_for_mode(mode))
+                    teacher_switch_error.set_title(
+                        f'Mission {mission_value} is not part of the {mode.title()} route. '
+                        f'Available missions: {available}.'
+                    )
+                    return
+
+                # Signal the outer Game teacher-session loop. It will dispose of
+                # this preview namespace and create a fresh isolated preview for
+                # the requested mission without another credential prompt.
+                self.player.teacher_switch_request = request
                 self.player.restart_to_intro = True
-                self.toggle_menu()
+                try:
+                    pygame.key.stop_text_input()
+                except Exception:
+                    pass
+                teacher_switch.disable()
                 menu.disable()
+                self.toggle_menu()
+
+            teacher_switch.add.button(
+                'Switch to Normal Mission',
+                lambda: switch_teacher_mission('normal'),
+            )
+            teacher_switch.add.button(
+                'Switch to Easy Mission',
+                lambda: switch_teacher_mission('easy'),
+            )
+            teacher_switch.add.button(
+                'Back',
+                pygame_menu.events.BACK,
+                background_color=(70, 70, 70),
+            )
+
+            # Teacher Preview must return cleanly to the title on both Web and
+            # desktop instead of quitting or touching the student's namespace.
+            menu.add.button('Change Teacher Mission', teacher_switch)
+            menu.add.button('Exit Teacher Preview', back_to_title)
+        elif sys.platform == 'emscripten':
             menu.add.button('Back to Title', back_to_title)
         else:
             def save_and_quit():

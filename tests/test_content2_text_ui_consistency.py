@@ -12,12 +12,15 @@ class Content2TextUiConsistencyTests(unittest.TestCase):
         functions = (CODE / "functions.py").read_text(encoding="utf-8")
         menu = (CODE / "menu_2.py").read_text(encoding="utf-8")
 
+        # Current global branding is deliberately the single word ``LabHero``.
+        # The previous test accidentally asserted both presence and absence of
+        # these exact same strings, making the suite impossible to satisfy.
         self.assertIn("render('LabHero'", intro)
         self.assertIn("render('LabHero'", functions)
         self.assertIn("pygame_menu.Menu('LabHero Settings'", menu)
-        self.assertNotIn("render('LabHero'", intro)
-        self.assertNotIn("render('LabHero'", functions)
-        self.assertNotIn("pygame_menu.Menu('LabHero Settings'", menu)
+        self.assertNotIn("render('Lab Hero'", intro)
+        self.assertNotIn("render('Lab Hero'", functions)
+        self.assertNotIn("pygame_menu.Menu('Lab Hero Settings'", menu)
 
     def test_story_matches_current_student_campaign_flow(self):
         intro = (CODE / "intro.py").read_text(encoding="utf-8")

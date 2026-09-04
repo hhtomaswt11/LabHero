@@ -90,19 +90,33 @@ class DialogueLayoutTests(unittest.TestCase):
         return DialogueLayoutTests._assignment_key(argument)
 
     @staticmethod
-    def _evaluate_list(module, list_node):
+    def _evaluate_list(module, list_node, campaign_mode='easy'):
         fake_self = SimpleNamespace(
             player=SimpleNamespace(
                 player_name=LONG_PLAYER_NAME,
-                campaign_mode='easy',
+                campaign_mode=campaign_mode,
             )
         )
+
+        # Some current NPC dialogue is intentionally built from local runtime
+        # values before assigning self.message (for example Dr. Alves'
+        # campaign-specific key budget/current balance).  This AST-based layout
+        # test evaluates only the list expression, so reproduce those locals
+        # rather than forcing production dialogue back to hard-coded strings.
+        locals_context = {'self': fake_self}
+        if hasattr(module, 'initial_keys_for_campaign'):
+            budget = module.initial_keys_for_campaign(campaign_mode)
+            current = dict(budget)
+            if hasattr(module, 'golden_egg_gold_reward_for_campaign'):
+                current['gold'] += module.golden_egg_gold_reward_for_campaign(campaign_mode)
+            locals_context.update({'budget': budget, 'current': current})
+
         expression = ast.Expression(body=list_node)
         ast.fix_missing_locations(expression)
         return eval(
             compile(expression, str(Path(module.__file__)), 'eval'),
             module.__dict__,
-            {'self': fake_self},
+            locals_context,
         )
 
     def test_dialogue_discovery_includes_all_current_fixed_panel_missions(self):
@@ -197,22 +211,26 @@ class DialogueLayoutTests(unittest.TestCase):
                 for target in node.targets
             ):
                 continue
-            messages = self._evaluate_list(module, node.value)
-            if len(messages) > MAX_LINES_WITHOUT_BUTTONS:
-                violations.append(
-                    f'dialogues.py line {node.lineno}: {len(messages)} lines '
-                    f'> {MAX_LINES_WITHOUT_BUTTONS}'
-                )
-            for index, message in enumerate(messages, start=1):
-                # Generic dialogues pass every line through prepare_dialogue_text()
-                # before rendering, so long student names are compacted at runtime.
-                rendered_message = prepare_dialogue_text(message, LONG_PLAYER_NAME)
-                width = self.font.size(str(rendered_message))[0]
-                if width > MAX_SAFE_LINE_WIDTH:
+            # Check both student campaign modes because Alves' message contains
+            # campaign-specific key budgets. Static NPC text is harmlessly
+            # evaluated twice, while dynamic text is now protected in both paths.
+            for campaign_mode in ('normal', 'easy'):
+                messages = self._evaluate_list(module, node.value, campaign_mode=campaign_mode)
+                if len(messages) > MAX_LINES_WITHOUT_BUTTONS:
                     violations.append(
-                        f'dialogues.py line {node.lineno}, message {index}: '
-                        f'{width}px > {MAX_SAFE_LINE_WIDTH}px: {rendered_message!r}'
+                        f'dialogues.py line {node.lineno} ({campaign_mode}): '
+                        f'{len(messages)} lines > {MAX_LINES_WITHOUT_BUTTONS}'
                     )
+                for index, message in enumerate(messages, start=1):
+                    # Generic dialogues pass every line through prepare_dialogue_text()
+                    # before rendering, so long student names are compacted at runtime.
+                    rendered_message = prepare_dialogue_text(message, LONG_PLAYER_NAME)
+                    width = self.font.size(str(rendered_message))[0]
+                    if width > MAX_SAFE_LINE_WIDTH:
+                        violations.append(
+                            f'dialogues.py line {node.lineno} ({campaign_mode}), message {index}: '
+                            f'{width}px > {MAX_SAFE_LINE_WIDTH}px: {rendered_message!r}'
+                        )
 
         self.assertEqual([], violations, '\n'.join(violations))
 

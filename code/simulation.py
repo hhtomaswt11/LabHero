@@ -24,6 +24,54 @@ from room_milp import (
 )
 
 
+def _strict_answer_ascii(value):
+    """Return accent-insensitive lower-case answer text without discarding content.
+
+    Answer validators must validate the whole submission.  In particular, they
+    must not accept a correct token merely because it appears somewhere inside
+    an otherwise incorrect answer.
+    """
+    text = str(value or '').replace('−', '-').replace('–', '-').replace('α', 'alpha').replace('Α', 'alpha')
+    text = unicodedata.normalize('NFKD', text)
+    return ''.join(char for char in text if not unicodedata.combining(char)).lower().strip()
+
+
+def _strict_answer_phrase(value):
+    """Normalise a direct textual answer while preserving every word."""
+    return re.sub(r'[^a-z0-9]+', ' ', _strict_answer_ascii(value)).strip()
+
+
+def _strict_extract_answer_mentions(answer, patterns, order, allowed_residue_words=()):
+    """Extract recognised entities and reject any unrecognised answer residue.
+
+    ``patterns`` maps a canonical entity to regex aliases.  Every recognised
+    alias is removed from a working copy of the submission.  After harmless
+    connector/filler words are removed, any remaining alphanumeric token makes
+    the answer invalid.  This closes the historic ``correct + extra junk``
+    loophole while retaining concise natural aliases intentionally supported by
+    each mission.
+    """
+    text = _strict_answer_ascii(answer)
+    if not text:
+        return None
+
+    working = text
+    found = set()
+    for entity in order:
+        for pattern in patterns.get(entity, ()):
+            if re.search(pattern, working):
+                found.add(entity)
+                working = re.sub(pattern, ' ', working)
+
+    residue = re.sub(r'[^a-z0-9]+', ' ', working).strip()
+    if residue:
+        allowed = {str(word).lower() for word in allowed_residue_words}
+        if any(token not in allowed for token in residue.split()):
+            return None
+
+    return tuple(entity for entity in order if entity in found)
+
+
 # Mission 06 is a controlled multi-knockout strain-design challenge.  The
 # player keeps the default aerobic medium fixed, uses biomass-optimal FBA,
 # tracks ethanol and may disable at most two highlighted candidate genes.
@@ -1038,15 +1086,12 @@ def normalise_method_name(value):
 
 
 def _saved_menu_scalar(mapping, key):
-    """Read one pygame-menu value from both selector and text-input saves.
+    """Read one canonical scalar from current and legacy menu-save shapes.
 
-    ``DropSelect`` values are stored as nested list/tuple structures while
-    ``TextInput`` values are plain strings.  Recursively taking the first
-    element is safe for selector payloads, but a string must be treated as an
-    atomic value; otherwise ``BIOMASS_SC5_notrace`` becomes ``B``.
-
-    The helper deliberately accepts both old and new save shapes so existing
-    E. coli saves remain compatible after the multi-model UI was introduced.
+    Current saves store plain strings.  Legacy DropSelect saves may contain a
+    selected item as ``[(display_label, internal_value), ...]`` or equivalent
+    nested lists.  Prefer the second item field so readable UI labels can never
+    leak into the solver contract.
     """
     try:
         value = mapping.get(key) if isinstance(mapping, dict) else None
@@ -1056,13 +1101,17 @@ def _saved_menu_scalar(mapping, key):
     if isinstance(value, str):
         return value
 
-    # pygame-menu selectors have historically produced values such as
-    # [["FBA", "FBA"]] or [("FBA", "FBA")].  Peel only container
-    # layers; never index plain text.
-    while isinstance(value, (list, tuple)) and value:
-        value = value[0]
-        if isinstance(value, str):
-            return value
+    if isinstance(value, (list, tuple)) and value:
+        item = value[0]
+        if isinstance(item, (list, tuple)):
+            if len(item) >= 2:
+                return str(item[1])
+            if item:
+                return str(item[0])
+            return ''
+        if len(value) >= 2 and isinstance(value[1], str):
+            return str(value[1])
+        return str(item)
 
     return '' if value is None else str(value)
 
@@ -6696,7 +6745,10 @@ def _mission15_priority_clause_supports(clause, priority_terms, zero_terms):
 
 
 def normalise_mission15_answer(answer):
-    phrase = _mission15_answer_text(answer)
+    # Mission 15 historically accepted arbitrary explanatory text whenever a
+    # few key words were present.  Keep the documented aliases and natural
+    # conclusions, but require the complete answer to match one of them.
+    phrase = _strict_answer_phrase(answer)
     compact = phrase.replace(' ', '')
     aliases = {
         'objectiveconflict': 'objective_conflict',
@@ -6731,60 +6783,17 @@ def normalise_mission15_answer(answer):
     exact = aliases.get(compact)
     if exact:
         return exact
-    if not phrase:
-        return None
 
-    # Explicit claims of compatibility or absence of conflict must not be
-    # misread as the supported Mission 15 conclusion.
-    coexistence_patterns = (
-        r'\b(?:growth|biomass)\b.*\b(?:succinate|product|production)\b.*\b(?:are|is|remain|can be)\s+compatible\b',
-        r'\b(?:succinate|product|production)\b.*\b(?:growth|biomass)\b.*\b(?:are|is|remain|can be)\s+compatible\b',
-        r'\b(?:no|without)\s+(?:objective\s+|growth production\s+)?conflict\b',
-        r'\b(?:do|does)\s+not\s+conflict\b',
-        r'\bcan\s+coexist\b',
-    )
-    if any(re.search(pattern, phrase) for pattern in coexistence_patterns):
-        return 'coexistence'
-
-    words = set(phrase.split())
-    has_growth = bool(words.intersection({'growth', 'biomass'}))
-    has_product = bool(words.intersection({'succinate', 'product', 'production'}))
-    has_both_subjects = has_growth and has_product
-
-    if has_both_subjects:
-        conflict_language = bool(words.intersection({
-            'conflict', 'conflicts', 'conflicting', 'incompatible',
-            'incompatibility', 'tradeoff', 'uncoupled',
-        })) or 'trade off' in phrase or 'mutually exclusive' in phrase
-        negative_coupling = bool(re.search(
-            r'\b(?:not|no|never)\b(?:\s+\w+){0,3}\s+\b(?:coupled|compatible)\b',
-            phrase,
-        ))
-        if conflict_language or negative_coupling:
-            return 'objective_conflict'
-
-    # Accept a complete evidence-based sentence even when the player does not
-    # use specialist terms such as "objective conflict" or "growth-coupled".
-    clauses = [part.strip() for part in re.split(r'\b(?:and|while|whereas|but)\b', phrase) if part.strip()]
-    product_priority_zero_growth = any(
-        _mission15_priority_clause_supports(
-            clause,
-            ('succinate', 'product', 'production'),
-            ('growth', 'biomass'),
-        )
-        for clause in clauses
-    )
-    growth_priority_zero_product = any(
-        _mission15_priority_clause_supports(
-            clause,
-            ('growth', 'biomass'),
-            ('succinate', 'product', 'production'),
-        )
-        for clause in clauses
-    )
-    if product_priority_zero_growth and growth_priority_zero_product:
+    natural_conflict_answers = {
+        'there is a trade off between growth and succinate production',
+        'when succinate is maximised biomass is zero and when growth is maximised succinate is zero',
+        'when succinate is maximized biomass is zero and when growth is maximized succinate is zero',
+        'growth and maximum succinate production conflict under these conditions',
+        'maximum succinate production is not growth coupled under these conditions',
+        'the product and growth objectives are incompatible under these conditions',
+    }
+    if phrase in natural_conflict_answers:
         return 'objective_conflict'
-
     return None
 
 
@@ -7573,30 +7582,24 @@ def _normalise_mission17_text(value):
 
 
 def normalise_mission17_answer(answer):
-    """Extract candidate route identifiers from a concise player answer."""
-    text = _normalise_mission17_text(answer)
-    if not text.strip() or re.search(r'\b(?:all|every|todos|todas)\b', text):
+    """Extract only the explicitly submitted candidate uptake routes."""
+    text = _strict_answer_ascii(answer)
+    if not text or re.fullmatch(r'\s*(?:all|every|todos|todas)(?:\s+candidates?)?\s*', text):
         return tuple()
-
     patterns = {
-        'EX_nh4_e': r'\b(?:ex[_\s-]*nh4[_\s-]*e|nh4|ammonia|ammonium|amonia|amonio)\b',
-        'EX_pi_e': r'\b(?:ex[_\s-]*pi[_\s-]*e|pi|phosphate|fosfato)\b',
-        'EX_h2o_e': r'\b(?:ex[_\s-]*h2o[_\s-]*e|h2o|water|agua)\b',
-        # A standalone H/H+ is an unambiguous shorthand for the proton route
-        # within this five-candidate answer field.  Recognising it prevents a
-        # three-route answer such as 'h pi nh4' from being accepted after the
-        # extra proton candidate was silently ignored.
-        'EX_h_e': r'\b(?:ex[_\s-]*h[_\s-]*e|proton|protons|hydrogen ion|h)\b',
-        'EX_co2_e': r'\b(?:ex[_\s-]*co2[_\s-]*e|co2|carbon dioxide|dioxido de carbono)\b',
+        'EX_nh4_e': (r'\bex[_\s-]*nh4[_\s-]*e\b', r'\bnh4\b', r'\bammonia\b', r'\bammonium\b', r'\bamonia\b', r'\bamonio\b'),
+        'EX_pi_e': (r'\bex[_\s-]*pi[_\s-]*e\b', r'\bpi\b', r'\bphosphate\b', r'\bfosfato\b'),
+        'EX_h2o_e': (r'\bex[_\s-]*h2o[_\s-]*e\b', r'\bh2o\b', r'\bwater\b', r'\bagua\b'),
+        'EX_h_e': (r'\bex[_\s-]*h[_\s-]*e\b', r'\bprotons?\b', r'\bhydrogen\s+ion\b', r'\bh\b'),
+        'EX_co2_e': (r'\bex[_\s-]*co2[_\s-]*e\b', r'\bco2\b', r'\bcarbon\s+dioxide\b', r'\bdioxido\s+de\s+carbono\b'),
     }
-    found = {
-        reaction_id for reaction_id, pattern in patterns.items()
-        if re.search(pattern, text)
-    }
-    return tuple(
-        reaction_id for reaction_id in MISSION17_CANDIDATE_NUTRIENTS
-        if reaction_id in found
+    found = _strict_extract_answer_mentions(
+        answer,
+        patterns,
+        MISSION17_CANDIDATE_NUTRIENTS,
+        allowed_residue_words={'and', 'e', 'i', 'think', 'are', 'the', 'required', 'uptake', 'route', 'routes'},
     )
+    return found
 
 
 def mission17_answer_matches(answer, report_data=None):
@@ -8141,28 +8144,22 @@ def _normalise_mission18_text(value):
 
 
 def normalise_mission18_answer(answer):
-    """Extract candidate export identifiers from a concise answer."""
-    text = _normalise_mission18_text(answer)
-    if not text.strip() or re.search(r'\b(?:all|both|every|todos|todas|ambos|ambas)\b', text):
+    """Extract a tracked export route and reject every extra answer token."""
+    text = _strict_answer_ascii(answer)
+    if not text or re.fullmatch(r'\s*(?:all|both|every|todos|todas|ambos|ambas)\s*', text):
         return tuple()
-    # Recognise every tracked export route, not only the two candidates.
-    # This prevents an answer such as 'acetate and ethanol' from passing after
-    # the additional route was silently ignored.  The UI deliberately asks for
-    # one concise route rather than an explanatory sentence.
     patterns = {
-        'EX_ac_e': r'\b(?:ex[_\s-]*ac[_\s-]*e|acetate|acetato)\b',
-        'EX_etoh_e': r'\b(?:ex[_\s-]*etoh[_\s-]*e|ethanol|etanol)\b',
-        'EX_for_e': r'\b(?:ex[_\s-]*for[_\s-]*e|formate|formato)\b',
-        'EX_succ_e': r'\b(?:ex[_\s-]*succ[_\s-]*e|succinate|succinato)\b',
-        'EX_lac__D_e': r'\b(?:ex[_\s-]*lac[_\s-]*d[_\s-]*e|d[-\s]*lactate|lactate|lactato)\b',
+        'EX_ac_e': (r'\bex[_\s-]*ac[_\s-]*e\b', r'\bacetate\b', r'\bacetato\b'),
+        'EX_etoh_e': (r'\bex[_\s-]*etoh[_\s-]*e\b', r'\bethanol\b', r'\betanol\b'),
+        'EX_for_e': (r'\bex[_\s-]*for[_\s-]*e\b', r'\bformate\b', r'\bformato\b'),
+        'EX_succ_e': (r'\bex[_\s-]*succ[_\s-]*e\b', r'\bsuccinate\b', r'\bsuccinato\b'),
+        'EX_lac__D_e': (r'\bex[_\s-]*lac[_\s-]*d[_\s-]*e\b', r'\bd[-\s]*lactate\b', r'\blactate\b', r'\blactato\b'),
     }
-    found = {
-        reaction_id for reaction_id, pattern in patterns.items()
-        if re.search(pattern, text)
-    }
-    return tuple(
-        reaction_id for reaction_id in MISSION18_REQUIRED_TRACKED_FLUXES
-        if reaction_id in found
+    return _strict_extract_answer_mentions(
+        answer,
+        patterns,
+        MISSION18_REQUIRED_TRACKED_FLUXES,
+        allowed_residue_words={'and', 'e', 'exchange', 'route'},
     )
 
 
@@ -8642,18 +8639,22 @@ def _normalise_mission19_text(value):
 
 
 def normalise_mission19_answer(answer):
-    """Extract explicitly named simulation methods from a concise answer."""
-    text = _normalise_mission19_text(answer)
-    if not text.strip() or re.search(r'\b(?:all|both|every|todos|todas|ambos|ambas)\b', text):
-        return tuple()
-    patterns = {
-        'FBA': r'(?<![a-z0-9])fba(?![a-z0-9])',
-        'pFBA': r'(?<![a-z0-9])pfba(?![a-z0-9])|parsimonious\s+fba',
-        'lMOMA': r'(?<![a-z0-9])l\s*[-_]?\s*moma(?![a-z0-9])|linear\s+(?:minimi[sz]ation\s+of\s+metabolic\s+adjustment|moma)',
-        'ROOM': r'(?<![a-z0-9])room(?![a-z0-9])|regulatory\s+on\s*/?\s*off\s+minimi[sz]ation',
+    """Accept one complete method name; extra methods/text invalidate it."""
+    phrase = _strict_answer_phrase(answer)
+    aliases = {
+        'fba': 'FBA',
+        'pfba': 'pFBA',
+        'parsimonious fba': 'pFBA',
+        'lmoma': 'lMOMA',
+        'linear moma': 'lMOMA',
+        'linear minimization of metabolic adjustment': 'lMOMA',
+        'linear minimisation of metabolic adjustment': 'lMOMA',
+        'room': 'ROOM',
+        'regulatory on off minimization': 'ROOM',
+        'regulatory on off minimisation': 'ROOM',
     }
-    found = {method for method, pattern in patterns.items() if re.search(pattern, text)}
-    return tuple(method for method in ('FBA', 'pFBA', 'lMOMA', 'ROOM') if method in found)
+    method = aliases.get(phrase)
+    return (method,) if method else tuple()
 
 
 def mission19_answer_matches(answer, report_data=None):
@@ -9307,36 +9308,26 @@ def _normalise_mission20_text(value):
 
 
 def normalise_mission20_answer(answer):
-    """Extract exactly one oxygen context from a concise answer."""
-    text = _normalise_mission20_text(answer)
-    if not text.strip() or re.search(r'\b(?:both|all|either|neither|ambos|ambas|todos|todas)\b', text):
-        return tuple()
-
-    anaerobic_patterns = [
-        r'\banaerobic\b',
-        r'\banaerobio\b',
-        r'\bwithout\s+(?:o2|oxygen)\b',
-        r'\bno\s+(?:o2|oxygen)\b',
-        r'\b(?:o2|oxygen)\s+(?:closed|unavailable|absent|removed|off)\b',
-        r'\bex[_\s-]*o2[_\s-]*e\s+(?:closed|off)\b',
-        r'\bsem\s+oxigenio\b',
-        r'\boxigenio\s+(?:fechado|indisponivel|ausente|removido)\b',
-    ]
-    aerobic_patterns = [
-        r'\baerobic\b',
-        r'\baerobio\b',
-        r'\bwith\s+(?:o2|oxygen)\b',
-        r'\b(?:o2|oxygen)\s+(?:available|open|present|on)\b',
-        r'\bex[_\s-]*o2[_\s-]*e\s+(?:open|on)\b',
-        r'\bcom\s+oxigenio\b',
-        r'\boxigenio\s+(?:aberto|disponivel|presente)\b',
-    ]
-    found = []
-    if any(re.search(pattern, text) for pattern in anaerobic_patterns):
-        found.append('oxygen_closed')
-    if any(re.search(pattern, text) for pattern in aerobic_patterns):
-        found.append('oxygen_available')
-    return tuple(found)
+    """Accept exactly one supported oxygen-context phrase."""
+    phrase = _strict_answer_phrase(answer)
+    anaerobic = {
+        'anaerobic', 'anaerobio', 'without o2', 'without oxygen', 'no o2', 'no oxygen',
+        'o2 closed', 'oxygen closed', 'o2 unavailable', 'oxygen unavailable',
+        'o2 absent', 'oxygen absent', 'o2 removed', 'oxygen removed', 'o2 off', 'oxygen off',
+        'ex o2 e closed', 'ex o2 e off', 'sem oxigenio', 'oxigenio fechado',
+        'oxigenio indisponivel', 'oxigenio ausente', 'oxigenio removido',
+    }
+    aerobic = {
+        'aerobic', 'aerobio', 'with o2', 'with oxygen', 'o2 available', 'oxygen available',
+        'o2 open', 'oxygen open', 'o2 present', 'oxygen present', 'o2 on', 'oxygen on',
+        'ex o2 e open', 'ex o2 e on', 'com oxigenio', 'oxigenio aberto',
+        'oxigenio disponivel', 'oxigenio presente',
+    }
+    if phrase in anaerobic:
+        return ('oxygen_closed',)
+    if phrase in aerobic:
+        return ('oxygen_available',)
+    return tuple()
 
 
 def mission20_answer_matches(answer, report_data=None):
@@ -11710,24 +11701,22 @@ def _normalise_mission21_text(value):
 
 
 def normalise_mission21_answer(answer):
-    """Extract tracked secretion identifiers from a concise player answer."""
-    text = _normalise_mission21_text(answer)
-    if not text.strip() or re.search(r'\b(?:all|every|todos|todas|both|ambos|ambas)\b', text):
+    """Extract tracked secretion identifiers without ignoring extra content."""
+    text = _strict_answer_ascii(answer)
+    if not text or re.fullmatch(r'\s*(?:all|every|todos|todas|both|ambos|ambas)(?:\s+products?)?\s*', text):
         return tuple()
     patterns = {
-        'EX_ac_e': r'\b(?:ex[_\s-]*ac[_\s-]*e|acetate|acetato)\b',
-        'EX_etoh_e': r'\b(?:ex[_\s-]*etoh[_\s-]*e|ethanol|etanol)\b',
-        'EX_for_e': r'\b(?:ex[_\s-]*for[_\s-]*e|formate|formato)\b',
-        'EX_succ_e': r'\b(?:ex[_\s-]*succ[_\s-]*e|succinate|succinato)\b',
-        'EX_lac__D_e': r'\b(?:ex[_\s-]*lac[_\s-]*d[_\s-]*e|d[-\s]*lactate|lactate|lactato)\b',
+        'EX_ac_e': (r'\bex[_\s-]*ac[_\s-]*e\b', r'\bacetate\b', r'\bacetato\b'),
+        'EX_etoh_e': (r'\bex[_\s-]*etoh[_\s-]*e\b', r'\bethanol\b', r'\betanol\b'),
+        'EX_for_e': (r'\bex[_\s-]*for[_\s-]*e\b', r'\bformate\b', r'\bformato\b'),
+        'EX_succ_e': (r'\bex[_\s-]*succ[_\s-]*e\b', r'\bsuccinate\b', r'\bsuccinato\b'),
+        'EX_lac__D_e': (r'\bex[_\s-]*lac[_\s-]*d[_\s-]*e\b', r'\bd[-\s]*lactate\b', r'\blactate\b', r'\blactato\b'),
     }
-    found = {
-        reaction_id for reaction_id, pattern in patterns.items()
-        if re.search(pattern, text)
-    }
-    return tuple(
-        reaction_id for reaction_id in MISSION21_REQUIRED_TRACKED_FLUXES
-        if reaction_id in found
+    return _strict_extract_answer_mentions(
+        answer,
+        patterns,
+        MISSION21_REQUIRED_TRACKED_FLUXES,
+        allowed_residue_words={'and', 'e', 'exchange', 'route'},
     )
 
 
@@ -13194,8 +13183,14 @@ def _mission23_answer_mentions(answer):
 
 
 def normalise_mission23_answer(answer):
-    mentions = _mission23_answer_mentions(answer)
-    return next(iter(mentions)) if len(mentions) == 1 else None
+    patterns = {
+        'EX_ac_e': (r'\bex[_\s-]*ac[_\s-]*e\b', r'\bacetate\b', r'\bacetato\b', r'\bacetic\s+acid\b'),
+        'EX_co2_e': (r'\bex[_\s-]*co2[_\s-]*e\b', r'\bco2\b', r'\bcarbon\s+dioxide\b', r'\bdioxido(?:\s+de)?\s+carbono\b'),
+    }
+    mentions = _strict_extract_answer_mentions(
+        answer, patterns, tuple(patterns), allowed_residue_words={'and', 'e', 'exchange', 'route'}
+    )
+    return mentions[0] if mentions is not None and len(mentions) == 1 else None
 
 
 def mission23_answer_matches(answer, report_data=None):
@@ -13719,8 +13714,15 @@ def _mission24_answer_mentions(answer):
 
 
 def normalise_mission24_answer(answer):
-    mentions = _mission24_answer_mentions(answer)
-    return next(iter(mentions)) if len(mentions) == 1 else None
+    patterns = {
+        'EX_for_e': (r'\bex[_\s-]*for[_\s-]*e\b', r'\bformate\b', r'\bformato\b', r'\bformic\s+acid\b'),
+        'EX_ac_e': (r'\bex[_\s-]*ac[_\s-]*e\b', r'\bacetate\b', r'\bacetato\b', r'\bacetic\s+acid\b'),
+        'EX_co2_e': (r'\bex[_\s-]*co2[_\s-]*e\b', r'\bco2\b', r'\bcarbon\s+dioxide\b', r'\bdioxido(?:\s+de)?\s+carbono\b'),
+    }
+    mentions = _strict_extract_answer_mentions(
+        answer, patterns, tuple(patterns), allowed_residue_words={'and', 'e', 'exchange', 'route'}
+    )
+    return mentions[0] if mentions is not None and len(mentions) == 1 else None
 
 
 def mission24_answer_matches(answer, report_data=None):
@@ -13890,23 +13892,21 @@ def _normalise_mission25_text(value):
 
 
 def normalise_mission25_answer(answer):
-    """Return one oxygen context from a concise English or Portuguese answer."""
-    text = _normalise_mission25_text(answer)
-    if not text.strip():
-        return None
-    if re.search(r'\b(?:both|ambos|ambas|all|todos|todas)\b', text):
-        return None
-    aerobic = bool(re.search(
-        r'\b(?:aerobic|aerobiosis|with\s+oxygen|oxygen\s+available|aerobio|aerobiose|com\s+oxigenio)\b',
-        text,
-    ))
-    anaerobic = bool(re.search(
-        r'\b(?:anaerobic|anaerobiosis|without\s+oxygen|oxygen\s+blocked|oxygen[-\s]*free|anaerobio|anaerobiose|sem\s+oxigenio|oxigenio\s+bloqueado)\b',
-        text,
-    ))
-    if aerobic == anaerobic:
-        return None
-    return 'anaerobic' if anaerobic else 'aerobic'
+    """Return exactly one direct oxygen context."""
+    phrase = _strict_answer_phrase(answer)
+    aerobic = {
+        'aerobic', 'aerobiosis', 'with oxygen', 'oxygen available',
+        'aerobio', 'aerobiose', 'com oxigenio',
+    }
+    anaerobic = {
+        'anaerobic', 'anaerobiosis', 'without oxygen', 'oxygen blocked', 'oxygen free',
+        'anaerobio', 'anaerobiose', 'sem oxigenio', 'oxigenio bloqueado',
+    }
+    if phrase in anaerobic:
+        return 'anaerobic'
+    if phrase in aerobic:
+        return 'aerobic'
+    return None
 
 
 def mission25_answer_matches(answer, report_data=None):
@@ -15283,25 +15283,16 @@ def run_mission26_bound_sweep_check(sweep_data=None):
 
 
 def normalise_mission26_answer(answer):
-    text = unicodedata.normalize('NFKD', str(answer or '')).encode('ascii', 'ignore').decode('ascii').lower().strip()
-    if re.search(r'(?<![\d.])0(?:\.0+)?(?![\d.])', text):
+    text = re.sub(r'\s+', ' ', _strict_answer_ascii(answer))
+    if re.fullmatch(r'0(?:\.0+)?', text):
         return 0.0
-    accepted_phrases = (
-        'zero',
-        'lower bound zero',
-        'lower bound at zero',
-        'lb zero',
-        'complete oxygen block',
-        'oxygen blocked',
-        'full oxygen block',
-        'full block',
-        'bloqueio completo',
-        'oxigenio bloqueado',
-        'bloqueio de oxigenio',
-    )
-    if any(phrase in text for phrase in accepted_phrases):
-        return 0.0
-    return None
+    accepted = {
+        'zero', 'lower bound zero', 'lower bound at zero', 'lb zero',
+        'lower bound 0', 'lb 0', 'complete oxygen block', 'oxygen blocked',
+        'full oxygen block', 'full block', 'bloqueio completo',
+        'oxigenio bloqueado', 'bloqueio de oxigenio',
+    }
+    return 0.0 if text in accepted else None
 
 
 def mission26_answer_matches(answer, report_data=None):
@@ -15816,17 +15807,12 @@ def _normalise_mission27_text(value):
 
 
 def normalise_mission27_answer(answer):
-    text = _normalise_mission27_text(answer)
-    if not text:
-        return None
-    patterns = (
-        r'\bex[_\s-]*akg[_\s-]*e\b',
-        r'\b(?:2|two)[-\s]*(?:oxo|keto)glutarate\b',
-        r'\balpha[-\s]*ketoglutarate\b',
-        r'\bakg\b',
-        r'\b2og\b',
-    )
-    return MISSION27_EXPECTED_RESCUE if any(re.search(pattern, text) for pattern in patterns) else None
+    phrase = _strict_answer_phrase(answer)
+    aliases = {
+        'ex akg e', '2 oxoglutarate', 'two oxoglutarate', '2 ketoglutarate',
+        'two ketoglutarate', 'alpha ketoglutarate', 'akg', '2og',
+    }
+    return MISSION27_EXPECTED_RESCUE if phrase in aliases else None
 
 
 def mission27_answer_matches(answer, report_data=None):
@@ -16431,17 +16417,13 @@ def _normalise_mission28_text(value):
 
 
 def normalise_mission28_answer(answer):
-    text = _normalise_mission28_text(answer)
-    if not text:
-        return None
-    patterns = (
-        r'\bb2587\b',
-        r'\bkgtp\b',
-        r'\bakgt2r\b',
-        r'\b(?:2|two)[-\s]*(?:oxo|keto)glutarate\s+transporter\b',
-        r'\balpha[-\s]*ketoglutarate\s+transporter\b',
-    )
-    return MISSION28_EXPECTED_DEPENDENCY if any(re.search(pattern, text) for pattern in patterns) else None
+    phrase = _strict_answer_phrase(answer)
+    aliases = {
+        'b2587', 'kgtp', 'akgt2r', '2 oxoglutarate transporter',
+        'two oxoglutarate transporter', '2 ketoglutarate transporter',
+        'two ketoglutarate transporter', 'alpha ketoglutarate transporter',
+    }
+    return MISSION28_EXPECTED_DEPENDENCY if phrase in aliases else None
 
 
 def mission28_answer_matches(answer, report_data=None):
@@ -17642,31 +17624,38 @@ def _normalise_mission29_text(value):
 
 
 def normalise_mission29_answer(answer):
-    text = _normalise_mission29_text(answer)
-    compact = re.sub(r'[^a-z0-9]+', ' ', text).strip()
-    tokens = set(compact.split())
-    pair_aliases = {
-        'aconitase': [
-            ({'b0118', 'b1276'}, None),
-            ({'acnb', 'acna'}, None),
-            ({'aconta', 'acontb'}, None),
-            (set(), r'\baconitase(?:\s+isoenzyme|\s+isoenzymes|\s+pair)?\b'),
-        ],
-        'phosphofructokinase': [
-            ({'b1723', 'b3916'}, None),
-            ({'pfkb', 'pfka'}, None),
-            (set(), r'\bphosphofructokinase(?:\s+isoenzyme|\s+isoenzymes|\s+pair)?\b'),
-        ],
-        'pyruvate_kinase': [
-            ({'b1676', 'b1854'}, None),
-            ({'pykf', 'pyka'}, None),
-            (set(), r'\bpyruvate\s+kinase(?:\s+isoenzyme|\s+isoenzymes|\s+pair)?\b'),
-        ],
+    phrase = _strict_answer_phrase(answer)
+    conceptual = {
+        'aconitase': 'aconitase',
+        'aconitase isoenzyme': 'aconitase',
+        'aconitase isoenzymes': 'aconitase',
+        'aconitase pair': 'aconitase',
+        'aconitase isoenzyme pair': 'aconitase',
+        'phosphofructokinase': 'phosphofructokinase',
+        'phosphofructokinase isoenzyme': 'phosphofructokinase',
+        'phosphofructokinase isoenzymes': 'phosphofructokinase',
+        'phosphofructokinase pair': 'phosphofructokinase',
+        'phosphofructokinase isoenzyme pair': 'phosphofructokinase',
+        'pyruvate kinase': 'pyruvate_kinase',
+        'pyruvate kinase isoenzyme': 'pyruvate_kinase',
+        'pyruvate kinase isoenzymes': 'pyruvate_kinase',
+        'pyruvate kinase pair': 'pyruvate_kinase',
+        'pyruvate kinase isoenzyme pair': 'pyruvate_kinase',
     }
-    matches = []
-    for pair_id, aliases in pair_aliases.items():
-        if any((required and required.issubset(tokens)) or (pattern and re.search(pattern, compact)) for required, pattern in aliases):
-            matches.append(pair_id)
+    if phrase in conceptual:
+        return conceptual[phrase]
+
+    words = [word for word in phrase.split() if word not in {'and', 'e'}]
+    submitted = set(words)
+    alias_sets = {
+        'aconitase': ({'b0118', 'b1276'}, {'acnb', 'acna'}, {'aconta', 'acontb'}),
+        'phosphofructokinase': ({'b1723', 'b3916'}, {'pfkb', 'pfka'}),
+        'pyruvate_kinase': ({'b1676', 'b1854'}, {'pykf', 'pyka'}),
+    }
+    matches = [
+        pair_id for pair_id, accepted_sets in alias_sets.items()
+        if any(submitted == accepted for accepted in accepted_sets)
+    ]
     return matches[0] if len(matches) == 1 else None
 
 
@@ -18325,15 +18314,15 @@ def run_mission30_redundancy_threshold_check_remote(backend_url, sweep_data=None
 
 
 def normalise_mission30_answer(answer):
-    text = unicodedata.normalize('NFKD', str(answer or '')).encode('ascii', 'ignore').decode('ascii').lower().strip()
-    if re.search(r'(?<![\d.])-\s*2(?:\.0+)?(?![\d.])', text):
+    text = re.sub(r'\s+', ' ', _strict_answer_ascii(answer))
+    if re.fullmatch(r'-\s*2(?:\.0+)?', text):
         return MISSION30_EXPECTED_THRESHOLD_BOUND
-    accepted = (
+    accepted = {
         'minus two', 'negative two', 'lb minus two', 'lower bound minus two',
         'lower bound negative two', 'oxygen lower bound minus two',
         'menos dois', 'lower bound -2', 'lb -2',
-    )
-    return MISSION30_EXPECTED_THRESHOLD_BOUND if any(item in text for item in accepted) else None
+    }
+    return MISSION30_EXPECTED_THRESHOLD_BOUND if text in accepted else None
 
 
 def mission30_answer_matches(answer, report_data=None):
@@ -18957,28 +18946,15 @@ def _normalise_mission31_text(value):
 
 
 def normalise_mission31_answer(answer):
-    text = _normalise_mission31_text(answer)
-    compact = re.sub(r'[^a-z0-9]+', ' ', text).strip()
-    tokens = set(compact.split())
+    phrase = _strict_answer_phrase(answer)
     aliases = {
-        'EX_fru_e': [r'\bex\s+fru\s+e\b', r'\bd\s+fructose\b', r'\bfructose\b', r'\bfru\b'],
-        'EX_pyr_e': [r'\bex\s+pyr\s+e\b', r'\bpyruvate\b', r'\bpiruvato\b', r'\bpyr\b'],
-        'EX_succ_e': [r'\bex\s+succ\s+e\b', r'\bsuccinate\b', r'\bsuccinato\b', r'\bsucc\b'],
-        'EX_glu__L_e': [
-            r'\bex\s+glu\s+l\s+e\b',
-            r'\bl\s+glutamate\b',
-            r'\bglutamate\b',
-            r'\bl\s+glutamato\b',
-            r'\bglutamato\b',
-        ],
+        'ex fru e': 'EX_fru_e', 'd fructose': 'EX_fru_e', 'fructose': 'EX_fru_e', 'fru': 'EX_fru_e',
+        'ex pyr e': 'EX_pyr_e', 'pyruvate': 'EX_pyr_e', 'piruvato': 'EX_pyr_e', 'pyr': 'EX_pyr_e',
+        'ex succ e': 'EX_succ_e', 'succinate': 'EX_succ_e', 'succinato': 'EX_succ_e', 'succ': 'EX_succ_e',
+        'ex glu l e': 'EX_glu__L_e', 'l glutamate': 'EX_glu__L_e', 'glutamate': 'EX_glu__L_e',
+        'l glutamato': 'EX_glu__L_e', 'glutamato': 'EX_glu__L_e', 'glu': 'EX_glu__L_e',
     }
-    matches = []
-    for source_id, patterns in aliases.items():
-        if any(re.search(pattern, compact) for pattern in patterns):
-            matches.append(source_id)
-    if 'glu' in tokens and 'EX_glu__L_e' not in matches:
-        matches.append('EX_glu__L_e')
-    return matches[0] if len(set(matches)) == 1 else None
+    return aliases.get(phrase)
 
 
 def mission31_answer_matches(answer, report_data=None):
@@ -19648,35 +19624,31 @@ def _normalise_mission32_text(value):
 
 
 def normalise_mission32_answer(answer, report_data=None):
-    text = _normalise_mission32_text(answer)
-    compact = re.sub(r'[^a-z0-9]+', ' ', text).strip()
-    detected = []
-    aliases = {
-        'b0978': [r'\bb0978\b', r'\bcbd\s*a\b', r'\bcbda\b'],
-        'b0979': [r'\bb0979\b', r'\bcbd\s*b\b', r'\bcbdb\b'],
-        'b0733': [r'\bb0733\b', r'\bcyd\s*a\b', r'\bcyda\b'],
-        'b0734': [r'\bb0734\b', r'\bcyd\s*b\b', r'\bcydb\b'],
+    phrase = _strict_answer_phrase(answer)
+    conceptual = {
+        'cross branch pair',
+        'one gene from each branch',
+        'one subunit from each complex',
+        'um gene de cada ramo',
+        'uma subunidade de cada complexo',
     }
-    for gene_id, patterns in aliases.items():
-        if any(re.search(pattern, compact) for pattern in patterns):
-            detected.append(gene_id)
-    if len(set(detected)) == 2:
-        return sorted(set(detected))
-    if detected:
-        return None
-
-    conceptual_patterns = (
-        r'\bcross\s+branch\s+pair\b',
-        r'\bone\s+gene\s+from\s+each\s+branch\b',
-        r'\bone\s+subunit\s+from\s+each\s+complex\b',
-        r'\bum\s+gene\s+de\s+cada\s+ramo\b',
-        r'\buma\s+subunidade\s+de\s+cada\s+complexo\b',
-    )
-    if any(re.search(pattern, compact) for pattern in conceptual_patterns):
+    if phrase in conceptual:
         report = report_data or {}
         genes = report.get('unique_tested_cut_set_genes') or []
         return sorted(genes) if len(genes) == 2 else None
-    return None
+
+    patterns = {
+        'b0978': (r'\bb0978\b', r'\bcbd\s*a\b', r'\bcbda\b'),
+        'b0979': (r'\bb0979\b', r'\bcbd\s*b\b', r'\bcbdb\b'),
+        'b0733': (r'\bb0733\b', r'\bcyd\s*a\b', r'\bcyda\b'),
+        'b0734': (r'\bb0734\b', r'\bcyd\s*b\b', r'\bcydb\b'),
+    }
+    detected = _strict_extract_answer_mentions(
+        answer, patterns, tuple(patterns), allowed_residue_words={'and', 'e'}
+    )
+    if detected is None or len(set(detected)) != 2:
+        return None
+    return sorted(set(detected))
 
 
 def mission32_answer_matches(answer, report_data=None):
@@ -22673,7 +22645,7 @@ def build_mission36_fermentation_report_text(report_data=None, include_title=Tru
     if report.get('evidence_ready'):
         lines.extend([
             'Evidence complete.',
-            'Find the first glucose lower bound (tested) where O2 uptake caps out and ethanol secretion is positive.',
+            'Find the first tested glucose lower bound where O2 uptake caps out and ethanol secretion is positive.',
         ])
     else:
         lines.append('Evidence incomplete.')
@@ -23079,14 +23051,20 @@ def run_mission37_fermentation_cut_set_check_remote(
 
 
 def _mission37_normalise_answer(answer):
-    text = unicodedata.normalize('NFKD', str(answer or '')).encode('ascii', 'ignore').decode('ascii').upper()
-    compact = re.sub(r'[^A-Z0-9]+', ' ', text).strip()
-    if re.search(r'\bALL\s+THREE\b|\bTRIPLE(?:\s+KNOCKOUT)?\b', compact):
+    phrase = _strict_answer_phrase(answer)
+    if phrase in {'all three', 'triple', 'triple knockout'}:
         return frozenset(MISSION37_PDC_GENES.values())
-    detected = set()
+    patterns = {}
+    order = []
     for common_name, gene_id in MISSION37_PDC_GENES.items():
-        if re.search(rf'\b{re.escape(common_name)}\b', compact) or re.search(rf'\b{re.escape(gene_id)}\b', compact):
-            detected.add(gene_id)
+        order.append(gene_id)
+        patterns[gene_id] = (
+            rf'\b{re.escape(common_name.lower())}\b',
+            rf'\b{re.escape(gene_id.lower())}\b',
+        )
+    detected = _strict_extract_answer_mentions(
+        answer, patterns, tuple(order), allowed_residue_words={'and', 'e'}
+    )
     return frozenset(detected) if detected else None
 
 
@@ -23585,13 +23563,12 @@ def run_mission38_background_dependency_check_remote(
 
 
 def _mission38_normalise_answer(answer):
-    text = unicodedata.normalize('NFKD', str(answer or '')).encode('ascii', 'ignore').decode('ascii').upper()
-    compact = re.sub(r'[^A-Z0-9]+', ' ', text).strip()
+    phrase = _strict_answer_phrase(answer)
+    aliases = {}
     for common_name in MISSION38_CANDIDATES:
-        gene_id = MISSION38_GENES[common_name]
-        if re.search(rf'\b{re.escape(common_name)}\b', compact) or re.search(rf'\b{re.escape(gene_id)}\b', compact):
-            return common_name
-    return None
+        aliases[_strict_answer_phrase(common_name)] = common_name
+        aliases[_strict_answer_phrase(MISSION38_GENES[common_name])] = common_name
+    return aliases.get(phrase)
 
 
 def mission38_answer_matches(answer, report_data=None):
@@ -24117,17 +24094,13 @@ def run_mission39_bypass_rescue_check_remote(
 
 
 def _mission39_normalise_answer(answer):
-    text = unicodedata.normalize('NFKD', str(answer or '')).encode('ascii', 'ignore').decode('ascii').lower()
-    compact = re.sub(r'[^a-z0-9]+', ' ', text).strip()
+    phrase = _strict_answer_phrase(answer)
     aliases = {
-        'pyruvate_open': ('pyruvate', 'pyr', 'ex pyr e'),
-        'ethanol_open': ('ethanol', 'etoh', 'ex etoh e'),
-        'acetaldehyde_open': ('acetaldehyde', 'acald', 'ex acald e'),
+        'pyruvate': 'pyruvate_open', 'pyr': 'pyruvate_open', 'ex pyr e': 'pyruvate_open',
+        'ethanol': 'ethanol_open', 'etoh': 'ethanol_open', 'ex etoh e': 'ethanol_open',
+        'acetaldehyde': 'acetaldehyde_open', 'acald': 'acetaldehyde_open', 'ex acald e': 'acetaldehyde_open',
     }
-    for condition_id, names in aliases.items():
-        if any(re.search(rf'\b{re.escape(name)}\b', compact) for name in names):
-            return condition_id
-    return None
+    return aliases.get(phrase)
 
 
 def mission39_answer_matches(answer, report_data=None):
@@ -24631,14 +24604,23 @@ def run_mission40_rejected_sweep_attempt(sweep_menu_data, method_name, objective
 
 def _mission40_parse_answer_bounds(answer):
     raw = str(answer or '').replace('−', '-').replace('–', '-')
-    text = unicodedata.normalize('NFKD', raw).encode('ascii', 'ignore').decode('ascii')
+    text = unicodedata.normalize('NFKD', raw).encode('ascii', 'ignore').decode('ascii').lower()
     text = text.replace(',', '.')
+    number_pattern = r'[-+]?\d+(?:\.\d+)?'
     values = []
-    for token in re.findall(r'[-+]?\d+(?:\.\d+)?', text):
+    for token in re.findall(number_pattern, text):
         try:
             values.append(round(float(token), 6))
         except Exception:
-            continue
+            return None
+    if not values:
+        return None
+
+    residue = re.sub(number_pattern, ' ', text)
+    residue = re.sub(r'[^a-z]+', ' ', residue).strip()
+    allowed = {'and', 'lb', 'lbs', 'lower', 'bound', 'bounds', 'glucose', 'tested'}
+    if residue and any(token not in allowed for token in residue.split()):
+        return None
     return set(values)
 
 

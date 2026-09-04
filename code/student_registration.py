@@ -9,7 +9,11 @@ from save_load import save_file
 from student_identity import validate_student_name
 from utils import get_resource_path
 from campaign import CampaignContext, STUDENT_CAMPAIGN_MODES
-from hint_system import INITIAL_KEYS, SCORE_BY_HINT_LEVEL, WRONG_ANSWER_PENALTY
+from hint_system import (
+    SCORE_BY_HINT_LEVEL,
+    WRONG_ANSWER_PENALTY,
+    initial_keys_for_campaign,
+)
 
 
 class StudentRegistrationMenu:
@@ -38,9 +42,17 @@ class StudentRegistrationMenu:
             wordwrap=True,
         )
         entry.add.vertical_margin(15)
+        normal_keys = initial_keys_for_campaign('normal')
+        easy_keys = initial_keys_for_campaign('easy')
         entry.add.label(
-            f"Dr. Alves: You start with {INITIAL_KEYS['bronze']} Bronze, "
-            f"{INITIAL_KEYS['silver']} Silver, and {INITIAL_KEYS['gold']} Gold hint keys.",
+            "Dr. Alves: Hint keys are limited, and the starting budget depends on your route.",
+            max_char=-1,
+            wordwrap=True,
+        )
+        entry.add.label(
+            f"Normal starts with {normal_keys['bronze']} Bronze, {normal_keys['silver']} Silver, "
+            f"and {normal_keys['gold']} Gold keys. Easy starts with {easy_keys['bronze']} Bronze, "
+            f"{easy_keys['silver']} Silver, and {easy_keys['gold']} Gold keys.",
             max_char=-1,
             wordwrap=True,
         )
@@ -162,6 +174,13 @@ class StudentRegistrationMenu:
         )
         final_menu.add.label(f"Student: {candidate['name']}", font_name=self.font_path)
         final_menu.add.label(f"Mode: {candidate['mode'].title()}")
+        selected_keys = initial_keys_for_campaign(candidate['mode'])
+        final_menu.add.label(
+            f"Starting hint keys: {selected_keys['bronze']} Bronze / "
+            f"{selected_keys['silver']} Silver / {selected_keys['gold']} Gold",
+            max_char=-1,
+            wordwrap=True,
+        )
         final_menu.add.label(
             f"Missions: {context.mission_count}    Maximum score: {context.max_score}",
             max_char=-1,

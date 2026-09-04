@@ -1,50 +1,82 @@
 """Teacher mission-jump support for isolated LabHero previews.
 
-Web (production):
-    /teacher/?mission=17
-    The /teacher/ route must be protected by the deployment web server.
+Teacher previews deliberately reuse the student's canonical mission numbers.
+Normal previews reproduce the full 40-mission predecessor chain; Easy previews
+reproduce only the curated Easy predecessors.  The preview itself is isolated
+by the save namespace selected in :mod:`LabHero`, so normal student progress is
+never loaded or overwritten.
 
-Desktop:
-    python3 LabHero.py --teacher --mission 17
+Web fallbacks remain available through the server-protected route::
 
-The teacher session uses a separate persistence namespace and an ephemeral
-campaign state in which missions before the target are completed. The student's
-normal save is never loaded or overwritten.
+    /teacher/?mission=25&mode=easy
+
+Desktop automation remains available through CLI flags::
+
+    python3 LabHero.py --teacher --mission 25 --mode easy
+
+The user-friendly in-game entry point is hidden on the title screen behind
+SHIFT+T and authenticates server-side before constructing the same request.
 """
 
 import sys
 from urllib.parse import parse_qs
 
-from campaign import NORMAL_MISSIONS, normalize_mission_id
-from hint_system import create_reward_state
+from campaign import EASY_MISSIONS, NORMAL_MISSIONS, normalize_mission_id
+from hint_system import create_reward_state, initial_keys_for_campaign
 
 
 TEACHER_DISPLAY_NAME = "Teacher Preview"
+TEACHER_CAMPAIGN_MODES = ("normal", "easy")
 
 
-def validate_teacher_mission(mission_id):
+def normalize_teacher_campaign_mode(mode, default="normal"):
+    value = str(mode or default).strip().lower()
+    return value if value in TEACHER_CAMPAIGN_MODES else default
+
+
+def teacher_missions_for_mode(campaign_mode="normal"):
+    mode = normalize_teacher_campaign_mode(campaign_mode)
+    return EASY_MISSIONS if mode == "easy" else NORMAL_MISSIONS
+
+
+def validate_teacher_mission(mission_id, campaign_mode="normal"):
     mission_id = normalize_mission_id(mission_id)
-    return mission_id if mission_id in NORMAL_MISSIONS else None
+    sequence = teacher_missions_for_mode(campaign_mode)
+    return mission_id if mission_id in sequence else None
+
+
+def build_teacher_request(mission_id, campaign_mode="normal", source="title"):
+    mode = normalize_teacher_campaign_mode(campaign_mode)
+    target = validate_teacher_mission(mission_id, mode)
+    if target is None:
+        return None
+    return {
+        "mission_id": target,
+        "campaign_mode": mode,
+        "source": str(source or "title"),
+    }
 
 
 def parse_teacher_query(search):
-    """Parse only the mission selector used inside an authorised teacher route."""
+    """Parse mission + route inside the already-authorised teacher URL."""
     query = str(search or "").strip()
     if query.startswith("?"):
         query = query[1:]
     values = parse_qs(query, keep_blank_values=True)
-    mission_id = validate_teacher_mission((values.get("mission") or [None])[0])
-    if mission_id is None:
-        return None
-    return {"mission_id": mission_id, "source": "web"}
+    mode = normalize_teacher_campaign_mode((values.get("mode") or ["normal"])[0])
+    return build_teacher_request(
+        (values.get("mission") or [None])[0],
+        mode,
+        source="web",
+    )
 
 
 def is_teacher_web_path(pathname):
     """Return True only for the server-protected /teacher/ namespace.
 
-    The public root must never activate Teacher Mode from query parameters
-    alone.  Production nginx protects /teacher/ with HTTP Basic Auth before
-    the Pygbag bundle is served.
+    The public root must never activate Teacher Preview from query parameters
+    alone. Production nginx protects /teacher/ with HTTP Basic Auth before the
+    Pygbag entry document is served.
     """
     path = str(pathname or "").strip()
     return path == "/teacher" or path.startswith("/teacher/")
@@ -62,18 +94,19 @@ def parse_teacher_argv(argv):
         return None
 
     mission_value = None
+    mode_value = "normal"
     for index, arg in enumerate(args):
         if arg.startswith("--mission="):
             mission_value = arg.split("=", 1)[1]
-            break
-        if arg == "--mission" and index + 1 < len(args):
+        elif arg == "--mission" and index + 1 < len(args):
             mission_value = args[index + 1]
-            break
+        elif arg.startswith("--mode="):
+            mode_value = arg.split("=", 1)[1]
+        elif arg == "--mode" and index + 1 < len(args):
+            mode_value = args[index + 1]
 
-    mission_id = validate_teacher_mission(mission_value)
-    if mission_id is None:
-        return None
-    return {"mission_id": mission_id, "source": "desktop"}
+    mode = normalize_teacher_campaign_mode(mode_value)
+    return build_teacher_request(mission_value, mode, source="desktop")
 
 
 def get_teacher_request():
@@ -92,24 +125,36 @@ def get_teacher_request():
     return parse_teacher_argv(sys.argv[1:])
 
 
-def previous_teacher_missions(target_mission):
-    target = validate_teacher_mission(target_mission)
+def previous_teacher_missions(target_mission, campaign_mode="normal"):
+    mode = normalize_teacher_campaign_mode(campaign_mode)
+    target = validate_teacher_mission(target_mission, mode)
     if target is None:
-        raise ValueError(f"Invalid teacher mission: {target_mission}")
-    index = NORMAL_MISSIONS.index(target)
-    return NORMAL_MISSIONS[:index]
+        raise ValueError(
+            f"Invalid {mode} teacher mission: {target_mission}"
+        )
+    sequence = teacher_missions_for_mode(mode)
+    index = sequence.index(target)
+    return sequence[:index]
 
 
-def build_teacher_save_data(target_mission):
-    """Return an isolated six-field save payload for one teacher preview."""
-    target = validate_teacher_mission(target_mission)
+def build_teacher_save_data(target_mission, campaign_mode="normal"):
+    """Return an isolated six-field save payload for one teacher preview.
+
+    Only predecessors in the selected route are marked complete.  Therefore an
+    Easy preview of Mission 25 contains M01/M03/.../M23, not fake completions of
+    Normal-only missions.  Canonical mission ids remain unchanged.
+    """
+    mode = normalize_teacher_campaign_mode(campaign_mode)
+    target = validate_teacher_mission(target_mission, mode)
     if target is None:
-        raise ValueError(f"Invalid teacher mission: {target_mission}")
+        raise ValueError(
+            f"Invalid {mode} teacher mission: {target_mission}"
+        )
 
-    previous = previous_teacher_missions(target)
+    previous = previous_teacher_missions(target, mode)
     # Runtime mission lists are historically newest-first. Membership is what
-    # progression relies on, but keeping that convention also preserves NPC
-    # chain behaviour for direct teacher previews.
+    # progression relies on, but preserving that convention keeps mission/NPC
+    # code consistent with normal saves.
     completed = list(reversed(previous))
     activated = list(completed)
 
@@ -121,10 +166,13 @@ def build_teacher_save_data(target_mission):
         "status": "down_idle",
         "skin_id": "default",
         "name_confirmed": True,
-        "campaign_mode": "teacher",
+        "campaign_mode": mode,
         # Student final-results summaries are irrelevant in a teacher preview.
         "final_results_seen": True,
     }
+
+    reward_state = create_reward_state(legacy_completed=completed)
+    reward_state["keys"] = initial_keys_for_campaign(mode)
 
     return [
         TEACHER_DISPLAY_NAME,
@@ -132,5 +180,5 @@ def build_teacher_save_data(target_mission):
         activated,
         completed,
         player_state,
-        create_reward_state(legacy_completed=completed),
+        reward_state,
     ]

@@ -1,3 +1,4 @@
+import ast
 import gzip
 import json
 import unittest
@@ -6,6 +7,18 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
+
+
+def _load_function_from_source(path, function_name, globals_dict=None):
+    tree = ast.parse(path.read_text(encoding='utf-8'))
+    node = next(
+        item for item in tree.body
+        if isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)) and item.name == function_name
+    )
+    module = ast.Module(body=[node], type_ignores=[])
+    namespace = dict(globals_dict or {})
+    exec(compile(module, str(path), 'exec'), namespace)
+    return namespace[function_name]
 
 
 def _backend_reaction_names():
@@ -68,6 +81,60 @@ class ObjectiveReactionLabelTests(unittest.TestCase):
         self.assertIn("'Objective reaction:'", source)
         self.assertIn('selection_box_width=850', source)
         self.assertIn('font_size=20', source)
+
+    def test_objective_dropdown_extracts_internal_id_not_display_label(self):
+        helper = _load_function_from_source(
+            ROOT / 'code' / 'window.py',
+            '_selected_menu_value',
+            {'normalise_method_name': lambda value: value},
+        )
+        label = 'Biomass Objective Function with GAM (BIOMASS_Ecoli_core_w_GAM)'
+        reaction_id = 'BIOMASS_Ecoli_core_w_GAM'
+        for raw_value in (
+            [(label, reaction_id)],
+            [[label, reaction_id]],
+            [(label, reaction_id), 0],
+            (label, reaction_id),
+        ):
+            with self.subTest(raw_value=raw_value):
+                self.assertEqual(
+                    helper({'objective': raw_value}, 'objective'),
+                    reaction_id,
+                )
+        self.assertEqual(
+            helper({'method': [('Linear MOMA (lMOMA)', 'lmoma'), 2]}, 'method'),
+            'lmoma',
+        )
+
+    def test_simulation_file_persists_canonical_method_and_objective_scalars(self):
+        source = (ROOT / 'code' / 'window.py').read_text(encoding='utf-8')
+        self.assertIn("saved_method_data = {'method': simulation_method}", source)
+        self.assertIn("saved_objective_data = {'objective': objective_name}", source)
+        self.assertIn(
+            "save_simulation_file([saved_method_data, saved_objective_data, data_genes, data_reac, data_fluxes, {'model_id': self.model_id}])",
+            source,
+        )
+
+    def test_legacy_saved_dropdown_reader_prefers_internal_value(self):
+        helper = _load_function_from_source(
+            ROOT / 'code' / 'simulation.py',
+            '_saved_menu_scalar',
+        )
+        label = 'D-Glucose exchange (EX_glc__D_e)'
+        reaction_id = 'EX_glc__D_e'
+        self.assertEqual(
+            helper({'objective': [(label, reaction_id), 7]}, 'objective'),
+            reaction_id,
+        )
+        self.assertEqual(
+            helper({'objective': 'BIOMASS_SC5_notrace'}, 'objective'),
+            'BIOMASS_SC5_notrace',
+        )
+
+    def test_failed_simulation_result_shows_error_details(self):
+        source = (ROOT / 'code' / 'window.py').read_text(encoding='utf-8')
+        self.assertIn("objective_result.startswith(('Error:', 'Simulation error:'))", source)
+        self.assertIn("text += f'\\n{objective_result}'", source)
 
 
 if __name__ == '__main__':

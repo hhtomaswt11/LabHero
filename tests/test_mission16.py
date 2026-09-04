@@ -363,8 +363,6 @@ class Mission16RegressionTests(unittest.TestCase):
         self.assertIn('Context-Dependent Carbon Rescue', mission_doc)
         self.assertIn('Status: INFEASIBLE', mission_doc)
         self.assertIn('Which removed environmental factor', mission_doc)
-        overview = (PROJECT_ROOT / 'MISSION_PROGRESS_OVERVIEW.md').read_text(encoding='utf-8')
-        self.assertIn('Mission 16 — Context-Dependent Carbon Rescue', overview)
 
     def test_real_fba_values_for_five_sources_and_infeasible_challenge(self):
         for source_id, expected in self.EXPECTED.items():

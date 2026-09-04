@@ -292,7 +292,7 @@ class Mission30RegressionTests(unittest.TestCase):
         report = self._complete()
         for answer in ('-2', 'LB -2', 'minus two', 'lower bound -2', 'menos dois'):
             self.assertTrue(simulation.mission30_answer_matches(answer, report), answer)
-        for answer in ('0', '-5', 'anaerobic', 'b1723', 'PFK'):
+        for answer in ('0', '-5', 'anaerobic', 'b1723', 'PFK', '-2 -1'):
             self.assertFalse(simulation.mission30_answer_matches(answer, report), answer)
 
     def test_report_is_status_aware_and_not_answer_explicit(self):

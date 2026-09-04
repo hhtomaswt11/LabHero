@@ -359,8 +359,6 @@ class Mission19RegressionTests(unittest.TestCase):
         mission_doc = (PROJECT_ROOT / 'data' / 'missions' / 'mission19.md').read_text(encoding='utf-8')
         self.assertIn('Re-optimisation vs Minimal Adjustment', mission_doc)
         self.assertIn('No hidden simulation', mission_doc)
-        overview = (PROJECT_ROOT / 'MISSION_PROGRESS_OVERVIEW.md').read_text(encoding='utf-8')
-        self.assertIn('Mission 19 — Re-optimisation vs Minimal Adjustment', overview)
         deploy = (PROJECT_ROOT / 'deploy' / 'README.md').read_text(encoding='utf-8')
         self.assertNotIn("Mission 19's perturbation helper", deploy)
 

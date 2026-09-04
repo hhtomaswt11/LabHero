@@ -129,7 +129,7 @@ class Student2FinalResultsTests(unittest.TestCase):
     def test_completed_campaign_can_reopen_final_results_with_f_only(self):
         source = (ROOT / 'code' / 'level.py').read_text(encoding='utf-8')
         self.assertIn('def can_reopen_final_results(self):', source)
-        self.assertIn("self.campaign_context.mode != 'teacher'", source)
+        self.assertIn('not self.teacher_preview', source)
         self.assertIn('self.player.name_confirmed', source)
         self.assertIn('self.campaign_context.is_campaign_complete(self.player.missions_completed)', source)
         self.assertIn('def handle_final_results_shortcut(self):', source)

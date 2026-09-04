@@ -375,8 +375,6 @@ class Mission17RegressionTests(unittest.TestCase):
         self.assertIn('Essential Uptake Routes', mission_doc)
         self.assertIn('signed exchange flux', mission_doc)
         self.assertIn('Which two candidate uptake routes', mission_doc)
-        overview = (PROJECT_ROOT / 'MISSION_PROGRESS_OVERVIEW.md').read_text(encoding='utf-8')
-        self.assertIn('Mission 17 — Essential Uptake Routes', overview)
 
     def test_real_fba_values_for_baseline_and_five_closures(self):
         try:

@@ -5,8 +5,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "code"))
 
-from campaign import CampaignContext, EASY_MISSIONS
-from progression import is_model_unlocked
+from campaign import CampaignContext, EASY_MISSIONS, NORMAL_MISSIONS
+from progression import is_model_unlocked, is_skin_unlocked
 
 
 EXPECTED_EASY = (
@@ -32,6 +32,20 @@ class Easy2ACuratedProgressionTests(unittest.TestCase):
         self.assertEqual(ctx.next_mission("07"), "13")
         self.assertEqual(ctx.previous_mission("13"), "07")
         self.assertEqual(ctx.next_mission("27"), "36")
+
+    def test_easy_keeps_canonical_normal_mission_numbers(self):
+        # Easy is a curated subset, not a renumbered parallel campaign.  This
+        # means a student asking for help with Easy M25 is referring to the same
+        # canonical Mission 25 used by Normal/Teacher preview.
+        self.assertTrue(set(EASY_MISSIONS).issubset(set(NORMAL_MISSIONS)))
+        self.assertEqual(EASY_MISSIONS[1], "03")
+        self.assertEqual(EASY_MISSIONS[-1], "36")
+
+    def test_golden_skin_remains_normal_m35_exclusive_reward(self):
+        # Easy reaches the Golden Lab via the M27 progression mapping, but the
+        # cosmetic Golden LabHero skin deliberately still requires actual M35.
+        self.assertFalse(is_skin_unlocked("golden", list(EASY_MISSIONS)))
+        self.assertTrue(is_skin_unlocked("golden", ["35"]))
 
     def test_easy_unlocks_use_actual_easy_predecessor(self):
         ctx = CampaignContext("easy")

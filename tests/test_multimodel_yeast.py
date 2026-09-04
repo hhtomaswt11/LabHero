@@ -573,12 +573,17 @@ class MultiModelYeastRegressionTests(unittest.TestCase):
         save_load._MEMSTORE.clear()
         save_load._MEMSTORE['simulation_file'] = artifact
 
-        loaded = save_load.load_file('simulation_file')
-        self.assertEqual(loaded[5], {'model_id': 'yeast_iMM904'})
-        self.assertEqual(simulation._read_simulation_model_id(), 'yeast_iMM904')
-        payload = simulation._build_request_payload()
-        self.assertEqual(payload['model_id'], 'yeast_iMM904')
-        self.assertEqual(payload['objective'], 'BIOMASS_SC5_notrace')
+        # The contract being tested is specifically the browser persistence
+        # path.  On a native test run ``save_load._IS_WEB`` is False, so merely
+        # filling _MEMSTORE would otherwise make load_file() look for a desktop
+        # simulation_file.txt in the process working directory.
+        with patch.object(save_load, '_IS_WEB', True):
+            loaded = save_load.load_file('simulation_file')
+            self.assertEqual(loaded[5], {'model_id': 'yeast_iMM904'})
+            self.assertEqual(simulation._read_simulation_model_id(), 'yeast_iMM904')
+            payload = simulation._build_request_payload()
+            self.assertEqual(payload['model_id'], 'yeast_iMM904')
+            self.assertEqual(payload['objective'], 'BIOMASS_SC5_notrace')
 
     def test_simulation_reader_preserves_text_objective_and_legacy_dropselect(self):
         # Yeast TextInput is a plain string.  It must never be indexed like a

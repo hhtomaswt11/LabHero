@@ -505,8 +505,6 @@ class Mission15RegressionTests(unittest.TestCase):
         mission_doc = (PROJECT_ROOT / 'data' / 'missions' / 'mission15.md').read_text(encoding='utf-8')
         self.assertIn('Product–Growth Viability Audit', mission_doc)
         self.assertIn('BIOMASS_Ecoli_core_w_GAM', mission_doc)
-        overview = (PROJECT_ROOT / 'MISSION_PROGRESS_OVERVIEW.md').read_text(encoding='utf-8')
-        self.assertIn('Mission 15 — Product–Growth Viability Audit', overview)
 
     def test_real_pfba_values_for_both_objectives(self):
         expected_by_objective = {

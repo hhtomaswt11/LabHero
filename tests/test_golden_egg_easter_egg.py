@@ -10,7 +10,7 @@ if str(CODE) not in sys.path:
     sys.path.insert(0, str(CODE))
 
 from campaign import CampaignContext
-from hint_system import HintSystem
+from hint_system import HintSystem, golden_egg_gold_reward_for_campaign, initial_keys_for_campaign
 
 
 class GoldenEggEasterEggTests(unittest.TestCase):
@@ -58,6 +58,10 @@ class GoldenEggEasterEggTests(unittest.TestCase):
 
         self.assertTrue(teacher.should_gate_be_open('35', []))
 
+    def test_normal_and_easy_golden_egg_rewards_are_explicit(self):
+        self.assertEqual(golden_egg_gold_reward_for_campaign('normal'), 3)
+        self.assertEqual(golden_egg_gold_reward_for_campaign('easy'), 1)
+
     def test_hint_system_can_award_three_gold_keys_without_touching_scores(self):
         hints = HintSystem()
         before_scores = hints.to_dict()['mission_scores']
@@ -95,12 +99,29 @@ class GoldenEggEasterEggTests(unittest.TestCase):
         source = (CODE / 'player.py').read_text(encoding='utf-8')
         self.assertIn('def collect_golden_egg(self):', source)
         self.assertIn('if self.golden_egg_collected:', source)
-        self.assertIn("self.hint_system.award_keys('gold', 3)", source)
+        self.assertIn("reward = golden_egg_gold_reward_for_campaign(self.campaign_mode)", source)
+        self.assertIn("self.hint_system.award_keys('gold', reward)", source)
         self.assertIn('save_file(self.get_save_data())', source)
+        self.assertIn("f'Golden Egg discovered! You found {reward} Gold Key'", source)
+
+    def test_completed_campaign_leaves_uncollected_egg_visible_and_unconsumed(self):
+        source = (CODE / 'player.py').read_text(encoding='utf-8')
         self.assertIn(
-            'Golden Egg discovered! You found 3 Gold Keys.',
+            'self.get_campaign_context().is_campaign_complete(self.missions_completed)',
             source,
         )
+        self.assertIn(
+            'You should have found me before finishing the campaign. What a shame!',
+            source,
+        )
+        # The completed-campaign branch returns False, so Player.input does not
+        # kill the GoldenEgg interaction sprite and no key reward is consumed.
+        completed_branch = source.split(
+            'if self.get_campaign_context().is_campaign_complete(self.missions_completed):', 1
+        )[1].split('reward = golden_egg_gold_reward_for_campaign', 1)[0]
+        self.assertIn('return False', completed_branch)
+        self.assertNotIn('self.golden_egg_collected = True', completed_branch)
+        self.assertNotIn("award_keys('gold'", completed_branch)
 
     def test_level_spawns_only_uncollected_egg_and_nearby_interaction(self):
         source = (CODE / 'level.py').read_text(encoding='utf-8')

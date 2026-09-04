@@ -14,6 +14,10 @@ services:
     container_name: labhero-frontend
     ports:
       - "80:80"
+    # Reuse the same host-side teacher credential file created by deploy.sh.
+    # Public student routes do not require it; only /teacher* and SHIFT+T auth do.
+    volumes:
+      - "${HOME}/.config/labhero/teacher.htpasswd:/etc/nginx/.htpasswd:ro"
     depends_on:
       - backend
     restart: unless-stopped

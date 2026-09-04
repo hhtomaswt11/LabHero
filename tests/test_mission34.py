@@ -369,12 +369,11 @@ class Mission34RegressionTests(unittest.TestCase):
         self.assertIn('gpr_disabled_reactions: list[str] | None', schema)
         self.assertIn('gpr_disabled_reactions=sorted(disabled_reactions)', backend)
 
-    def test_docs_and_manifest_exist(self):
-        self.assertTrue((PROJECT_ROOT / 'data' / 'missions' / 'mission34.md').exists())
-        overview = (PROJECT_ROOT / 'MISSION_PROGRESS_OVERVIEW.md').read_text()
-        manifest = (PROJECT_ROOT / 'PATCH_MANIFEST.txt').read_text()
-        self.assertIn('Mission 34 — Shared-Subunit Equivalence Audit', overview)
-        self.assertIn('Mission 34 — Shared-Subunit Equivalence Audit', manifest)
+    def test_mission_document_exists_and_matches_current_title(self):
+        mission_doc = PROJECT_ROOT / 'data' / 'missions' / 'mission34.md'
+        self.assertTrue(mission_doc.exists())
+        text = mission_doc.read_text(encoding='utf-8')
+        self.assertIn('Mission 34 — Shared-Subunit Equivalence Audit', text)
 
 
 if __name__ == '__main__':

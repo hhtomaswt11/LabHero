@@ -518,7 +518,7 @@ class Mission31RegressionTests(unittest.TestCase):
             self.assertTrue(simulation.mission31_answer_matches(answer, report), answer)
         for answer in (
             'EX_akg_e', '2-oxoglutarate', 'fructose', 'pyruvate', 'succinate',
-            'b0118', 'b1276', 'aconitase', 'glucose'
+            'b0118', 'b1276', 'aconitase', 'glucose', 'glu randomtext'
         ):
             self.assertFalse(simulation.mission31_answer_matches(answer, report), answer)
 

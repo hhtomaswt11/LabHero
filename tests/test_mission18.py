@@ -333,8 +333,6 @@ class Mission18RegressionTests(unittest.TestCase):
         mission_doc = (PROJECT_ROOT / 'data' / 'missions' / 'mission18.md').read_text(encoding='utf-8')
         self.assertIn('Binding Export Constraints', mission_doc)
         self.assertIn('binding and non-binding', mission_doc)
-        overview = (PROJECT_ROOT / 'MISSION_PROGRESS_OVERVIEW.md').read_text(encoding='utf-8')
-        self.assertIn('Mission 18 — Binding Export Constraints', overview)
 
     def test_real_fba_values_for_baseline_and_two_upper_bound_trials(self):
         try:

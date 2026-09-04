@@ -27,22 +27,40 @@ _YIELD_ON_WEB = sys.platform == 'emscripten'
 
 
 def _selected_menu_value(data, key):
-    """Return a pygame-menu input value without corrupting plain text fields.
+    """Return the canonical value stored by a pygame-menu input widget.
 
-    DropSelect widgets expose a nested tuple/list value, while TextInput widgets
-    expose a plain string.  Indexing a string as ``value[0][0]`` silently turns
-    ``BIOMASS_SC5_notrace`` into ``B``; large-model text objectives therefore
-    need an explicit string branch.
+    ``DropSelect`` items are configured as ``(display_label, internal_value)``.
+    ``Menu.get_input_data()`` wraps the selected item in a list/tuple structure,
+    so reading ``value[0][0]`` returns the *display label*.  That happened to be
+    harmless while reaction labels and ids were identical, but became a real
+    simulation bug once Objectives started displaying ``Name (ID)``.
+
+    TextInput values are plain strings and must remain atomic.  For selectors we
+    deliberately prefer the item's second field (the solver-facing value) and
+    retain fallbacks for older pygame-menu/save shapes.
     """
     value = data.get(key)
 
     if isinstance(value, str):
         selected = value
+    elif isinstance(value, (list, tuple)) and value:
+        item = value[0]
+        if isinstance(item, (list, tuple)):
+            if len(item) >= 2:
+                selected = item[1]
+            elif item:
+                selected = item[0]
+            else:
+                selected = ''
+        elif len(value) >= 2 and isinstance(value[1], str):
+            # Compatibility with an unwrapped ``(label, value)`` shape.
+            selected = value[1]
+        else:
+            selected = item
     else:
-        try:
-            selected = value[0][0]
-        except Exception:
-            selected = str(value)
+        selected = '' if value is None else str(value)
+
+    selected = str(selected).strip()
     return normalise_method_name(selected) if key == 'method' else selected
 
 
@@ -659,6 +677,15 @@ def _build_simulation_results_text(results):
         pass
 
     text = model_prefix + f'Primary objective:\n{objective_name}'
+
+    # A failed-safe simulation must expose the actual reason here.  Previously
+    # the numeric formatter converted error strings to ``not available``, even
+    # though the preceding toast explicitly told the player to open New Results
+    # for details.
+    if isinstance(objective_result, str) and objective_result.startswith(('Error:', 'Simulation error:')):
+        text += f'\n{objective_result}'
+        return text
+
     if objective_name == biomass_reaction:
         text += f'\n{format_growth_rate(objective_result)}'
         text = text.replace(
@@ -1906,17 +1933,14 @@ class Window:
             )
 
 
-            # Persist a canonical text-objective shape for large models.
-            # pygame-menu TextInput values are plain strings whereas the E. coli
-            # DropSelect uses nested selector data.  Keeping the written yeast
-            # payload explicit avoids depending on widget-internal serialization
-            # and is also the shape the future web client can send directly.
-            saved_objective_data = (
-                {'objective': objective_name}
-                if objective_text_input is not None
-                else data_objective
-            )
-            save_simulation_file([data_simul, saved_objective_data, data_genes, data_reac, data_fluxes, {'model_id': self.model_id}])
+            # Persist canonical solver-facing scalars for every model.  Never
+            # store raw DropSelect structures here: their first field is the
+            # human-readable label, while the second field is the reaction/method
+            # value understood by the solver.  Canonical strings also keep Web
+            # and desktop saves independent of pygame-menu serialization details.
+            saved_method_data = {'method': simulation_method}
+            saved_objective_data = {'objective': objective_name}
+            save_simulation_file([saved_method_data, saved_objective_data, data_genes, data_reac, data_fluxes, {'model_id': self.model_id}])
             animation_text_save('Running')
             try:
                 if gene_input_error:

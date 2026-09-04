@@ -5,7 +5,11 @@ from timers import Timer
 import time
 from math import ceil
 from utils import *
-from hint_system import HintSystem, create_reward_state
+from hint_system import (
+    HintSystem,
+    create_reward_state,
+    golden_egg_gold_reward_for_campaign,
+)
 from student_identity import infer_name_confirmed, validate_student_name
 from save_load import save_file
 from campaign import (
@@ -333,16 +337,31 @@ class Player(pygame.sprite.Sprite):
 
 
     def collect_golden_egg(self):
-        """Collect the one-time Golden Egg reward and persist it immediately."""
+        """Collect the one-time Golden Egg reward while the campaign can use it.
+
+        Once the selected campaign is complete, hint keys have no remaining
+        mission-scoring purpose.  In that case the easter egg stays visible and
+        uncollected so the late discovery gets a small narrative response rather
+        than consuming a now-useless reward.
+        """
         if self.golden_egg_collected:
             return False
 
+        if self.get_campaign_context().is_campaign_complete(self.missions_completed):
+            animation_text_save(
+                'Too late! You should have found me before finishing the campaign. What a shame!',
+                time=3600,
+            )
+            return False
+
+        reward = golden_egg_gold_reward_for_campaign(self.campaign_mode)
         self.golden_egg_collected = True
-        self.hint_system.award_keys('gold', 3)
+        self.hint_system.award_keys('gold', reward)
         self.reward_state = self.hint_system.state
         save_file(self.get_save_data())
         animation_text_save(
-            'Golden Egg discovered! You found 3 Gold Keys.',
+            f'Golden Egg discovered! You found {reward} Gold Key'
+            f'{"s" if reward != 1 else ""}.',
             time=3200,
         )
         return True
@@ -362,6 +381,11 @@ class Player(pygame.sprite.Sprite):
             return False
         self.player_name = normalized
         self.campaign_mode = mode
+        # New campaigns receive a route-sized hint budget.  This happens only
+        # during the one-time pre-mission registration, so no existing campaign
+        # scores/hints are retroactively altered.
+        self.hint_system.set_campaign_initial_keys(mode)
+        self.reward_state = self.hint_system.state
         self.name_confirmed = True
         return True
 

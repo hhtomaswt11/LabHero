@@ -10,7 +10,11 @@ class LockedMissionFeedbackConsistencyTests(unittest.TestCase):
     def _source(self, name):
         return (CODE / name).read_text(encoding="utf-8")
 
-    def test_normal_yeast_npcs_use_transient_lock_feedback(self):
+    def test_normal_yeast_mission_menus_keep_direct_activation_guard(self):
+        # Direct access to a locked mission menu still needs a transient guard.
+        # This is separate from talking to the scientist on the map, where the
+        # selected final UX is for the scientist to explain why the mission is
+        # locked in their normal dialogue panel.
         previous = {"36": "35", "37": "36", "38": "37", "39": "38", "40": "39"}
         for mission_id, requirement in previous.items():
             with self.subTest(mission=mission_id):
@@ -19,22 +23,20 @@ class LockedMissionFeedbackConsistencyTests(unittest.TestCase):
                     f"animation_text_save('Complete Mission {requirement} first!', time=2500)",
                     source,
                 )
-                self.assertIn("self.toggle_menu()", source)
                 tree = ast.parse(source)
                 self.assertIsNotNone(tree)
 
-    def test_normal_yeast_locked_branch_no_longer_renders_locked_dialogue(self):
+    def test_normal_yeast_locked_npc_branch_uses_scientist_dialogue(self):
         for mission_id in ("36", "37", "38", "39", "40"):
             with self.subTest(mission=mission_id):
                 source = self._source(f"mission{mission_id}.py")
-                self.assertNotIn("self.menu_message(locked, buttons=False)", source)
+                self.assertIn("self.menu_message(locked, buttons=False)", source)
 
-    def test_easy_locked_feedback_uses_same_transient_overlay(self):
+    def test_easy_locked_npc_branch_uses_scientist_dialogue(self):
         source = self._source("easy_mission_npc.py")
-        self.assertIn("from functions import animation_text_save", source)
-        self.assertIn("animation_text_save(f'Complete Mission {requirement} first!', time=2500)", source)
-        self.assertNotIn("self.menu_message(locked, buttons=False)", source)
-        self.assertIn("self.toggle_menu()", source)
+        self.assertIn("self.menu_message(locked, buttons=False)", source)
+        self.assertNotIn("from functions import animation_text_save", source)
+        self.assertIn("Complete Mission {requirement} first in your Easy campaign.", source)
 
 
 if __name__ == "__main__":

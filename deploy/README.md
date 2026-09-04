@@ -62,11 +62,11 @@ The final Podman compatibility test must still be run on a machine with Podman
 
 ## What you're deploying
 
-LabHero is a serious game (RPG simulation) that teaches non-bioinformaticians about genome-scale metabolic models. Players control a bioinformatician at a university and complete missions involving FBA simulations on E. coli.
+LabHero is a serious game (RPG simulation) for learning constraint-based metabolic modelling. Players register as students with Dr. Alves and complete evidence-driven missions in the Normal or curated Easy campaign. The current curriculum uses the E. coli core model and, after the relevant progression milestone, the yeast iMM904 model.
 
 It started life as a Python/Pygame desktop game and has been ported to the browser via pygbag. The stack you'll run consists of two Docker containers:
 
-- **`labhero-backend`** — FastAPI + MEWpy. Receives simulation requests, runs the selected method on the `e_coli_core` model, and returns a structured method-aware result separating the primary objective flux from secondary solver scores. CPU-bound, small RAM footprint.
+- **`labhero-backend`** — FastAPI + MEWpy/COBRA tooling. Receives model-aware simulation requests for `ecoli_core` or `yeast_iMM904` and returns structured method-aware results separating the primary objective flux from secondary solver diagnostics. Each request works on an isolated model copy so mutable simulation state is not shared between students.
 - **`labhero-frontend`** — nginx. Serves the pygbag-compiled game bundle as static files and reverse-proxies `/api/*` to the backend over the internal Docker network.
 
 Only the frontend is exposed to the host network. End users only ever see one URL.
@@ -93,7 +93,7 @@ Only the frontend is exposed to the host network. End users only ever see one UR
    └──────────────────────┘
 ```
 
-### Resource sizing
+### Initial resource sizing (validate on the final host)
 
 | Resource | Minimum | Comfortable |
 |---|---|---|
@@ -102,7 +102,7 @@ Only the frontend is exposed to the host network. End users only ever see one UR
 | Disk | 4 GB | 10 GB |
 | Network | outbound HTTPS during build only | same |
 
-Runtime cost is dominated by uvicorn + cobra/MEWpy holding the `e_coli_core` model in memory. Concurrent FBA requests are CPU-bound but fast (<1 s each for the included model); a single vCPU handles a small classroom of simultaneous players comfortably.
+Runtime cost is dominated by uvicorn + COBRA/MEWpy model loading/solving. E. coli runs are lighter than the larger iMM904 workflows, and concurrent simulation requests are CPU-bound. The repository has structural deployment checks, but a representative 10/20/30-client classroom load test should be run on the final host before claiming a classroom concurrency capacity.
 
 ---
 

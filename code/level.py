@@ -25,7 +25,7 @@ from final_results import FinalResultsMenu
 from teacher_mission_launcher import TeacherMissionLauncher
 
 class Level:
-	def __init__(self, load_game, teacher_target_mission=None):
+	def __init__(self, load_game, teacher_target_mission=None, teacher_preview=False):
 
 		# get the display surface
 		self.display_surface = pygame.display.get_surface()
@@ -33,6 +33,7 @@ class Level:
 		# load the game
 		self.load_game = load_game
 		self.teacher_target_mission = teacher_target_mission
+		self.teacher_preview = bool(teacher_preview or teacher_target_mission is not None)
 		self.teacher_launch_pending = teacher_target_mission is not None
 		self.teacher_open_key_locked = False
 		self.campaign_context = CampaignContext(mode='normal')
@@ -53,6 +54,21 @@ class Level:
 
 		self.soil_layer = SoilLayer(self.all_sprites, self.collision_sprites)
 		self.setup()
+		# Teacher Preview is orthogonal to Normal/Easy campaign mode.  The Player
+		# keeps the selected student route so mission-specific Easy branches remain
+		# faithful, while this flag controls preview-only UI/behaviour.
+		self.player.teacher_preview = self.teacher_preview
+		self.player.teacher_target_mission = self.teacher_target_mission
+		# Transient Teacher control signal. Never persisted in student/teacher
+		# save data; Game consumes it only when switching isolated previews.
+		self.player.teacher_switch_request = None
+		if self.teacher_preview:
+			font_path = get_resource_path('font/LycheeSoda.ttf')
+			self.teacher_banner_font = pygame.font.Font(font_path, 24)
+			self.teacher_banner_small_font = pygame.font.Font(font_path, 19)
+		else:
+			self.teacher_banner_font = None
+			self.teacher_banner_small_font = None
 
 		# MENUS
 		self.menu_active = False
@@ -189,7 +205,7 @@ class Level:
 
 		# HouseFloor + HouseFurnitureBottom are large, completely static tile
 		# layers. Keep their exact pytmx surfaces/positions/order, but do not
-		# allocate 1406 Sprite objects or include them in the global per-frame
+		# allocate 1409 Sprite objects or include them in the global per-frame
 		# sort. CameraGroup draws this pre-sorted layer directly at the same z.
 		house_bottom_tiles = []
 		house_bottom_order = 0
@@ -580,7 +596,7 @@ class Level:
 
 	def should_show_final_results(self):
 		return (
-			self.campaign_context.mode != 'teacher'
+			not self.teacher_preview
 			and self.player.name_confirmed
 			and not self.player.final_results_seen
 			and self.campaign_context.is_campaign_complete(self.player.missions_completed)
@@ -589,7 +605,7 @@ class Level:
 	def can_reopen_final_results(self):
 		"""Return whether the completed campaign summary may be reopened with F."""
 		return (
-			self.campaign_context.mode != 'teacher'
+			not self.teacher_preview
 			and self.player.name_confirmed
 			and self.campaign_context.is_campaign_complete(self.player.missions_completed)
 		)
@@ -678,13 +694,33 @@ class Level:
 		self._map_modal_was_active = modal_active
 
 	def handle_teacher_mission_shortcut(self):
-		if self.teacher_launcher is None or self.campaign_context.mode != 'teacher':
+		if self.teacher_launcher is None or not self.teacher_preview:
 			return
 		keys = pygame.key.get_pressed()
 		t_pressed = keys[pygame.K_t]
 		if t_pressed and not self.teacher_open_key_locked and not self.any_modal_active() and not self.skin_menu_active:
 			self.teacher_launch_pending = True
 		self.teacher_open_key_locked = t_pressed
+
+	def draw_teacher_preview_banner(self):
+		"""Render a small persistent reminder without obscuring world interaction."""
+		if not self.teacher_preview or self.teacher_banner_font is None:
+			return
+		mode = self.player.campaign_mode.upper()
+		target = self.teacher_target_mission or '--'
+		panel = pygame.Surface((620, 66), pygame.SRCALPHA)
+		panel.fill((0, 0, 0, 185))
+		self.display_surface.blit(panel, (12, 12))
+		line1 = self.teacher_banner_font.render(
+			f'TEACHER PREVIEW - {mode} - MISSION {target}', True, 'white'
+		)
+		line2 = self.teacher_banner_small_font.render(
+			'Student save is isolated. T reopens target; M can change mission.',
+			True,
+			'white',
+		)
+		self.display_surface.blit(line1, (24, 18))
+		self.display_surface.blit(line2, (24, 49))
 
 	def handle_skin_menu_shortcut(self):
 		keys = pygame.key.get_pressed()
@@ -729,6 +765,7 @@ class Level:
 		# drawing logic
 		self.display_surface.fill('black')
 		self.all_sprites.custom_draw(self.player)
+		self.draw_teacher_preview_banner()
 
 		# A menu may have just closed using ENTER. Re-arm map interaction only
 		# after RETURN/KP_ENTER are physically released.

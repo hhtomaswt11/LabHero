@@ -63,6 +63,7 @@ class Easy2BModeSelectionTests(unittest.TestCase):
         self.assertIn('def register_student_campaign(self, value, campaign_mode):', source)
         self.assertIn('if self.name_confirmed or self.missions_activated or self.missions_completed:', source)
         self.assertIn('self.campaign_mode = mode', source)
+        self.assertIn('self.hint_system.set_campaign_initial_keys(mode)', source)
         self.assertIn('self.name_confirmed = True', source)
         self.assertIn('interaction_is_available(interaction_name)', source)
         self.assertIn('not part of your Easy campaign route', source)

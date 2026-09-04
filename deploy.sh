@@ -84,8 +84,11 @@ HEALTH_URL="http://127.0.0.1:${HOST_PORT}/api/health"
 for attempt in $(seq 1 90); do
     if curl -fsS "$HEALTH_URL" >/tmp/labhero-podman-health.json 2>/dev/null; then
         TEACHER_URL="http://127.0.0.1:${HOST_PORT}/teacher/?mission=1"
+        TEACHER_AUTH_URL="http://127.0.0.1:${HOST_PORT}/teacher-auth"
         UNAUTH_STATUS="$(curl -sS -o /dev/null -w '%{http_code}' "$TEACHER_URL" || true)"
         AUTH_STATUS="$(curl -sS -u "${TEACHER_USER}:${LABHERO_TEACHER_PASSWORD_FOR_CHECK}" -o /dev/null -w '%{http_code}' "$TEACHER_URL" || true)"
+        AUTH_PROBE_UNAUTH_STATUS="$(curl -sS -I -o /dev/null -w '%{http_code}' "$TEACHER_AUTH_URL" || true)"
+        AUTH_PROBE_AUTH_STATUS="$(curl -sS -I -u "${TEACHER_USER}:${LABHERO_TEACHER_PASSWORD_FOR_CHECK}" -o /dev/null -w '%{http_code}' "$TEACHER_AUTH_URL" || true)"
         TEACHER_HTML_FILE="/tmp/labhero-teacher-index.html"
         curl -fsS -u "${TEACHER_USER}:${LABHERO_TEACHER_PASSWORD_FOR_CHECK}" \
             "$TEACHER_URL" -o "$TEACHER_HTML_FILE" >/dev/null 2>&1 || true
@@ -96,21 +99,64 @@ for attempt in $(seq 1 90); do
                 "http://127.0.0.1:${HOST_PORT}/teacher/${TEACHER_ARCHIVE}" || true)"
         fi
 
-        if [ "$UNAUTH_STATUS" != "401" ] || [ "$AUTH_STATUS" != "200" ] || [ "$ASSET_STATUS" != "200" ]; then
+        if [ "$UNAUTH_STATUS" != "401" ] || [ "$AUTH_STATUS" != "200" ] || [ "$ASSET_STATUS" != "200" ] \
+            || [ "$AUTH_PROBE_UNAUTH_STATUS" != "401" ] || [ "$AUTH_PROBE_AUTH_STATUS" != "200" ]; then
             echo
-            echo "ERROR: Teacher route authentication/runtime smoke test failed." >&2
+            echo "ERROR: Teacher authentication/runtime smoke test failed." >&2
             echo "Expected unauthenticated entry HTTP 401, got ${UNAUTH_STATUS}." >&2
             echo "Expected authenticated entry HTTP 200, got ${AUTH_STATUS}." >&2
             echo "Expected unauthenticated Pygbag teacher asset HTTP 200, got ${ASSET_STATUS}." >&2
+            echo "Expected SHIFT+T auth probe without credentials HTTP 401, got ${AUTH_PROBE_UNAUTH_STATUS}." >&2
+            echo "Expected SHIFT+T auth probe with credentials HTTP 200, got ${AUTH_PROBE_AUTH_STATUS}." >&2
             echo "Frontend logs:" >&2
             podman logs "$FRONTEND_CONTAINER" 2>&1 | tail -50 >&2 || true
             exit 1
         fi
+
+        # A healthy FastAPI process is not enough for LabHero: verify that both
+        # production model stacks can actually load and solve one real request.
+        # These calls also warm the model-template caches before students arrive.
+        ECOLI_URL="http://127.0.0.1:${HOST_PORT}/api/simulate"
+        if ! ECOLI_RESPONSE="$(curl -fsS --max-time 90 \
+            -H 'Content-Type: application/json' \
+            -d '{"model_id":"ecoli_core","method":"FBA","objective":"BIOMASS_Ecoli_core_w_GAM","gene_knockouts":[],"env_conditions":{}}' \
+            "$ECOLI_URL")"; then
+            echo
+            echo "ERROR: E. coli simulation smoke test request failed." >&2
+            podman logs "$BACKEND_CONTAINER" 2>&1 | tail -80 >&2 || true
+            exit 1
+        fi
+        if ! printf '%s' "$ECOLI_RESPONSE" | grep -Eq '"status"[[:space:]]*:[[:space:]]*"ok"'; then
+            echo
+            echo "ERROR: E. coli simulation smoke test did not return status=ok." >&2
+            printf '%s\n' "$ECOLI_RESPONSE" >&2
+            exit 1
+        fi
+
+        if ! YEAST_RESPONSE="$(curl -fsS --max-time 120 \
+            -H 'Content-Type: application/json' \
+            -d '{"model_id":"yeast_iMM904","method":"pFBA","objective":"BIOMASS_SC5_notrace","gene_knockouts":[],"env_conditions":{}}' \
+            "$ECOLI_URL")"; then
+            echo
+            echo "ERROR: yeast iMM904 simulation smoke test request failed." >&2
+            podman logs "$BACKEND_CONTAINER" 2>&1 | tail -80 >&2 || true
+            exit 1
+        fi
+        if ! printf '%s' "$YEAST_RESPONSE" | grep -Eq '"status"[[:space:]]*:[[:space:]]*"ok"'; then
+            echo
+            echo "ERROR: yeast iMM904 simulation smoke test did not return status=ok." >&2
+            printf '%s\n' "$YEAST_RESPONSE" >&2
+            exit 1
+        fi
+
         unset LABHERO_TEACHER_PASSWORD_FOR_CHECK
         echo
         echo "[LabHero] Backend health: $(cat /tmp/labhero-podman-health.json)"
         echo "[LabHero] Teacher entry auth: unauthenticated=401 authenticated=200"
+        echo "[LabHero] SHIFT+T auth probe: unauthenticated=401 authenticated=200"
         echo "[LabHero] Teacher Pygbag asset: unauthenticated=200 (${TEACHER_ARCHIVE})"
+        echo "[LabHero] E. coli FBA smoke simulation: status=ok"
+        echo "[LabHero] Yeast iMM904 pFBA smoke simulation: status=ok"
         echo "[LabHero] Deployment ready at http://127.0.0.1:${HOST_PORT}/"
         exit 0
     fi

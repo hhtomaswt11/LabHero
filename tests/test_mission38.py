@@ -173,6 +173,7 @@ class Mission38RegressionTests(unittest.TestCase):
         self.assertTrue(simulation.mission38_answer_matches('FRD1', report))
         self.assertTrue(simulation.mission38_answer_matches('YEL047C', report))
         self.assertFalse(simulation.mission38_answer_matches('MAE1', report))
+        self.assertFalse(simulation.mission38_answer_matches('FRD1 PDC1', report))
 
     def test_old_report_version_is_rejected(self):
         prepared = simulation._mission38_prepare_report({'mission_id': '38', 'check_version': 0, 'runs': {'x': 1}})

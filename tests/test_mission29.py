@@ -364,7 +364,10 @@ class Mission29RegressionTests(unittest.TestCase):
 
     def test_wrong_or_incomplete_answers_are_rejected(self):
         report = self._complete()
-        for answer in ('b0118', 'b1723 + b3916', 'pfkA pfkB', 'PYK', ''):
+        for answer in (
+            'b0118', 'b1723 + b3916', 'pfkA pfkB', 'PYK', '',
+            'b0118 b1276 b1723',  # correct pair plus an extra wrong candidate
+        ):
             with self.subTest(answer=answer):
                 self.assertFalse(simulation.mission29_answer_matches(answer, report))
 

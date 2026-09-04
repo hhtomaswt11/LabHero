@@ -10,10 +10,33 @@ from copy import deepcopy
 
 REWARD_STATE_VERSION = 2
 
-INITIAL_KEYS = {
-    'bronze': 15,
-    'silver': 10,
-    'gold': 5,
+# Normal remains the historic/full-campaign budget.  Easy deliberately starts
+# with fewer keys because its curated route contains only 11 missions.  Keeping
+# these values in the reward module (rather than scattering literals through
+# UI code) makes registration, Alves' dialogue and tests share one source of
+# truth.
+CAMPAIGN_INITIAL_KEYS = {
+    'normal': {
+        'bronze': 15,
+        'silver': 10,
+        'gold': 5,
+    },
+    'easy': {
+        'bronze': 8,
+        'silver': 5,
+        'gold': 2,
+    },
+}
+
+# Backwards-compatible alias used by legacy-save normalization and older tests.
+# Historic saves without a campaign-specific budget are Normal campaigns.
+INITIAL_KEYS = dict(CAMPAIGN_INITIAL_KEYS['normal'])
+
+# The easter egg remains a stronger reward in the full campaign.  Easy still
+# rewards exploration, but one Gold Key is proportionate to its shorter route.
+GOLDEN_EGG_GOLD_REWARD_BY_CAMPAIGN = {
+    'normal': 3,
+    'easy': 1,
 }
 
 SCORE_BY_HINT_LEVEL = {
@@ -49,6 +72,23 @@ VALID_HINT_LEVELS = tuple(SCORE_BY_HINT_LEVEL)
 # still keep any pre-integration completions in legacy_unscored_missions, while
 # new/current mission completions receive their frozen score from hint usage.
 TRACKED_HINT_MISSIONS = frozenset(f'{mission:02d}' for mission in range(1, 41))
+
+
+def initial_keys_for_campaign(campaign_mode):
+    """Return a fresh key-budget dictionary for a student campaign mode.
+
+    Unknown/legacy modes deliberately fall back to Normal so old save/tooling
+    paths keep the historic 15/10/5 behaviour rather than unexpectedly losing
+    keys.
+    """
+    mode = str(campaign_mode or 'normal').strip().lower()
+    return dict(CAMPAIGN_INITIAL_KEYS.get(mode, CAMPAIGN_INITIAL_KEYS['normal']))
+
+
+def golden_egg_gold_reward_for_campaign(campaign_mode):
+    """Return the one-time Gold-Key reward for the selected campaign."""
+    mode = str(campaign_mode or 'normal').strip().lower()
+    return int(GOLDEN_EGG_GOLD_REWARD_BY_CAMPAIGN.get(mode, 3))
 
 
 def normalize_mission_id(mission_id):
@@ -239,6 +279,16 @@ class HintSystem:
         if key_type not in KEY_TYPES:
             raise ValueError(f'unknown key type: {key_type}')
         return self.state['keys'][key_type]
+
+    def set_campaign_initial_keys(self, campaign_mode):
+        """Apply the mode-specific starting key budget without touching progress.
+
+        Student registration calls this only before any mission has started.
+        Keeping the operation here guarantees that changing the initial budget
+        cannot accidentally rewrite hints, scores or wrong-answer penalties.
+        """
+        self.state['keys'] = initial_keys_for_campaign(campaign_mode)
+        return dict(self.state['keys'])
 
     def award_keys(self, key_type, amount):
         """Add a positive number of keys and return the updated count.

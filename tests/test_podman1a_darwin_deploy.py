@@ -63,6 +63,20 @@ class Podman1ADarwinDeployTests(unittest.TestCase):
         self.assertIn('http://127.0.0.1:${HOST_PORT}/api/health', script)
         self.assertIn('curl -fsS "$HEALTH_URL"', script)
 
+
+    def test_deploy_script_smoke_tests_teacher_probe_and_both_metabolic_models(self):
+        script = (ROOT / 'deploy.sh').read_text(encoding='utf-8')
+        self.assertIn('/teacher-auth', script)
+        self.assertIn('AUTH_PROBE_UNAUTH_STATUS=', script)
+        self.assertIn('AUTH_PROBE_AUTH_STATUS=', script)
+        self.assertIn('"model_id":"ecoli_core"', script)
+        self.assertIn('"method":"FBA"', script)
+        self.assertIn('"objective":"BIOMASS_Ecoli_core_w_GAM"', script)
+        self.assertIn('"model_id":"yeast_iMM904"', script)
+        self.assertIn('"method":"pFBA"', script)
+        self.assertIn('"objective":"BIOMASS_SC5_notrace"', script)
+        self.assertGreaterEqual(script.count('"status"[[:space:]]*:[[:space:]]*"ok"'), 2)
+
     def test_podman_nginx_keeps_cache_policy(self):
         nginx = (ROOT / 'deploy' / 'nginx.podman.conf').read_text(encoding='utf-8')
         self.assertRegex(nginx, r'location\s*=\s*/index\.html')

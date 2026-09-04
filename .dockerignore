@@ -11,3 +11,7 @@ __pycache__/
 .git/
 *.zip
 *.bak
+
+# Development-only material is not required to build the browser game.
+tests/
+planning/

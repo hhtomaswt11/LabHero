@@ -6,7 +6,11 @@ from timers import Timer
 from options_values import *
 from button import Button
 from utils import *
-from hint_system import INITIAL_KEYS, SCORE_BY_HINT_LEVEL, WRONG_ANSWER_PENALTY
+from hint_system import (
+    SCORE_BY_HINT_LEVEL,
+    WRONG_ANSWER_PENALTY,
+    initial_keys_for_campaign,
+)
 
 class Dialogues: 
     def __init__(self,toggle_menu, player) -> None: # add variable name character to change message and id
@@ -47,12 +51,18 @@ class Dialogues:
             self.nome = get_dialogue_text_surface(self.font_nome, 'Dr. Sequeira')
             
         elif self.character == 'Alves':
+            mode = self.player.campaign_mode
+            budget = initial_keys_for_campaign(mode)
+            current = {
+                key: self.player.hint_system.get_key_count(key)
+                for key in ('bronze', 'silver', 'gold')
+            }
             self.message = [
                 f"Registration complete, {self.player.player_name}. Mode: {self.player.campaign_mode.title()}.",
-                f"Hint keys: {INITIAL_KEYS['bronze']} Bronze, {INITIAL_KEYS['silver']} Silver, {INITIAL_KEYS['gold']} Gold.",
-                "Unlocking a hint spends a key. Keys are limited, so use them carefully.",
+                f"Your route starts with {budget['bronze']} Bronze, {budget['silver']} Silver and {budget['gold']} Gold keys.",
+                f"Current keys: {current['bronze']} Bronze, {current['silver']} Silver, {current['gold']} Gold. Each hint spends one.",
                 f"Hints reduce mission score: {SCORE_BY_HINT_LEVEL[0]} -> {SCORE_BY_HINT_LEVEL[1]} -> {SCORE_BY_HINT_LEVEL[2]} -> {SCORE_BY_HINT_LEVEL[3]}.",
-                f"Incorrect final-answer submissions cost {WRONG_ANSWER_PENALTY} point each, even typos. A mission can fall to 0."
+                f"Incorrect final-answer submission: -{WRONG_ANSWER_PENALTY} point, even for a typo. Minimum score: 0."
             ]
             self.imagem_path = get_resource_path('graphics/dialogues/alves.jpg')
             self.nome = get_dialogue_text_surface(self.font_nome, 'Dr. Alves')
