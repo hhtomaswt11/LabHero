@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<tileset version="1.8" tiledversion="1.8.0" name="secondary-characters" tilewidth="64" tileheight="64" tilecount="29" columns="0">
+<tileset version="1.8" tiledversion="1.8.0" name="secondary-characters" tilewidth="64" tileheight="64" tilecount="34" columns="0">
  <grid orientation="orthogonal" width="1" height="1"/>
  <tile id="0">
   <image width="64" height="64" source="../../graphics/sec-characters/Nuno.png"/>
@@ -87,5 +87,20 @@
  </tile>
  <tile id="32">
   <image width="64" height="64" source="../../graphics/sec-characters/start.png"/>
+ </tile>
+ <tile id="33">
+  <image width="64" height="64" source="../../graphics/sec-characters/bernhard_palsson.png"/>
+ </tile>
+ <tile id="34">
+  <image width="64" height="64" source="../../graphics/sec-characters/chris_henry.png"/>
+ </tile>
+ <tile id="35">
+  <image width="64" height="64" source="../../graphics/sec-characters/isabel_rocha.png"/>
+ </tile>
+ <tile id="36">
+  <image width="64" height="64" source="../../graphics/sec-characters/jens_nielsen.png"/>
+ </tile>
+ <tile id="37">
+  <image width="64" height="64" source="../../graphics/sec-characters/ahmad_zeidan.png"/>
  </tile>
 </tileset>
