@@ -13,7 +13,7 @@ REWARD_STATE_VERSION = 2
 # Normal remains the historic/full-campaign budget.  Easy deliberately starts
 # with fewer keys because its curated route contains only 11 missions.  Keeping
 # these values in the reward module (rather than scattering literals through
-# UI code) makes registration, Alves' dialogue and tests share one source of
+# UI code) makes registration, Melo's dialogue and tests share one source of
 # truth.
 CAMPAIGN_INITIAL_KEYS = {
     'normal': {

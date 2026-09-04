@@ -31,6 +31,29 @@ MISSION_START_INTERACTIONS = {
     'Mortis',
 }
 
+# Historical figures placed in the Golden Lab as a short hall-of-honour
+# transition between the E. coli and yeast arcs.  These are ordinary dialogue
+# interactions, not missions, so they never affect campaign progression.
+GOLDEN_LAB_HONOUREE_INTERACTIONS = (
+    'isabel',
+    'bernhard',
+    'jens',
+    'chris',
+    'ahmad',
+)
+
+# A fictional Golden Lab character that hints at the optional Golden Egg.
+# Keep it separate from the historical honourees while routing it through the
+# same lightweight generic-dialogue interaction path.
+GOLDEN_LAB_MYSTERY_INTERACTIONS = (
+    'easter_man',
+)
+
+GOLDEN_LAB_DIALOGUE_INTERACTIONS = (
+    *GOLDEN_LAB_HONOUREE_INTERACTIONS,
+    *GOLDEN_LAB_MYSTERY_INTERACTIONS,
+)
+
 
 
 def _movement_substep_plan(distance, max_step=MAX_COLLISION_STEP):
@@ -534,7 +557,7 @@ class Player(pygame.sprite.Sprite):
                     interaction_name = collided_interaction_sprite[0].name
                     if interaction_name in MISSION_START_INTERACTIONS and not self.name_confirmed:
                         animation_text_save(
-                            'Please register your name with Dr. Alves before starting missions.'
+                            'Please register your name with Dr. Melo before starting missions.'
                         )
                     elif (
                         interaction_name in MISSION_START_INTERACTIONS
@@ -544,7 +567,7 @@ class Player(pygame.sprite.Sprite):
                             'This researcher is not part of your Easy campaign route.',
                             time=2500,
                         )
-                    elif interaction_name == 'Alves':
+                    elif interaction_name == 'Alves':  # legacy Tiled id for Dr. Melo / start.png
                         if self.name_confirmed:
                             self.character = 'Alves'
                             self.dialogues()
@@ -605,7 +628,11 @@ class Player(pygame.sprite.Sprite):
                                 if sprite.name == 'Coffee':
                                     self.coffee.play()
                                     self.speed = 900
-                                if sprite.name in ('Sequeira', 'Pacheco', 'Nuno', 'Fernanda', 'Emanuel', 'Alexandre', 'Capela', 'Marta', 'Oscar', 'Miguel'):
+                                if sprite.name in (
+                                    'Sequeira', 'Pacheco', 'Nuno', 'Fernanda', 'Emanuel',
+                                    'Alexandre', 'Capela', 'Marta', 'Oscar', 'Miguel',
+                                    *GOLDEN_LAB_DIALOGUE_INTERACTIONS,
+                                ):
                                     self.character = sprite.name
                                     self.dialogues() # add variable with name character to change message and id
                                     

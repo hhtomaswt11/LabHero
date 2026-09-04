@@ -72,6 +72,62 @@ class Mission01RegressionTests(unittest.TestCase):
         }
         return {"run_a": baseline, "run_b": anaerobic}
 
+    def test_first_aerobic_run_is_reported_immediately_without_repeating_it(self):
+        baseline = self._valid_compare_runs()["run_a"]
+        with patch.object(simulation, "save_mission01_comparison_check"):
+            check = simulation.run_mission01_comparison_check(
+                {"run_a": None, "run_b": baseline}
+            )
+
+        self.assertTrue(check["baseline_run_found"])
+        self.assertFalse(check["anaerobic_run_found"])
+        self.assertFalse(check["ready_to_deliver"])
+        self.assertNotIn("error", check)
+
+    def test_first_anaerobic_run_is_also_reported_as_partial_evidence(self):
+        anaerobic = self._valid_compare_runs()["run_b"]
+        with patch.object(simulation, "save_mission01_comparison_check"):
+            check = simulation.run_mission01_comparison_check(
+                {"run_a": None, "run_b": anaerobic}
+            )
+
+        self.assertFalse(check["baseline_run_found"])
+        self.assertTrue(check["anaerobic_run_found"])
+        self.assertFalse(check["ready_to_deliver"])
+        self.assertNotIn("error", check)
+
+    def test_closing_both_oxygen_bounds_is_not_the_controlled_mission01_setup(self):
+        reactions = dict(self.default_reactions)
+        oxygen_index = list(simulation.REACTIONS.index).index(
+            simulation.MISSION01_OXYGEN_REACTION
+        )
+        reactions[f"reaction_{oxygen_index}_lb"] = False
+        reactions[f"reaction_{oxygen_index}_ub"] = False
+
+        status = simulation._mission21_environment_status(reactions)
+        self.assertTrue(status["oxygen_lower_bound_closed"])
+        self.assertIn("EX_o2_e upper bound", status["unexpected_environment_changes"])
+
+        snapshot = {
+            "result_available": True,
+            "method": simulation.MISSION01_METHOD,
+            "objective": simulation.MISSION01_GROWTH_OBJECTIVE,
+            "knocked_out_genes": [],
+            "oxygen_lower_bound_closed": True,
+            "oxygen_unexpected_changes": status["unexpected_environment_changes"],
+            "growth_value": 0.212,
+            "exchange_uptake_fluxes": {simulation.MISSION01_OXYGEN_REACTION: 0.0},
+        }
+        self.assertFalse(simulation._mission01_is_anaerobic_run(snapshot))
+
+    def test_martinez_explains_lower_vs_upper_bound_and_exact_control(self):
+        source = (CODE_DIR / 'mission01.py').read_text(encoding='utf-8')
+        self.assertIn('an exchange lower bound controls uptake; upper bound controls secretion.', source)
+        self.assertIn("close only oxygen's lower bound and keep its upper bound at default", source)
+        self.assertIn('Closing both may give the same growth, but it changes an extra assumption.', source)
+        self.assertIn('close only the oxygen exchange lower bound (uptake) and leave its upper bound (secretion) at the default', source)
+        self.assertIn('This exact one-factor setup matters', source)
+
     def test_explicit_empty_comparison_does_not_load_saved_runs(self):
         stored_runs = self._valid_compare_runs()
         with patch.object(simulation, "load_compare_runs", return_value=stored_runs) as loader:

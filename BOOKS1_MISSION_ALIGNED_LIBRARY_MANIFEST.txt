@@ -25,7 +25,7 @@ Scientific alignment
 
 Gameplay alignment
 ------------------
-- Documents Dr. Alves registration and locked campaign identity/mode.
+- Documents Dr. Melo registration and locked campaign identity/mode.
 - Documents Normal (40 missions) and Easy (11 missions).
 - Documents M/E/ENTER controls, hint keys and 5/3/2/1 mission scoring.
 - Documents browser-local save behavior.

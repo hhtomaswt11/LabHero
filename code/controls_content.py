@@ -44,7 +44,7 @@ def _sections(is_web=False):
         ),
         (
             "Interaction",
-            "Press ENTER when close to a scientist, Dr. Alves, a simulator desk, "
+            "Press ENTER when close to a scientist, Dr. Melo, a simulator desk, "
             "the library, an apple tree or the coffee machine. ESC closes/backtracks "
             "from dialogues and most menus.",
         ),

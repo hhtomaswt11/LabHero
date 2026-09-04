@@ -35,7 +35,21 @@ class Dialogues:
 
 
     def choosing_character(self, character):
-        if character == self._prepared_character:
+        # Most generic NPC dialogue is static and can be prepared once.
+        # Easter Man reacts to Golden Egg/campaign state, so include those
+        # values in his cache key and allow the dialogue to change later.
+        if character == 'easter_man':
+            preparation_key = (
+                character,
+                bool(getattr(self.player, 'golden_egg_collected', False)),
+                bool(self.player.get_campaign_context().is_campaign_complete(
+                    self.player.missions_completed
+                )),
+            )
+        else:
+            preparation_key = character
+
+        if preparation_key == self._prepared_character:
             return
 
         self.character = character
@@ -50,7 +64,7 @@ class Dialogues:
             self.imagem_path = get_resource_path('graphics/dialogues/Sequeira.jpg')
             self.nome = get_dialogue_text_surface(self.font_nome, 'Dr. Sequeira')
             
-        elif self.character == 'Alves':
+        elif self.character == 'Alves':  # legacy internal id for the Dr. Melo start NPC
             mode = self.player.campaign_mode
             budget = initial_keys_for_campaign(mode)
             current = {
@@ -64,8 +78,8 @@ class Dialogues:
                 f"Hints reduce mission score: {SCORE_BY_HINT_LEVEL[0]} -> {SCORE_BY_HINT_LEVEL[1]} -> {SCORE_BY_HINT_LEVEL[2]} -> {SCORE_BY_HINT_LEVEL[3]}.",
                 f"Incorrect final-answer submission: -{WRONG_ANSWER_PENALTY} point, even for a typo. Minimum score: 0."
             ]
-            self.imagem_path = get_resource_path('graphics/dialogues/alves.jpg')
-            self.nome = get_dialogue_text_surface(self.font_nome, 'Dr. Alves')
+            self.imagem_path = get_resource_path('graphics/dialogues/melo.jpg')
+            self.nome = get_dialogue_text_surface(self.font_nome, 'Dr. Melo')
 
         elif self.character == 'Nuno':    
             self.message = [
@@ -151,13 +165,101 @@ class Dialogues:
             self.imagem_path = get_resource_path('graphics/dialogues/Miguel.jpg') 
             self.nome = get_dialogue_text_surface(self.font_nome, 'Dr. Rocha')
 
+        elif self.character == 'isabel':
+            self.message = [
+                "I’m Isabel Rocha. In a Portuguese systems-biology lab, my name may sound familiar.",
+                "I helped create OptFlux, an open-source platform for in silico metabolic engineering.",
+                "OptFlux turned genome-scale models into practical tools for strain design.",
+                "You finished E. coli training; carry that design mindset into the Golden Lab.",
+            ]
+            self.imagem_path = get_resource_path('graphics/dialogues/isabel_rocha.jpg')
+            self.nome = get_dialogue_text_surface(self.font_nome, 'Isabel Rocha')
+
+        elif self.character == 'bernhard':
+            self.message = [
+                "I’m Bernhard O. Palsson. I study what cells can do within biological constraints.",
+                "My group helped establish COBRA for genome-scale reconstruction and analysis.",
+                "Stoichiometry, bounds and gene deletions are all part of that COBRA lineage.",
+                "Models become powerful when constraints turn biological ideas into predictions.",
+            ]
+            self.imagem_path = get_resource_path('graphics/dialogues/bernhard_palsson.jpg')
+            self.nome = get_dialogue_text_surface(self.font_nome, 'B. O. Palsson')
+
+        elif self.character == 'jens':
+            self.message = [
+                "I’m Jens Nielsen. My work connects systems biology with metabolic engineering.",
+                "Yeast has been a major focus of my work, from models to strain design.",
+                "Saccharomyces cerevisiae can be a cell factory for fuels, chemicals and proteins.",
+                "Your next missions move to yeast, so ask what each prediction could help you design.",
+            ]
+            self.imagem_path = get_resource_path('graphics/dialogues/jens_nielsen.jpg')
+            self.nome = get_dialogue_text_surface(self.font_nome, 'Jens Nielsen')
+
+        elif self.character == 'chris':
+            self.message = [
+                "I’m Christopher Henry — Chris is fine. I build metabolic models at large scale.",
+                "I developed ModelSEED to automate genome-scale metabolic model reconstruction.",
+                "That work also connects with KBase, bringing models and genomic tools together.",
+                "Every simulation starts by turning biological knowledge into a computable network.",
+            ]
+            self.imagem_path = get_resource_path('graphics/dialogues/chris_henry.jpg')
+            self.nome = get_dialogue_text_surface(self.font_nome, 'Chris Henry')
+
+        elif self.character == 'ahmad':
+            self.message = [
+                "I’m Ahmad Zeidan. My work connects systems biology with industrial biotechnology.",
+                "I use genome-scale and constraint-based models to understand industrial microbes.",
+                "In food biotechnology, models can connect microbial traits with practical decisions.",
+                "Predictions matter most when they guide real biological or biotechnological choices.",
+            ]
+            self.imagem_path = get_resource_path('graphics/dialogues/ahmad_zeidan.jpg')
+            self.nome = get_dialogue_text_surface(self.font_nome, 'Ahmad Zeidan')
+
+        elif self.character == 'easter_man':
+            egg_found = bool(getattr(self.player, 'golden_egg_collected', False))
+            campaign_complete = self.player.get_campaign_context().is_campaign_complete(
+                self.player.missions_completed
+            )
+
+            if egg_found and not campaign_complete:
+                self.message = [
+                    "So... you found it. Good. Curiosity still counts for something around here.",
+                    "Keep what it gave you close; the next experiments may make you glad you explored.",
+                    "Some of the best rewards are hidden just beyond the obvious path.",
+                    "And if anyone asks what I meant... we never spoke.",
+                ]
+            elif not egg_found and not campaign_complete:
+                self.message = [
+                    "Hmm... some things are easier to miss than to find.",
+                    "Funny how something valuable can hide in plain sight.",
+                    "Perhaps you have already found it. Or perhaps exploration is not your strongest skill.",
+                    "Either way, the next experiments may make you wish you had looked a little harder.",
+                ]
+            elif egg_found:
+                self.message = [
+                    "So you found it before the end. Good. I knew curiosity might pay off.",
+                    "I hope those golden keys were worth the detour.",
+                    "The best discoveries are not always part of the assignment.",
+                    "Do not worry — I will not tell anyone how close you came to missing it.",
+                ]
+            else:
+                self.message = [
+                    "Still looking for it? Ah... then you are a little late.",
+                    "Some rewards are useful only before the final experiment is finished.",
+                    "Perhaps exploration really was not your strongest trait after all.",
+                    "No matter. Next time, remember to look where the mission marker does not point.",
+                ]
+
+            self.imagem_path = get_resource_path('graphics/dialogues/easter_man.jpg')
+            self.nome = get_dialogue_text_surface(self.font_nome, '???')
+
         else:
             self.message = ['Hello there! Are you enjoying LabHero so far?']
             self.imagem_path = get_resource_path('graphics/dialogues/carter.jpg')
             self.nome = get_dialogue_text_surface(self.font_nome, 'Dr.')
 
         # Mark the character as prepared only after its complete static state exists.
-        self._prepared_character = character
+        self._prepared_character = preparation_key
 
 
     def input(self):

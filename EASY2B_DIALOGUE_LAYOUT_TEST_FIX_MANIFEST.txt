@@ -3,7 +3,7 @@ EASY.2B — dialogue layout test mock fix
 Runtime files changed: NONE.
 
 The layout test evaluates dialogue list expressions with a SimpleNamespace mock.
-After EASY.2B, Dr. Alves dialogue also reads player.campaign_mode.
+After EASY.2B, Dr. Melo dialogue also reads player.campaign_mode.
 The real Player always has this attribute; the test mock did not.
 
 Fix:

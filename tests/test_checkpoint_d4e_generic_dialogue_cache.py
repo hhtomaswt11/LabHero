@@ -10,6 +10,7 @@ PLAYER_PATH = ROOT / 'code' / 'player.py'
 GENERIC_CHARACTERS = (
     'Sequeira', 'Alves', 'Pacheco', 'Nuno', 'Fernanda', 'Emanuel',
     'Alexandre', 'Capela', 'Marta', 'Oscar', 'Miguel',
+    'isabel', 'bernhard', 'jens', 'chris', 'ahmad', 'easter_man',
 )
 
 
@@ -144,8 +145,9 @@ class TestCheckpointD4EGenericDialogueCache(unittest.TestCase):
             and isinstance(node.func, ast.Name)
             and node.func.id == 'get_dialogue_text_surface'
         ]
-        # Eleven named generic NPCs (including Alves) plus the legacy fallback label.
-        self.assertEqual(len(helper_calls), 12)
+        # Seventeen named generic NPCs (including Alves, the five Golden Lab
+        # honourees and Easter Man) plus the legacy fallback label.
+        self.assertEqual(len(helper_calls), 18)
 
     def test_generic_npc_set_in_player_interaction_is_unchanged(self):
         source = PLAYER_PATH.read_text(encoding='utf-8')
@@ -158,6 +160,40 @@ class TestCheckpointD4EGenericDialogueCache(unittest.TestCase):
         level_source = (ROOT / 'code' / 'level.py').read_text(encoding='utf-8')
         self.assertIn('self.dialogues.choosing_character(self.player.character)', level_source)
         self.assertIn('self.dialogues.update()', level_source)
+
+    def test_easter_man_cache_key_includes_dynamic_egg_and_campaign_state(self):
+        source = DIALOGUES_PATH.read_text(encoding='utf-8')
+        self.assertIn("if character == 'easter_man':", source)
+        self.assertIn("golden_egg_collected", source)
+        self.assertIn("is_campaign_complete", source)
+        self.assertIn("self._prepared_character = preparation_key", source)
+
+    def test_easter_man_dialogue_refreshes_after_golden_egg_is_found(self):
+        path_calls, text_calls = [], []
+        method = _compile_choosing_character(path_calls, text_calls)
+        obj = _fake_dialogue()
+        context = types.SimpleNamespace(is_campaign_complete=lambda completed: False)
+        obj.player = types.SimpleNamespace(
+            golden_egg_collected=False,
+            missions_completed=[],
+            get_campaign_context=lambda: context,
+        )
+
+        method(obj, 'easter_man')
+        before = tuple(obj.message)
+        self.assertIn('some things are easier to miss than to find', ' '.join(before).lower())
+        self.assertEqual(obj.nome, ('surface', '???'))
+
+        obj.player.golden_egg_collected = True
+        method(obj, 'easter_man')
+        after = tuple(obj.message)
+        self.assertNotEqual(before, after)
+        self.assertIn('you found it', ' '.join(after).lower())
+        self.assertEqual(
+            path_calls,
+            ['graphics/dialogues/easter_man.jpg', 'graphics/dialogues/easter_man.jpg'],
+        )
+
 
 
 if __name__ == '__main__':

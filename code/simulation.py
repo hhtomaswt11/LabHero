@@ -11628,7 +11628,13 @@ def run_mission01_comparison_check(compare_runs=None):
     # that no runs are available and must never be replaced by stale save data.
     if compare_runs is None:
         compare_runs = load_compare_runs()
-    if not compare_runs or not compare_runs.get('run_a') or not compare_runs.get('run_b'):
+
+    # A single captured run is already useful evidence and should be reported
+    # immediately.  Compare Runs stores the first simulation in run_b; run_a is
+    # populated only when the next simulation is captured.  The old guard
+    # therefore hid a perfectly valid first aerobic baseline behind a generic
+    # "run two simulations" message even though that baseline had been saved.
+    if not compare_runs or not (compare_runs.get('run_a') or compare_runs.get('run_b')):
         return _build_mission01_data(
             compare_runs,
             error='Run the aerobic baseline and the anaerobic setup before delivering Mission 01.',

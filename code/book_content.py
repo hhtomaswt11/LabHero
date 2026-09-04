@@ -27,7 +27,7 @@ BOOK_LIBRARY = (
             (
                 "Starting a campaign",
                 (
-                    "A new campaign begins with Dr. Alves. Register your name, choose "
+                    "A new campaign begins with Dr. Melo. Register your name, choose "
                     "Normal or Easy, review the summary and confirm. The name and mode "
                     "are then fixed for that campaign.",
                     "Normal contains all 40 missions. Easy is the curated 11-mission "

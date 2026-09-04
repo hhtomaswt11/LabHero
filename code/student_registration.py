@@ -37,7 +37,7 @@ class StudentRegistrationMenu:
             theme=mytheme,
         )
         entry.add.label(
-            "Before starting your missions, Dr. Alves needs to register your name.",
+            "Before starting your missions, Dr. Melo needs to register your name.",
             max_char=-1,
             wordwrap=True,
         )
@@ -45,7 +45,7 @@ class StudentRegistrationMenu:
         normal_keys = initial_keys_for_campaign('normal')
         easy_keys = initial_keys_for_campaign('easy')
         entry.add.label(
-            "Dr. Alves: Hint keys are limited, and the starting budget depends on your route.",
+            "Dr. Melo: Hint keys are limited, and the starting budget depends on your route.",
             max_char=-1,
             wordwrap=True,
         )

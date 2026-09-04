@@ -95,7 +95,7 @@ class StudentStartNpcIntegrationTests(unittest.TestCase):
         source = (ROOT / "code" / "player.py").read_text(encoding="utf-8")
         self.assertIn("MISSION_START_INTERACTIONS", source)
         self.assertIn("and not self.name_confirmed", source)
-        self.assertIn("register your name with Dr. Alves", source)
+        self.assertIn("register your name with Dr. Melo", source)
 
     def test_settings_no_longer_edits_student_name(self):
         source = (ROOT / "code" / "menu_2.py").read_text(encoding="utf-8")
@@ -105,10 +105,25 @@ class StudentStartNpcIntegrationTests(unittest.TestCase):
         self.assertIn("font_name=self.font_path", source)
         self.assertNotIn("font_name=font_path", source)
 
-    def test_alves_uses_new_portrait(self):
+    def test_start_npc_uses_melo_identity_and_portrait(self):
         source = (ROOT / "code" / "dialogues.py").read_text(encoding="utf-8")
-        self.assertIn("self.character == 'Alves'", source)
-        self.assertIn("graphics/dialogues/alves.jpg", source)
+        start_branch = source.split("elif self.character == 'Alves'", 1)[1].split(
+            "elif self.character == 'Nuno'", 1
+        )[0]
+        self.assertIn("graphics/dialogues/melo.jpg", start_branch)
+        self.assertIn("get_dialogue_text_surface(self.font_nome, 'Dr. Melo')", start_branch)
+        self.assertNotIn("graphics/dialogues/alves.jpg", start_branch)
+        self.assertNotIn("'Dr. Alves'", start_branch)
+
+    def test_nuno_alves_desk_dialogue_is_not_renamed(self):
+        source = (ROOT / "code" / "dialogues.py").read_text(encoding="utf-8")
+        nuno_branch = source.split("elif self.character == 'Nuno'", 1)[1].split(
+            "elif self.character == 'Pacheco'", 1
+        )[0]
+        self.assertIn("Hello! My name is Dr. Nuno Alves!", nuno_branch)
+        self.assertIn("graphics/dialogues/Nuno.jpg", nuno_branch)
+        self.assertIn("get_dialogue_text_surface(self.font_nome, 'Dr. Alves')", nuno_branch)
+        self.assertNotIn("Dr. Melo", nuno_branch)
 
 
 if __name__ == "__main__":

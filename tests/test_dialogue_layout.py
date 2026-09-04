@@ -99,7 +99,7 @@ class DialogueLayoutTests(unittest.TestCase):
         )
 
         # Some current NPC dialogue is intentionally built from local runtime
-        # values before assigning self.message (for example Dr. Alves'
+        # values before assigning self.message (for example Dr. Melo's
         # campaign-specific key budget/current balance).  This AST-based layout
         # test evaluates only the list expression, so reproduce those locals
         # rather than forcing production dialogue back to hard-coded strings.
@@ -211,7 +211,7 @@ class DialogueLayoutTests(unittest.TestCase):
                 for target in node.targets
             ):
                 continue
-            # Check both student campaign modes because Alves' message contains
+            # Check both student campaign modes because the Dr. Melo start-NPC message contains
             # campaign-specific key budgets. Static NPC text is harmlessly
             # evaluated twice, while dynamic text is now protected in both paths.
             for campaign_mode in ('normal', 'easy'):

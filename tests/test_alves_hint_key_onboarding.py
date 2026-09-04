@@ -10,7 +10,7 @@ if str(CODE) not in sys.path:
 from hint_system import INITIAL_KEYS, SCORE_BY_HINT_LEVEL, initial_keys_for_campaign
 
 
-class AlvesHintKeyOnboardingTests(unittest.TestCase):
+class MeloHintKeyOnboardingTests(unittest.TestCase):
     def setUp(self):
         self.dialogue_source = (CODE / "dialogues.py").read_text(encoding="utf-8")
         self.registration_source = (CODE / "student_registration.py").read_text(encoding="utf-8")
@@ -47,13 +47,13 @@ class AlvesHintKeyOnboardingTests(unittest.TestCase):
         self.assertIn("points with no hints", self.registration_source)
         self.assertIn("three hint levels", self.registration_source)
 
-    def test_alves_followup_dialogue_repeats_route_budget_and_live_keys(self):
+    def test_melo_followup_dialogue_repeats_route_budget_and_live_keys(self):
         self.assertIn('budget = initial_keys_for_campaign(mode)', self.dialogue_source)
         self.assertIn('Your route starts with', self.dialogue_source)
         self.assertIn('Current keys:', self.dialogue_source)
         self.assertIn('Each hint spends one.', self.dialogue_source)
 
-    def test_alves_followup_dialogue_repeats_score_penalty(self):
+    def test_melo_followup_dialogue_repeats_score_penalty(self):
         self.assertIn("Hints reduce mission score:", self.dialogue_source)
         for level in range(4):
             self.assertIn(f"SCORE_BY_HINT_LEVEL[{level}]", self.dialogue_source)

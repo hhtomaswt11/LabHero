@@ -37,7 +37,7 @@ class Menu:
 
 
     def save_game(self, menu=None):
-        # Student identity is registered once through Dr. Alves and is not
+        # Student identity is registered once through Dr. Melo and is not
         # editable from Settings during the campaign.
         save_file(self.player.get_save_data())
         animation_text_save('Game saved')

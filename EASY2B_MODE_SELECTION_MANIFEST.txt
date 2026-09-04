@@ -1,7 +1,7 @@
 EASY.2B — Student Normal/Easy selection + curated NPC routing
 
 Purpose
-- Expose Normal/Easy choice only during Dr. Alves registration for a New Game.
+- Expose Normal/Easy choice only during Dr. Melo registration for a New Game.
 - Lock student name and campaign mode together after explicit final confirmation.
 - Persist campaign_mode in the existing player_state save field.
 - Route Easy NPC entry points directly to the 11 curated missions.

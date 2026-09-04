@@ -2,7 +2,7 @@
 
 # LabHero
 
-LabHero is an educational serious game for learning **constraint-based metabolic modelling** through guided, evidence-driven missions. The player enters a systems-biology laboratory as a student, registers with **Dr. Alves**, chooses a campaign route, talks to researchers, designs simulations and interprets the visible evidence before submitting conclusions.
+LabHero is an educational serious game for learning **constraint-based metabolic modelling** through guided, evidence-driven missions. The player enters a systems-biology laboratory as a student, registers with **Dr. Melo**, chooses a campaign route, talks to researchers, designs simulations and interprets the visible evidence before submitting conclusions.
 
 The current game supports two metabolic models:
 
@@ -13,7 +13,7 @@ LabHero was originally developed as part of Mónica Leiras' MSc thesis, *Develop
 
 ## Campaign modes
 
-A new student registers a name with Dr. Alves and then chooses one campaign mode. The choice is locked for that save.
+A new student registers a name with Dr. Melo and then chooses one campaign mode. The choice is locked for that save.
 
 ### Normal
 
@@ -60,7 +60,7 @@ Keys are limited and are spent when optional hints are unlocked. A mission start
 
 Once the required mission evidence is complete, **every rejected final-answer submission costs 1 additional point**, including spelling/typing mistakes. Mission scores never fall below 0. This discourages brute-force guessing and rewards careful interpretation of the report.
 
-Dr. Alves explains the key inventory and scoring rules during registration. Current keys, score, hints and skins can be reviewed in the Inventory.
+Dr. Melo explains the key inventory and scoring rules during registration. Current keys, score, hints and skins can be reviewed in the Inventory.
 
 ## Controls
 
@@ -74,7 +74,7 @@ Dr. Alves explains the key inventory and scoring rules during registration. Curr
 ### Exploration
 
 - **Arrow keys / WASD** — move.
-- **ENTER** — interact with nearby scientists, Dr. Alves, simulators, books and other interactive objects.
+- **ENTER** — interact with nearby scientists, Dr. Melo, simulators, books and other interactive objects.
 - **E** — open the Inventory / skin selector.
 - **M** — open LabHero Settings.
 - **F** — after campaign completion, reopen Final Results.

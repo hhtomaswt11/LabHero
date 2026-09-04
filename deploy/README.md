@@ -62,7 +62,7 @@ The final Podman compatibility test must still be run on a machine with Podman
 
 ## What you're deploying
 
-LabHero is a serious game (RPG simulation) for learning constraint-based metabolic modelling. Players register as students with Dr. Alves and complete evidence-driven missions in the Normal or curated Easy campaign. The current curriculum uses the E. coli core model and, after the relevant progression milestone, the yeast iMM904 model.
+LabHero is a serious game (RPG simulation) for learning constraint-based metabolic modelling. Players register as students with Dr. Melo and complete evidence-driven missions in the Normal or curated Easy campaign. The current curriculum uses the E. coli core model and, after the relevant progression milestone, the yeast iMM904 model.
 
 It started life as a Python/Pygame desktop game and has been ported to the browser via pygbag. The stack you'll run consists of two Docker containers:
 

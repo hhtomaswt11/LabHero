@@ -167,7 +167,7 @@ class Story:
             """
             You are a student entering the LabHero systems-biology laboratory.
 
-            Start by registering with Dr. Alves. You will then follow either the full Normal campaign or the shorter curated Easy campaign.
+            Start by registering with Dr. Melo. You will then follow either the full Normal campaign or the shorter curated Easy campaign.
 
             Across the laboratories, researchers will give you missions in constraint-based metabolic modelling. Talk to them, understand the biological question and use the simulator to build controlled environmental and genetic experiments.
 

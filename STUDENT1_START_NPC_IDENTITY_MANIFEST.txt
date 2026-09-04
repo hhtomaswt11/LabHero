@@ -1,14 +1,14 @@
 STUDENT.1 — Start NPC / Student Identity
 
 Implemented:
-- Tiled NPC "Alves" is rendered from start.png and becomes interactive.
-- Fresh campaigns require registration with Dr. Alves before mission-start interactions.
+- Tiled NPC "Alves" (legacy internal id; displayed as Dr. Melo) is rendered from start.png and becomes interactive.
+- Fresh campaigns require registration with Dr. Melo before mission-start interactions.
 - Two-step name flow: entry -> explicit confirmation.
 - Confirmed name is stored in the existing six-field save payload via player_state.name_confirmed.
 - Confirmed name cannot be changed from Settings during the campaign.
 - Continue restores the same name/confirmation state.
 - New Game starts unconfirmed and asks for a new name.
 - Historic saves with existing mission progress are treated as already registered.
-- After registration, Alves has a normal dialogue using graphics/dialogues/alves.jpg.
+- After registration, the legacy Tiled NPC id 'Alves' is displayed as Dr. Melo and uses graphics/dialogues/melo.jpg.
 
 No mission science, mission validators, hints, scores, gates, solver, backend or Web persistence logic changed.

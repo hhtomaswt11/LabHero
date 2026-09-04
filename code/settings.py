@@ -84,7 +84,7 @@ DEFAULT_PLAYER_STATE = {
     'skin_id': 'default',
     'name_confirmed': False,
     # Historic saves default safely to Normal. Fresh New Games may replace
-    # this value during Dr. Alves registration before any mission starts.
+    # this value during Dr. Melo registration before any mission starts.
     'campaign_mode': 'normal',
     # STUDENT.2: the campaign-completion summary is shown once automatically.
     'final_results_seen': False,

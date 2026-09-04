@@ -1,7 +1,7 @@
 import pygame 
 from bisect import bisect_left, bisect_right
 from settings import *
-from player import Player
+from player import Player, GOLDEN_LAB_DIALOGUE_INTERACTIONS
 from sprites import *
 import pytmx
 from pytmx.util_pygame import load_pygame # pytmx map loader
@@ -371,8 +371,22 @@ class Level:
 			if obj.name in ('Sequeira', 'Pacheco', 'Nuno', 'Fernanda', 'Emanuel', 'Alexandre', 'Capela', 'Marta', 'Oscar', 'Miguel'):
 				Interaction((obj.x, obj.y), (obj.width, obj.height), self.interaction_sprites, obj.name)
 
+			if obj.name in GOLDEN_LAB_DIALOGUE_INTERACTIONS:
+				# These Golden Lab dialogue characters are authored as Tiled tile objects,
+				# so their Player-layer image is also their in-world sprite.  Keep
+				# them static/solid like Dr. Melo and attach a normal dialogue zone.
+				if getattr(obj, 'image', None) is not None:
+					Generic(
+						(obj.x, obj.y),
+						obj.image,
+						[self.all_sprites, self.collision_sprites],
+						LAYERS['main'],
+					)
+				Interaction((obj.x, obj.y), (obj.width, obj.height), self.interaction_sprites, obj.name)
+
 			if obj.name == 'Alves':
-				# Start NPC: the Tiled tile object resolves to start.png.
+				# Legacy Tiled id 'Alves': this start.png onboarding NPC is displayed as Dr. Melo.
+				# Keep the internal map id stable so the TMX does not need to change.
 				if getattr(obj, 'image', None) is not None:
 					Generic(
 						(obj.x, obj.y),

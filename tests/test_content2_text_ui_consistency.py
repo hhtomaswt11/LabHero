@@ -26,7 +26,7 @@ class Content2TextUiConsistencyTests(unittest.TestCase):
         intro = (CODE / "intro.py").read_text(encoding="utf-8")
         required = [
             "You are a student entering the LabHero systems-biology laboratory.",
-            "registering with Dr. Alves",
+            "registering with Dr. Melo",
             "Normal campaign",
             "Easy campaign",
             "constraint-based metabolic modelling",

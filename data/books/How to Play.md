@@ -10,7 +10,7 @@ Press M to open the game menu. Use **Back to Spawnpoint** there if you need to r
 
 ## Starting a campaign
 
-A new campaign begins with Dr. Alves. Register your name, choose Normal or Easy, review the summary and confirm. The name and mode are then fixed for that campaign.
+A new campaign begins with Dr. Melo. Register your name, choose Normal or Easy, review the summary and confirm. The name and mode are then fixed for that campaign.
 
 Normal contains all 40 missions. Easy is the curated 11-mission classroom route. Skipped Easy missions are not marked as completed and do not count towards the Easy score.
 

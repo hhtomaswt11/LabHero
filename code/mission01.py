@@ -45,8 +45,9 @@ class Mission01:
         ]
         
         self.m01_step2 = [
-            "Have you already tested the environmental condition?",
-            "Show me what the simulation revealed."
+            "Remember: an exchange lower bound controls uptake; upper bound controls secretion.",
+            "For Mission 01, close only oxygen's lower bound and keep its upper bound at default.",
+            "Closing both may give the same growth, but it changes an extra assumption."
         ]
 
 
@@ -476,9 +477,9 @@ class Mission_info:
             """
             Flux Balance Analysis (FBA) predicts feasible metabolic behaviour under a defined objective and a set of reaction bounds.
 
-            Dr. Martinez wants a controlled comparison between a normal aerobic reference and a condition in which oxygen uptake is unavailable. Change only the environmental factor being investigated; keep the simulation method, objective, genotype and unrelated environmental assumptions comparable.
+            Dr. Martinez wants a controlled comparison between a normal aerobic reference and a condition in which oxygen uptake is unavailable. For the oxygen-restricted run, close only the oxygen exchange lower bound (uptake) and leave its upper bound (secretion) at the default. Keep the simulation method, objective, genotype and every unrelated environmental assumption unchanged.
 
-            Use the growth output together with exchange evidence to determine whether the oxygen-restricted condition remains viable and how its predicted growth changes relative to the aerobic reference. FBA can have alternative optimal flux distributions, so base your conclusion on the requested relationship rather than on one exact rounded growth value or one unique byproduct profile.
+            This exact one-factor setup matters even if closing an unused flux direction happens to give the same numerical result. Use the growth output together with exchange evidence to determine whether the oxygen-restricted condition remains viable and how its predicted growth changes relative to the aerobic reference. FBA can have alternative optimal flux distributions, so base your conclusion on the requested relationship rather than on one exact rounded growth value or one unique byproduct profile.
             """,
             max_char=-1,
             wordwrap=True,
