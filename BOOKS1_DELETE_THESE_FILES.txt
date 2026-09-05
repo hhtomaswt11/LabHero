@@ -1,2 +1,0 @@
-Delete this obsolete file when applying the patch:
-data/books/How to Date a Model.md

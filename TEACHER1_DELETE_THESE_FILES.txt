@@ -1,2 +1,0 @@
-Delete this obsolete BOOKS.1 leftover when applying the patch manually:
-data/books/How to Date a Model.md

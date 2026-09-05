@@ -1,6 +1,6 @@
 # LabHero — Mission Progress Overview
 
-Resumo curto das missões implementadas até agora, organizado por laboratório.
+Resumo das 40 missões implementadas na versão atual do LabHero, organizado por laboratório.
 
 ## Lab 1 — Dr. Martinez
 
@@ -201,16 +201,56 @@ Resumo curto das missões implementadas até agora, organizado por laboratório.
 **Explica:** uma intervenção não deve ser escolhida apenas pelo maior produto; crescimento retido e impacto GPR também contam. Genótipos mecanisticamente diferentes podem convergir para o mesmo painel fenotípico sob limitação ambiental, sem se tornarem mecanicamente equivalentes. Maximizar diretamente um produto pode ainda selecionar um ótimo sem crescimento.  
 **Como passar:** depois da Missão 34, completar três secções. (A) Com `pFBA`, objetivo `BIOMASS_Ecoli_core_w_GAM`, ambiente aeróbio completamente default e painel exato `EX_for_e`, `EX_ac_e`, `EX_etoh_e`, registar wild type, `b0114`, `b0726` e `b0116`. O design aprovado tem de cumprir simultaneamente formato >= `7.5`, retenção de crescimento >= `90%` e no máximo uma reação desativada pela GPR. (B) Registar dois Bound Sweeps visíveis para `b0114` e `b0116`, sempre com pFBA/biomassa, base ambiental default, variável `EX_o2_e` lower bound e preset `Final oxygen convergence` com `-30,-10,-5,-2`; determinar o primeiro ponto testado de convergência fenotípica sustentada, mantendo distintos os conjuntos GPR. (C) Voltar ao ambiente default, usar `b0114`, `pFBA` e objetivo `EX_for_e`, comparando o máximo direto de formato com o run de biomassa já guardado. Entregar três conclusões curtas no menu final. Ao concluir, a progressão passa a desbloquear a skin `Golden LabHero`, a capacidade lógica `golden_lab` e o futuro modelo `yeast_iMM904`; a skin não é equipada automaticamente.
 
-## Infraestrutura após a Missão 35 — simulador de levedura
+## Golden Lab — Yeast iMM904
 
-Depois da certificação de *E. coli*, a progressão desbloqueia logicamente `model:yeast_iMM904`. O objeto Tiled `YeastSimulator`, colocado na layer `Player`, passa a abrir um segundo simulador baseado no modelo `iMM904` sem substituir nem alterar o computador original de *E. coli*.
+Após a certificação de *E. coli*, o jogo introduz o segundo modelo metabólico, `yeast_iMM904`, sem substituir o simulador original. No Normal, M35 desbloqueia a Golden Lab, a skin `Golden LabHero` e o modelo de levedura. No Easy, a progressão equivalente para acesso à Golden Lab ocorre após M27; a skin dourada continua exclusiva da conclusão real da M35 Normal.
 
-A seleção do modelo é explícita através de `model_id`: o computador antigo usa `ecoli_core` e o novo usa `yeast_iMM904`. O desktop guarda esse identificador juntamente com a configuração da simulação e a futura versão web envia-o no mesmo `POST /simulate`. Saves antigos sem `model_id` continuam a assumir `ecoli_core`.
+A seleção do modelo é explícita através de `model_id`: o computador original usa `ecoli_core` e o computador da Golden Lab usa `yeast_iMM904`. O mesmo contrato estruturado é usado no desktop e no browser. O backend mantém templates em cache, mas cada pedido trabalha sobre uma cópia isolada antes de aplicar objetivo, bounds ou knockouts.
 
-O backend mantém templates de modelo em cache, mas cada pedido trabalha sobre uma cópia isolada antes de alterar objetivo, bounds ou knockouts. Assim, pedidos concorrentes de vários alunos não partilham estado mutável do simulador. O mesmo endpoint suporta ambos os modelos e devolve `model_id`, fluxos, objetivo primário, diagnósticos do método e reações desativadas pela GPR.
+O iMM904 incluído no projeto possui aproximadamente 1577 reações, 164 exchanges e 905 genes, com objetivo default `BIOMASS_SC5_notrace`. O simulador de levedura expõe FBA/pFBA, valida objetivo, genes e exchanges contra o catálogo real e mostra uma preview canónica das alterações registadas. O Bound Sweep é model-aware e é utilizado pelas Missões 36 e 40.
 
-O iMM904 incluído no projeto possui 1577 reações, 164 exchanges e 905 genes, com objetivo default `BIOMASS_SC5_notrace`. Nesta fase inicial, apenas `FBA` e `pFBA` são expostos no menu de levedura; `lMOMA` e `ROOM` ficam deliberadamente ocultos até serem benchmarkados no modelo grande. Para evitar centenas de widgets pesados no desktop/pygbag, knockouts e objetivo no simulador de levedura usam campos de texto validados contra o catálogo completo; os environmental bounds continuam limitados às 164 reações de troca. O Bound Sweep de levedura fica deliberadamente desativado até as Missões 36+ definirem presets e critérios próprios.
+A sequência Normal da Golden Lab é:
 
+```text
+Vale -> M36
+Voss -> M37
+Umbra -> M38
+Morbus -> M39
+Mortis -> M40
+```
 
-## Mission 36 — Oxygen-Capped Fermentation Onset
-First iMM904 mission. Establish a default wild-type pFBA reference and compare it with a four-point glucose lower-bound sweep while oxygen capacity stays fixed. The player derives the first tested point where O2 becomes binding and ethanol is positive. NPC: Vale.
+### Mission 36 — Oxygen-Capped Fermentation Onset
+**NPC:** Vale.  
+**Tema:** interação entre disponibilidade de carbono, capacidade respiratória fixa e início de secreção fermentativa.  
+**Explica:** uma constraint que não é alterada diretamente pode tornar-se binding quando outra entrada aumenta. No iMM904 default, o lower bound de `EX_o2_e` permanece fixo em `-2`, enquanto a disponibilidade de glucose é variada. O primeiro ponto em que a solução usa toda a capacidade de O₂ e passa a secretar etanol deve ser inferido da curva visível.  
+**Como passar:** usar `pFBA`, objetivo `BIOMASS_SC5_notrace`, wild type e ambiente base completamente default. Acompanhar exatamente `EX_etoh_e` e `EX_co2_e`. Primeiro registar a referência default; depois executar um Bound Sweep do lower bound de `EX_glc__D_e` com `-0.5`, `-1`, `-2`, `-10`. A referência deve coincidir com a linha `-10` dentro da tolerância. A curva mostra aproximadamente O₂ `1.414` e etanol `0` em `-0.5`, e O₂ `2.000` com etanol positivo já em `-1`. Entregar o primeiro lower bound testado que satisfaz simultaneamente as duas condições.
+
+### Mission 37 — Fermentation Redundancy Cut Set
+**NPC:** Voss.  
+**Tema:** redundância genética e identificação de um cut set funcional na fermentação da levedura.  
+**Explica:** perturbar uma única alternativa genética pode ser compensado por outras isoenzimas; a conclusão deve ser baseada numa série controlada de single, double e triple knockouts, e não no nome de um gene isolado.  
+**Como passar:** usar `pFBA`, objetivo `BIOMASS_SC5_notrace`, ambiente completamente default e acompanhar exatamente `EX_etoh_e` e `EX_succ_e`. Deixar Bound Sweep desligado. Registar, por qualquer ordem, WT, `PDC1`, `PDC1+PDC5`, `PDC1+PDC6`, `PDC5+PDC6` e `PDC1+PDC5+PDC6`. Comparar crescimento e os fluxos acompanhados para identificar o conjunto testado cuja remoção conjunta quebra a redundância fermentativa.
+
+### Mission 38 — Background-Dependent Compensation Audit
+**NPC:** Umbra.  
+**Tema:** vulnerabilidade genética dependente do background e comparação de efeitos condicionais.  
+**Explica:** o mesmo knockout pode ser quase neutro num background e tornar-se muito mais importante depois de outra via já ter sido perturbada. A missão exige comparar o candidato sozinho com WT e o mesmo candidato sobre o background `PDC1+PDC5+PDC6`, evitando concluir a partir de um único genótipo.  
+**Como passar:** usar `pFBA`, objetivo `BIOMASS_SC5_notrace`, ambiente default, Bound Sweep desligado e acompanhar exatamente `EX_etoh_e`, `EX_succ_e`, `EX_pyr_e`. Registar WT, `FRD1`, `MAE1`, `PDC1+PDC5+PDC6`, `PDC1+PDC5+PDC6+FRD1` e `PDC1+PDC5+PDC6+MAE1`. Comparar os pares controlados e entregar o candidato cujo grande efeito é específico do background alterado.
+
+### Mission 39 — Pathway Bypass Rescue
+**NPC:** Morbus.  
+**Tema:** rescue metabólico por suplementação e posição de um metabolito numa via bloqueada.  
+**Explica:** tornar um metabolito externamente disponível não demonstra resgate. É necessário provar uptake real e recuperação fenotípica na mesma solução. A posição do suplemento relativamente ao passo bloqueado distingue um precursor de um verdadeiro bypass.  
+**Como passar:** usar `pFBA`, objetivo `BIOMASS_SC5_notrace` e o genótipo fixo `PDC1+PDC5+PDC6+FRD1`. Acompanhar exatamente `EX_etoh_e`, `EX_succ_e`, `EX_pyr_e` e manter Bound Sweep desligado. Registar quatro ambientes: default; abrir apenas o lower bound de `EX_pyr_e`; abrir apenas `EX_etoh_e`; abrir apenas `EX_acald_e`. Comparar cada suplemento com a referência, verificando uptake, crescimento e recuperação de etanol. Entregar o suplemento testado que funciona como bypass.
+
+### Mission 40 — Final Rescue Robustness Certification
+**NPC:** Mortis.  
+**Tema:** robustez de um rescue através de curvas ambientais emparelhadas.  
+**Explica:** uma intervenção que funciona num único meio não está automaticamente certificada como robusta. A missão final compara duas curvas de glucose com o mesmo genótipo e protocolo, diferindo apenas na disponibilidade do bypass identificado na missão anterior.  
+**Como passar:** usar `pFBA`, objetivo `BIOMASS_SC5_notrace`, genótipo fixo `PDC1+PDC5+PDC6+FRD1` e acompanhar exatamente `EX_etoh_e`, `EX_succ_e`, `EX_pyr_e`. Executar dois Bound Sweeps do lower bound de `EX_glc__D_e` com `-0.5`, `-1`, `-2`, `-10`: uma curva com ambiente base completamente default e outra com o mesmo setup, abrindo apenas o lower bound de `EX_acald_e`. Comparar ponto a ponto e entregar os lower bounds testados em que o bypass constitui um rescue completo segundo os critérios da missão.
+
+## Progressão final e exploração opcional
+
+A campanha Normal termina na M40; a campanha Easy termina na M36. Final Results é apresentado quando a missão final da rota selecionada é concluída e pode ser reaberto com **F**.
+
+O Golden Egg é um elemento opcional de exploração, separado dos validators das missões. Quando é recolhido antes do fim da campanha, o estado `golden_egg_collected` é persistido e a recompensa é atribuída uma única vez (Normal: +3 Gold Keys; Easy: +1 Gold Key). A progression gate dependente do ovo abre apenas quando esse estado é verdadeiro; concluir M35/M40 por si só não satisfaz essa condição.

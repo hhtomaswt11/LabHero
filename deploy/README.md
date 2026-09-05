@@ -1,331 +1,506 @@
 # Deploying LabHero on a server
 
-Entry-point guide for getting [LabHero](https://github.com/mleiras/LabHero) live on a server with a public domain. Written for UMinho IT staff (or any sysadmin) who has not seen this project before.
+Entry-point guide for deploying [LabHero](https://github.com/hhtomaswt11/LabHero) as a browser game. It is written for CEB/UMinho IT staff or any sysadmin who has not worked with the project before.
 
-If you already have Docker installed on a server reachable on the internet, jump to [§3 Deploy](#3-deploy) — the actual game-specific steps are just three commands. Everything before that is generic VM + DNS + TLS setup that may or may not apply.
+The current release has two deployment paths:
+
+- **Production (CEB/UMinho Darwin):** Podman, using repository-root `deploy.sh` and `deploy/nginx.podman.conf`.
+- **Development/local validation:** Docker Compose, using files under `deploy/`.
+
+The browser is the intended classroom client: students open one URL and do not install Python, Pygame, MEWpy or the metabolic models locally.
 
 ---
 
+## 1. Production architecture — Darwin / Podman
 
-## Darwin / Podman production path
+The production host uses **Podman**, not Docker Compose.
 
-The CEB/UMinho production host (Darwin) uses **Podman**, not Docker Compose.
-The repository therefore keeps two explicit deployment paths:
+`deploy.sh` builds and starts two containers in one Podman pod:
 
-- `deploy/docker-compose.yml` + `deploy/nginx.conf`: local/development Docker workflow.
-- `./deploy.sh` + `deploy/nginx.podman.conf`: Darwin/Podman workflow.
+- **`labhero-frontend`** — nginx serving the fingerprinted Pygbag/WebAssembly bundle and proxying `/api/*`.
+- **`labhero-backend`** — FastAPI + metabolic simulation stack for `ecoli_core` and `yeast_iMM904`.
 
-In the Podman deployment, frontend and backend run in the same pod. Containers
-in a Podman pod share a network namespace, so nginx proxies `/api/*` to
-`http://127.0.0.1:8000/`. Only the frontend port is published by the pod; the
-backend remains internal. The default host mapping is `8080:80`, configurable
-with `LABHERO_PORT`.
+Containers inside the pod share a network namespace, therefore nginx reaches the backend at:
 
-From the repository root, choose a teacher password at deploy time:
+```text
+http://127.0.0.1:8000/
+```
+
+Only the frontend port is published. The default host mapping is:
+
+```text
+127.0.0.1 / host :8080 -> pod :80
+```
+
+The host port can be changed with `LABHERO_PORT`.
+
+The expected institutional topology is:
+
+```text
+students / teachers
+        |
+       HTTPS
+        |
+        v
+UMinho institutional reverse proxy
+        |
+        | internal HTTP
+        v
+Darwin host :8080
+        |
+        v
+labhero-frontend (nginx)
+        |
+        +---- static Pygbag bundle
+        |
+        +---- /api/* ----------> labhero-backend :8000
+```
+
+The backend is not published directly to the external network.
+
+### Why HTTPS matters
+
+The public LabHero URL should be served through HTTPS. This is especially important because Teacher access uses HTTP Basic authentication at the web-server boundary. In the CEB/UMinho setup, TLS should normally be terminated by the institutional reverse proxy before traffic reaches the LabHero host port.
+
+Do **not** expose the backend Uvicorn port directly to the internet.
+
+---
+
+## 2. Teacher access
+
+Teacher Preview is isolated from student saves and supports both Normal and Easy campaign contexts.
+
+### In-game access
+
+On the title screen:
+
+```text
+SHIFT + T
+```
+
+The game asks for Teacher credentials, campaign mode and canonical mission number.
+
+On Web the credentials are validated **server-side** through the protected `/teacher-auth` route. They are not embedded in the Pygbag bundle and are not persisted to `localStorage` or student save data.
+
+After one successful authentication, the Teacher session remains authenticated only in memory for that page/runtime. The professor can switch missions from Settings without entering the password again. Reloading/restarting the page ends that transient authenticated session.
+
+### Direct fallback routes
+
+The protected direct route remains available, for example:
+
+```text
+https://<labhero-domain>/teacher/?mission=17&mode=normal
+https://<labhero-domain>/teacher/?mission=25&mode=easy
+```
+
+The public root must not activate Teacher Preview from query parameters alone:
+
+```text
+/?teacher=1&mission=17
+```
+
+is not a valid Teacher entry point.
+
+### Credentials
+
+At deploy time, provide a strong password:
 
 ```bash
 LABHERO_TEACHER_PASSWORD='use-a-strong-password' ./deploy.sh
 ```
 
-The username defaults to `teacher` and can be changed with
-`LABHERO_TEACHER_USER`. The password is **not** written into the repository or
-browser bundle. `deploy.sh` hashes it into
-`~/.config/labhero/teacher.htpasswd` (file mode `0644` inside a host directory kept at `0700`) and mounts that file read-only
-into nginx.
-
-The public student game remains at `/`. Teacher mission-jump access is available
-only below the HTTP-Basic-authenticated `/teacher/` route, for example:
+The username defaults to:
 
 ```text
-https://<labhero-domain>/teacher/?mission=17
+teacher
 ```
 
-A public URL such as `/?teacher=1&mission=17` does **not** activate Teacher Mode.
-Do not place teacher credentials in source code, JavaScript, Pygbag files or a
-shared URL.
+and can be changed with:
 
-Only the Teacher HTML entry document is Basic-Auth protected. Pygbag fetches its
-relative `src.<hash>.tar.gz` archive with browser credentials explicitly omitted,
-so `/teacher/` asset requests are rewritten to the identical public root assets
-without requiring Basic Auth. `/teacher/` and `/teacher/index.html` themselves
-remain protected, so this does not create a second unauthenticated Teacher entry
-point. `deploy.sh` verifies both the protected entry and the credential-free
-Pygbag archive fetch after each deployment.
-
-The script builds both images, recreates `labhero-pod`, starts both containers,
-and waits for `http://127.0.0.1:8080/api/health` to return successfully. The
-CEB administrator can then place the institutional reverse proxy/domain/HTTPS
-in front of host port 8080.
-
-The final Podman compatibility test must still be run on a machine with Podman
-(and ultimately on Darwin); the normal Docker Compose workflow remains intact.
-
-## What you're deploying
-
-LabHero is a serious game (RPG simulation) for learning constraint-based metabolic modelling. Players register as students with Dr. Melo and complete evidence-driven missions in the Normal or curated Easy campaign. The current curriculum uses the E. coli core model and, after the relevant progression milestone, the yeast iMM904 model.
-
-It started life as a Python/Pygame desktop game and has been ported to the browser via pygbag. The stack you'll run consists of two Docker containers:
-
-- **`labhero-backend`** — FastAPI + MEWpy/COBRA tooling. Receives model-aware simulation requests for `ecoli_core` or `yeast_iMM904` and returns structured method-aware results separating the primary objective flux from secondary solver diagnostics. Each request works on an isolated model copy so mutable simulation state is not shared between students.
-- **`labhero-frontend`** — nginx. Serves the pygbag-compiled game bundle as static files and reverse-proxies `/api/*` to the backend over the internal Docker network.
-
-Only the frontend is exposed to the host network. End users only ever see one URL.
-
-```
-        public internet
-              │
-              ▼
-   ┌──────────────────────┐
-   │  TLS terminator      │  ←  Cloudflare / Caddy / nginx
-   │  (your choice)       │     (HTTPS, certs, the public domain)
-   └─────────┬────────────┘
-             │ plain HTTP
-             ▼
-   ┌──────────────────────┐
-   │  labhero-frontend    │  ←  port 80 on the host
-   │  (nginx)             │
-   └─────────┬────────────┘
-             │ docker network
-             ▼
-   ┌──────────────────────┐
-   │  labhero-backend     │  ←  not exposed to host
-   │  (FastAPI + MEWpy)   │
-   └──────────────────────┘
+```bash
+LABHERO_TEACHER_USER='another-user' \
+LABHERO_TEACHER_PASSWORD='use-a-strong-password' \
+./deploy.sh
 ```
 
-### Initial resource sizing (validate on the final host)
+`deploy.sh` hashes the password into:
 
-| Resource | Minimum | Comfortable |
-|---|---|---|
-| CPU | 1 vCPU | 2 vCPU |
-| RAM | 1 GB | 2 GB |
-| Disk | 4 GB | 10 GB |
-| Network | outbound HTTPS during build only | same |
+```text
+~/.config/labhero/teacher.htpasswd
+```
 
-Runtime cost is dominated by uvicorn + COBRA/MEWpy model loading/solving. E. coli runs are lighter than the larger iMM904 workflows, and concurrent simulation requests are CPU-bound. The repository has structural deployment checks, but a representative 10/20/30-client classroom load test should be run on the final host before claiming a classroom concurrency capacity.
+and mounts the generated file read-only into nginx. Do not commit Teacher credentials, hashes intended as secrets, or plaintext passwords into the repository or browser bundle.
 
 ---
 
-## 1. Prepare the server
+## 3. Get the current project
 
-Skip this section if you already have a Linux VM with Docker installed and outbound internet access.
-
-### 1.1 OS
-
-Any recent Linux. Ubuntu 22.04 / 24.04 LTS, Debian 12, Rocky / Alma 9, or equivalent. Instructions below assume Ubuntu/Debian; substitute the package manager for RPM-based distros.
-
-### 1.2 Install Docker
-
-Use Docker's official `get.docker.com` script (works on Ubuntu, Debian, Fedora, CentOS, Rocky, Alma):
+On the target host:
 
 ```bash
-curl -fsSL https://get.docker.com | sudo sh
-sudo usermod -aG docker $USER
-# log out and back in for the group change to apply
+git clone https://github.com/hhtomaswt11/LabHero.git
+cd LabHero
 ```
 
+For an existing checkout:
+
+```bash
+cd ~/LabHero
+git pull --ff-only
+```
+
+For a classroom/release deployment, prefer deploying a known release tag or exact commit rather than an arbitrary moving `main`.
+
+---
+
+## 4. Production deploy with Podman
+
+### 4.1 Prerequisites
+
+The production host needs:
+
+- Podman
+- a shell compatible with `deploy.sh`
+- outbound HTTPS during image builds
+- access from the institutional reverse proxy to the configured LabHero host port
+
 Verify:
+
+```bash
+podman --version
+```
+
+### 4.2 Deploy
+
+From the repository root:
+
+```bash
+LABHERO_TEACHER_PASSWORD='use-a-strong-password' ./deploy.sh
+```
+
+`deploy.sh` builds both images, recreates the LabHero pod, starts frontend/backend and performs deployment smoke checks.
+
+The script currently verifies the important production contracts, including:
+
+- API health;
+- protected Teacher entry behaviour;
+- Teacher authentication probe;
+- Pygbag Teacher asset access;
+- a real E. coli FBA simulation;
+- a real yeast iMM904 pFBA simulation.
+
+A successful `/api/health` alone is not considered sufficient proof that the scientific backend is usable.
+
+### 4.3 Verify from the host
+
+The default local checks use port `8080`:
+
+```bash
+curl http://127.0.0.1:8080/api/health
+curl -I http://127.0.0.1:8080/
+```
+
+Expected health response:
+
+```json
+{"status":"ok"}
+```
+
+Then verify the institutional public HTTPS URL from a browser.
+
+---
+
+## 5. HTTPS / public domain
+
+### Recommended CEB/UMinho setup
+
+For the institutional deployment:
+
+1. LabHero listens on an internal host port such as `8080`.
+2. The UMinho reverse proxy owns the public hostname and TLS certificate.
+3. The proxy forwards requests to the Darwin host.
+4. Students and teachers only use the public HTTPS URL.
+
+This keeps certificate management outside the LabHero containers and avoids exposing Uvicorn directly.
+
+### Other environments
+
+If deploying outside the institutional infrastructure, use a normal HTTPS reverse proxy such as Caddy, nginx or an equivalent managed service.
+
+If Cloudflare is used, do **not** document or rely on `Flexible` SSL for a production Teacher deployment. Use end-to-end TLS (`Full (strict)`) when the origin is configured for HTTPS, or use another trusted reverse-proxy design that protects credentials in transit.
+
+---
+
+## 6. Development / local validation with Docker Compose
+
+Docker Compose remains available for local development and smoke testing. It is not the production Darwin path.
+
+### 6.1 Prerequisites
+
+Verify Docker Engine and Compose v2:
 
 ```bash
 docker --version
 docker compose version
 ```
 
-You need Docker Engine 20.10+ and the Compose v2 plugin (the command is `docker compose`, two words — not the older `docker-compose`).
-
-### 1.3 Firewall
-
-The frontend listens on port 80 of the host. If you'll put a TLS terminator on the same host, that terminator also needs 443. UMinho's network team likely manages this at the VLAN level — check before opening anything host-side.
-
-If using `ufw`:
-
-```bash
-sudo ufw allow 80/tcp
-sudo ufw allow 443/tcp   # if TLS lives on this host
-```
-
----
-
-## 2. Domain and HTTPS
-
-Skip this section if you'll be reached via an existing UMinho subdomain that already has TLS handled upstream.
-
-Browsers refuse to run modern game features (audio, fast wasm) over plain HTTP on a public domain. You **must** terminate TLS somewhere before traffic hits the LabHero containers. There are three good ways to do it.
-
-### Option A: Cloudflare (zero config on the server)
-
-Sign up at cloudflare.com, add your domain, point the nameservers as instructed by Cloudflare, then create an A record pointing `labhero.yourdomain.tld` → your server's public IP. Make sure the orange-cloud proxy icon is on. Set SSL/TLS mode to "Flexible" (Cloudflare → user is HTTPS; Cloudflare → your server is plain HTTP). Done.
-
-This is the lowest-friction option. The downside is your traffic passes through a third party.
-
-### Option B: Caddy on the same host (1 file)
-
-Caddy gets a Let's Encrypt cert automatically. Install:
-
-```bash
-sudo apt install -y debian-keyring debian-archive-keyring apt-transport-https
-curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/gpg.key' | sudo gpg --dearmor -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg
-curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt' | sudo tee /etc/apt/sources.list.d/caddy-stable.list
-sudo apt update && sudo apt install -y caddy
-```
-
-`/etc/caddy/Caddyfile`:
-
-```
-labhero.yourdomain.tld {
-    reverse_proxy localhost:80
-}
-```
-
-Then:
-
-```bash
-sudo systemctl restart caddy
-```
-
-Caddy will provision the cert on first request and renew it automatically. Make sure the `A` record for `labhero.yourdomain.tld` already points at this server before Caddy starts, otherwise the ACME challenge fails.
-
-### Option C: nginx + certbot on the same host
-
-Most flexible but most moving parts. UMinho IT may already have a preferred pattern — defer to that. The principle is the same: nginx (or any TLS terminator) listens on 443, proxies to `127.0.0.1:80` where labhero-frontend is bound.
-
----
-
-## 3. Deploy
-
-This is the part that's specific to LabHero. All commands run on the server.
-
-### 3.1 Get the code
-
-```bash
-sudo apt install -y git
-git clone https://github.com/mleiras/LabHero.git
-cd LabHero/deploy
-```
-
-### 3.2 Build and start
-
-For the first local browser smoke test, the repository includes a helper that builds the two containers, waits for the API health check and verifies that nginx serves the frontend:
+### 6.2 Build and smoke test
 
 ```bash
 cd deploy
 ./local_smoke.sh
 ```
 
-The equivalent manual commands are:
+Or manually:
 
 ```bash
 docker compose build
 docker compose up -d
 ```
 
-First build takes 3-6 minutes (downloads ~600 MB of pip wheels for the backend image, plus pygbag and the game bundle for the frontend image). Subsequent builds reuse Docker layers and take under a minute.
-
-### 3.3 Verify
+Verify:
 
 ```bash
-docker compose ps                    # both services should be Up
-curl http://localhost/api/health     # {"status":"ok"}
-curl -I http://localhost/            # Content-Type: text/html
+docker compose ps
+curl http://localhost/api/health
+curl -I http://localhost/
 ```
 
-For local validation, open `http://localhost/` in Firefox or Chrome. On the final server, open the configured public URL instead. The first page load is the expensive one because the browser must bootstrap Pygbag's CPython/WebAssembly runtime and download the game archive. Repeat visits reuse the content-addressed game archive from the browser cache.
+Open:
+
+```text
+http://localhost/
+```
+
+in Firefox or Chrome.
+
+### 6.3 Logs / stop
+
+```bash
+docker compose logs -f
+docker compose logs -f backend
+docker compose restart
+docker compose down
+```
+
+For a complete image cleanup:
+
+```bash
+docker compose down --rmi all
+```
+
+There are no application database volumes in the current stack. Student browser progress lives in browser `localStorage`, not in a server-side LabHero account database.
 
 ---
 
-## 4. Operate
+## 7. Browser bundle and cache behaviour
 
-### Day-to-day
+The frontend is built with Pygbag.
 
-```bash
-docker compose ps                # who's up
-docker compose logs -f           # tail logs from both containers
-docker compose logs -f backend   # just one
-docker compose restart           # restart in place (e.g. after host reboot)
+The build fingerprints the game archive:
+
+```text
+src.<sha256>.tar.gz
 ```
 
-### Update to a new game version
+nginx serves:
 
-When the upstream repo gets a new release:
+- `index.html` with revalidation / no-cache semantics;
+- fingerprinted archives with a long immutable cache lifetime.
 
-```bash
-cd ~/LabHero
-git pull
-cd deploy
-docker compose build --no-cache    # force rebuild so latest game code is bundled
-docker compose up -d
-```
+After a deploy, clients revalidate the entry document. If the game bytes changed, the new `index.html` references a different fingerprinted archive URL, avoiding the classic problem where a browser keeps running an obsolete fixed-name game archive.
 
-The frontend build fingerprints the Pygbag archive as `src.<sha256>.tar.gz`. nginx keeps `index.html` on `Cache-Control: no-cache`, so clients revalidate the entry point after a deploy; if the game bytes changed, that fresh index references a new archive URL. The fingerprinted archive itself is served with a long `immutable` cache lifetime, so repeat visits avoid re-downloading the ~12 MB bundle without risking an old fixed-name archive after an update.
-
-### Stop / uninstall
-
-```bash
-docker compose down              # stop and remove containers (images stay)
-docker compose down --rmi all    # also remove images, for a full uninstall
-```
-
-There are no Docker volumes — the stack is stateless. Nothing to back up.
-
-### Configuration knobs
-
-This stack runs with sensible defaults out of the box. You probably do not need to edit anything. If you do, the surfaces are:
-
-- **`docker-compose.yml`** — service definitions, port mapping. Change `"80:80"` if you need to bind to a different host port.
-- **`nginx.conf`** — proxy timeouts, MIME types, cache headers.
-- **`Dockerfile.frontend`** — pinned pygbag version (0.9.3).
-- **`../backend/Dockerfile`** — pinned Python (3.10-slim) and the `libexpat1` system dependency MEWpy/libsbml needs.
-
-If you change `nginx.conf` you can hot-reload without rebuilding the image:
-
-```bash
-docker compose exec frontend nginx -s reload
-```
+The first browser visit is the expensive one because the Pygbag CPython/WebAssembly runtime and game archive must be initialized/downloaded. Repeat visits can reuse browser cache.
 
 ---
 
-## 5. Troubleshooting
+## 8. Browser saves
 
-| Symptom | Likely cause | First thing to check |
+Student progress is browser-local.
+
+The Web build persists LabHero data under the versioned:
+
+```text
+labhero:v1:
+```
+
+namespace in `localStorage`, with an in-memory session cache/fallback.
+
+Persisted state includes the normal/easy student campaign data and mission evidence used by the existing save helpers. Autosave also keeps position/profile/reward state reasonably current.
+
+Important operational consequences:
+
+- progress is scoped to the **browser + origin**;
+- changing hostname, protocol or port creates a different browser storage origin;
+- clearing site data removes that browser's LabHero progress;
+- `Back to Title` preserves progress;
+- an explicit `New Game` clears LabHero's student namespace rather than unrelated browser storage;
+- if `localStorage` is unavailable, the game falls back to session memory and warns in the browser console.
+
+Keep the production hostname stable once students start using the game.
+
+---
+
+## 9. Scientific simulation paths
+
+The browser never needs MEWpy installed on the student's computer. Visible simulations are submitted to FastAPI.
+
+The current backend supports:
+
+```text
+model_id:
+- ecoli_core
+- yeast_iMM904
+```
+
+Simulation requests/results are model-aware. The backend validates the objective/model combination and works on an isolated model copy before applying mutation/environmental constraints.
+
+The response separates:
+
+- primary objective flux;
+- method-specific diagnostic/score;
+- predicted growth;
+- requested fluxes;
+- exchange/medium information;
+- disabled reactions/GPR evidence where applicable.
+
+Bound Sweep is also model-aware. The live browser path submits the tested rows through normal backend simulations and assembles the visible curve client-side. This is used by the E. coli sweep missions and the yeast glucose sweeps in Missions 36 and 40.
+
+The live Pygbag UI uses asynchronous browser requests so the event loop remains responsive. Sweep requests are intentionally awaited sequentially rather than flooding the backend with all rows at once.
+
+---
+
+## 10. Resource sizing and classroom load
+
+Initial sizing still needs to be validated on the final host.
+
+| Resource | Minimum starting point | More comfortable starting point |
+|---|---:|---:|
+| CPU | 1 vCPU | 2+ vCPU |
+| RAM | 1 GB | 2+ GB |
+| Disk | 4 GB | 10 GB |
+| Network | outbound HTTPS during build | same |
+
+Runtime cost is dominated by Python + the metabolic model/solver stack. E. coli work is lighter than iMM904 and concurrent scientific requests are CPU-bound.
+
+Before claiming a classroom concurrency capacity, perform a representative load test on Darwin. Recommended checkpoints:
+
+```text
+5 simultaneous users
+10 simultaneous users
+20 simultaneous users
+30 simultaneous users
+```
+
+Record at least:
+
+- error/timeout count;
+- p50/p95 response latency;
+- CPU;
+- RAM.
+
+Do not add Uvicorn workers or nginx rate limits blindly before measuring the real host. Extra workers can improve concurrency but also duplicate model/process memory.
+
+---
+
+## 11. Security notes
+
+### Network boundary
+
+Keep FastAPI internal behind nginx/the institutional reverse proxy. The current dependency stack contains older scientific packages that should not be treated as a reason to expose Uvicorn directly.
+
+### Teacher credentials
+
+Teacher Basic Auth must only travel over the public HTTPS deployment. Credentials must never be embedded in Python files shipped to Pygbag, JavaScript, URLs, screenshots or repository documentation.
+
+### Dependencies
+
+The scientific stack is intentionally pinned for reproducibility. Before a public release, run a dependency audit such as:
+
+```bash
+python3 -m pip install pip-audit
+pip-audit -r requirements.txt
+```
+
+Treat the output as an audit. Do not perform a broad MEWpy/NumPy/pandas/httpx upgrade immediately before release without rerunning the scientific and mission regression suites, because solver/library changes can alter validated behaviour.
+
+---
+
+## 12. Release verification
+
+Before deploying a final classroom release, run from the repository root:
+
+```bash
+python3 -m compileall -q code backend/app tests main.py LabHero.py
+python3 -m unittest discover -s tests -p "test_*.py"
+```
+
+Then validate manually on the public HTTPS deployment:
+
+- New Game / Continue;
+- refresh persistence;
+- Easy campaign end-to-end;
+- Golden Lab / yeast access;
+- Golden Egg persistence if part of the QA pass;
+- Teacher Access with Normal and Easy;
+- Teacher mission switching and exit;
+- student save isolation from Teacher Preview;
+- E. coli simulation;
+- yeast iMM904 simulation;
+- representative Bound Sweep;
+- Final Results.
+
+For the final handoff, record the exact Git commit/tag deployed on Darwin.
+
+---
+
+## 13. Troubleshooting
+
+| Symptom | Likely cause | First check |
 |---|---|---|
-| Build fails on the pygbag step | Server has no outbound HTTPS to `pygame-web.github.io` | Build the image on a workstation, push to a registry, `docker pull` on the server |
-| `curl http://localhost/` downloads a file instead of returning HTML | `nginx.conf` was edited and now overrides `types {}` | Revert to the shipped `nginx.conf` or read the comment block in it |
-| `curl http://localhost/api/health` times out | Backend not ready or docker network broken | `docker compose logs backend` for the startup line; `docker compose down && up -d` |
-| Browser shows the title screen but the simulation menu hangs | Frontend reached but backend unreachable from frontend | `docker compose exec frontend wget -qO- http://backend:8000/health` should return `{"status":"ok"}` |
-| Audio doesn't play | Browser audio is gated behind user interaction | Click anywhere on the page first |
-| Audio works but stutters when opening menus | Single-threaded wasm running heavy menu construction (137 gene toggles, 40 reaction toggles) | Expected. The build is broken into chunks that yield to the audio mixer between batches, but on low-end CPUs the gaps can still be audible |
-| Browser appears to run an older build after a deploy | Confirm the served `index.html` references the newest `src.<sha256>.tar.gz`; a hard refresh should revalidate the no-cache entry point | Rebuild/restart the frontend and verify the fingerprinted archive name changed when game bytes changed |
-| "Quit Game" does nothing on web | Expected | The game replaces "Quit Game" with "Back to Title" on the web because browsers don't let JavaScript close their own tab |
+| Build fails during Pygbag | Host cannot reach required package/build sources | Check outbound HTTPS and build logs |
+| `/api/health` times out | Backend not ready or pod/container networking problem | Backend logs and pod/container status |
+| Browser opens but simulation fails | Frontend cannot reach API or scientific backend failed | `/api/health`, backend logs, deploy smoke simulation |
+| Teacher credentials always fail | htpasswd not mounted/configured or reverse proxy route mismatch | `~/.config/labhero/teacher.htpasswd`, nginx config, `/teacher-auth` |
+| Teacher direct URL is public | `/teacher/` auth boundary misconfigured | nginx auth config before classroom use |
+| Browser shows an old game | stale entry point/container deployment | Confirm current `index.html` points to the newest `src.<sha256>.tar.gz` |
+| Progress disappears after hostname change | browser storage origin changed | Keep one stable production origin |
+| Audio does not start immediately | browser autoplay restrictions | Interact with the page/game first |
+| Web "Quit Game" behaviour differs from desktop | browsers cannot close their own tab reliably | Use the Web Back-to-Title flow |
 
 ---
 
-## 6. Known issues to revisit before going public
+## 14. Useful operational commands
 
-### Browser save persistence
+### Podman production
 
-The pygbag build now mirrors the main player save and all mission evidence artifacts to browser `localStorage` under the versioned `labhero:v1:` namespace. The in-memory store remains only as a hot session cache/fallback. A page refresh or closed/reopened tab can therefore restore progress from the same browser + origin, and a five-second web autosave keeps player position/profile/reward state reasonably current. Mission evidence is persisted immediately when its existing save helper is called.
+Exact container/pod lifecycle is centralized in `deploy.sh`. For troubleshooting:
 
-`Back to Title` preserves durable progress. Starting an explicit `New Game` clears only keys in the `labhero:v1:` namespace, leaving unrelated localStorage data untouched. Browser storage is origin-scoped: changing the production hostname/protocol/port creates a different storage origin, so deployment should keep a stable public URL once students begin using it. If localStorage is unavailable because of browser policy/privacy/quota, LabHero falls back to the in-memory store for that session and writes a warning to the browser console.
+```bash
+podman ps
+podman pod ps
+podman logs labhero-backend
+podman logs labhero-frontend
+```
 
-Before classroom rollout, manually validate refresh persistence in each supported browser and verify the intended production hostname. Server-side accounts/sync are still optional future work; they are not required for per-browser persistence.
+Container names can differ if the deploy script is changed; inspect `podman ps` first.
 
-### Browser-only simulation paths
+### Docker development
 
-Normal visible simulations, including Mission 19's FBA/lMOMA comparison, use the FastAPI service and validate the already visible structured result. For lMOMA, the backend computes an explicit wild-type FBA reference in the selected medium before applying the GPR-derived mutant constraints; the browser never runs MEWpy locally. Bound Sweeps are now model-aware and reuse the same `POST /simulate` contract: the browser submits each tested bound as a normal backend simulation and assembles the visible rows client-side for the E. coli sweep missions and Mission 36. The live browser simulation path now uses Pygbag asynchronous Fetch (`aio.fetch`), and Bound Sweep requests are awaited sequentially so the Pygame/pygbag event loop stays responsive without multiplying backend load. A legacy synchronous helper remains only for backwards-compatible direct callers/tests; it is not used by the live simulator UI.
-
-### Dependency security
-
-Three Dependabot CVEs were dismissed for the desktop game because they are not reachable in a Pygame desktop binary. They **become reachable** the moment the backend starts parsing real HTTP behind a public TLS terminator.
-
-- **h11 < 0.13** is forced by MEWpy 0.1.36's transitive pin on `httpx==0.23.0` (Chunked-Encoding CVE). The included nginx in this stack handles HTTP parsing itself before traffic reaches uvicorn, which is sufficient mitigation. **If you bypass nginx and expose uvicorn directly to the public internet, the CVE is in play.**
-- **idna** is in the same dependency tree and has a low-severity CVE.
-- **Pillow** is not currently in the runtime dependency closure but a future game update that adds image processing would introduce it.
-
-If your security team needs a clean scan, the path is to upgrade MEWpy to a version that does not pin httpx 0.23.0, or to vendor the FBA call directly against cobrapy (the backend's `app/simulator.py` already does most of this — only the `mewpy.simulation.get_simulator` indirection would need replacing).
+```bash
+cd deploy
+docker compose ps
+docker compose logs -f
+docker compose restart
+docker compose down
+```
 
 ---
 
-## 7. Where to ask for help
+## 15. Where to ask for help
 
-- The repo's GitHub Issues: <https://github.com/mleiras/LabHero/issues>
-- The game's archived release on Zenodo (DOI [10.5281/zenodo.20292021](https://doi.org/10.5281/zenodo.20292021))
+- Current project repository / Issues: <https://github.com/hhtomaswt11/LabHero/issues>
+- Original LabHero project: <https://github.com/mleiras/LabHero>
+- Original archived release / DOI: <https://doi.org/10.5281/zenodo.20292021>
+
+For institutional production changes, coordinate with the CEB/UMinho administrator responsible for the reverse proxy, DNS and TLS.
