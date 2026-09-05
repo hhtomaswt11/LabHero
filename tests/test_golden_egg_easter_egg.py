@@ -45,6 +45,48 @@ class GoldenEggEasterEggTests(unittest.TestCase):
         }
         self.assertEqual(properties.get('unlock_after'), '35')
 
+    def test_map_contains_second_gate_unlocked_only_by_collected_egg(self):
+        root = ET.parse(ROOT / 'data' / 'map_lb.tmx').getroot()
+        gate_layer = next(
+            layer for layer in root.findall('objectgroup')
+            if layer.get('name') == 'ProgressionGates'
+        )
+        gates = [
+            obj for obj in gate_layer.findall('object')
+            if obj.get('name') == 'EggGate_2'
+        ]
+        self.assertEqual(len(gates), 1)
+        properties = {
+            prop.get('name'): prop.get('value')
+            for prop in gates[0].findall('./properties/property')
+        }
+        self.assertEqual(
+            properties,
+            {'unlock_when': 'golden_egg_collected'},
+        )
+
+    def test_level_supports_event_gate_without_changing_mission_gate_contract(self):
+        source = (CODE / 'level.py').read_text(encoding='utf-8')
+        self.assertIn("required_mission = properties.get('unlock_after')", source)
+        self.assertIn("unlock_when = properties.get('unlock_when')", source)
+        self.assertIn('required_mission=required_mission,', source)
+        self.assertIn('unlock_when=unlock_when,', source)
+        self.assertIn("cannot define both 'unlock_after' and 'unlock_when'", source)
+
+    def test_event_gate_opens_only_from_persisted_golden_egg_flag(self):
+        source = (CODE / 'sprites.py').read_text(encoding='utf-8')
+        event_branch = source.split(
+            "if self.unlock_when == 'golden_egg_collected':", 1
+        )[1].split('return False', 1)[0]
+        self.assertIn(
+            "getattr(self.player, 'golden_egg_collected', False)",
+            event_branch,
+        )
+        self.assertIn('self.kill()', event_branch)
+        self.assertNotIn('should_gate_be_open', event_branch)
+        self.assertNotIn('missions_completed', event_branch)
+        self.assertNotIn('teacher', event_branch.lower())
+
     def test_gate35_policy_is_normal_m35_easy_m27_teacher_open(self):
         normal = CampaignContext('normal')
         easy = CampaignContext('easy')

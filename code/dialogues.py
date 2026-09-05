@@ -232,7 +232,7 @@ class Dialogues:
                 self.message = [
                     "Hmm... some things are easier to miss than to find.",
                     "Funny how something valuable can hide in plain sight.",
-                    "Perhaps you have already found it. Or perhaps exploration is not your strongest skill.",
+                    "Perhaps exploration is not your strongest skill after all.",
                     "Either way, the next experiments may make you wish you had looked a little harder.",
                 ]
             elif egg_found:

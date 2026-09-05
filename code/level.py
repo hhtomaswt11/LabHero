@@ -174,10 +174,20 @@ class Level:
 		for obj in layer:
 			properties = getattr(obj, 'properties', {}) or {}
 			required_mission = properties.get('unlock_after')
-			if required_mission is None:
+			unlock_when = properties.get('unlock_when')
+
+			# A gate must use one clear unlock contract. Existing mission gates keep
+			# ``unlock_after``; event gates (currently EggGate_2) use
+			# ``unlock_when`` and are intentionally independent of mission progress.
+			if required_mission is None and unlock_when is None:
 				raise ValueError(
 					f"Progression gate {getattr(obj, 'name', '<unnamed>')!r} "
-					"is missing Tiled property 'unlock_after'"
+					"must define either Tiled property 'unlock_after' or 'unlock_when'"
+				)
+			if required_mission is not None and unlock_when is not None:
+				raise ValueError(
+					f"Progression gate {getattr(obj, 'name', '<unnamed>')!r} "
+					"cannot define both 'unlock_after' and 'unlock_when'"
 				)
 
 			surf = getattr(obj, 'image', None)
@@ -194,6 +204,7 @@ class Level:
 				player=self.player,
 				campaign_context=self.campaign_context,
 				required_mission=required_mission,
+				unlock_when=unlock_when,
 				name=getattr(obj, 'name', None),
 			)
 

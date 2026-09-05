@@ -34,17 +34,46 @@ class GoldenEgg(Generic):
 
 
 class ProgressionGate(Generic):
-    """Visible/collidable barrier removed when its required mission is complete."""
+    """Visible/collidable barrier removed when its configured condition is met.
+
+    Mission gates use ``required_mission`` exactly as before. Event gates use
+    ``unlock_when``; those gates do not inherit mission/Teacher bypass rules.
+    """
+
+    _SUPPORTED_UNLOCK_EVENTS = {'golden_egg_collected'}
 
     def __init__(self, pos, surf, groups, player, campaign_context,
-                 required_mission, name=None):
+                 required_mission=None, name=None, unlock_when=None):
         self.player = player
         self.campaign_context = campaign_context
-        self.required_mission = normalize_mission_id(required_mission)
-        self.name = name or f'Gate{self.required_mission or ""}'
+        self.required_mission = (
+            normalize_mission_id(required_mission)
+            if required_mission is not None
+            else None
+        )
+        self.unlock_when = (
+            str(unlock_when).strip()
+            if unlock_when is not None
+            else None
+        )
+        self.name = name or (
+            f'Gate{self.required_mission}'
+            if self.required_mission is not None
+            else f'Gate_{self.unlock_when or "unknown"}'
+        )
 
-        if self.required_mission is None:
-            raise ValueError(f'Progression gate {self.name!r} has no unlock_after mission')
+        if self.required_mission is None and self.unlock_when is None:
+            raise ValueError(f'Progression gate {self.name!r} has no unlock condition')
+        if self.required_mission is not None and self.unlock_when is not None:
+            raise ValueError(f'Progression gate {self.name!r} has multiple unlock conditions')
+        if (
+            self.unlock_when is not None
+            and self.unlock_when not in self._SUPPORTED_UNLOCK_EVENTS
+        ):
+            raise ValueError(
+                f'Progression gate {self.name!r} has unknown unlock condition '
+                f'{self.unlock_when!r}'
+            )
 
         super().__init__(pos, surf, groups, LAYERS['main'])
         # Unlike decorative Generic sprites, a gate is a deliberate wall.
@@ -52,12 +81,25 @@ class ProgressionGate(Generic):
         self.sync_with_progression()
 
     def sync_with_progression(self):
-        if self.campaign_context.should_gate_be_open(
-            self.required_mission,
-            self.player.missions_completed,
-        ):
-            self.kill()
-            return True
+        # Existing mission gates keep the campaign-aware behaviour, including
+        # Easy milestones and Teacher Preview bypasses.
+        if self.required_mission is not None:
+            if self.campaign_context.should_gate_be_open(
+                self.required_mission,
+                self.player.missions_completed,
+            ):
+                self.kill()
+                return True
+            return False
+
+        # EggGate_2 is deliberately stricter: mission completion and Teacher
+        # Preview do not open it. It opens only after the egg was truly consumed
+        # and the persisted player flag became True.
+        if self.unlock_when == 'golden_egg_collected':
+            if bool(getattr(self.player, 'golden_egg_collected', False)):
+                self.kill()
+                return True
+
         return False
 
     def update(self, dt):
