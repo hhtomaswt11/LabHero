@@ -152,6 +152,17 @@ class Level:
 		self.quest_tracker_active = False
 		self.quest_tracker = QuestTrackerOverlay(self.player)
 		self.quest_tracker_open_key_locked = False
+
+		# Non-blocking map-edge feedback. This intentionally mirrors the small
+		# white transient-message style without using animation_text_save(), whose
+		# queued animation loop would pause normal world updates while displayed.
+		boundary_font_path = get_resource_path('font/LycheeSoda.ttf')
+		self.map_boundary_warning_surf = pygame.font.Font(
+			boundary_font_path, 30
+		).render('Turn around.', False, 'black')
+		self.map_boundary_warning_rect = self.map_boundary_warning_surf.get_rect(
+			midbottom=(SCREEN_WIDTH / 2, SCREEN_HEIGHT - 20)
+		)
 		# Track modal -> map transitions. If a modal was confirmed with ENTER,
 		# the same held key must not trigger a nearby world interaction.
 		self._map_modal_was_active = False
@@ -269,6 +280,19 @@ class Level:
 		# collision tiles 
 		for x, y, surf in tmx_data.get_layer_by_name('Collision').tiles(): # no mapa tem tiles definidos como collision (como water, house, etc.)
 			Generic((x * TILE_SIZE, y * TILE_SIZE), pygame.Surface((TILE_SIZE, TILE_SIZE)), self.collision_sprites) # apenas neste grupo porque não queremos mostrar estes tiles, apenas colidir
+
+		# Map boundaries use the same invisible collision geometry as the legacy
+		# Collision layer, but are tagged so Player can give UX feedback only at
+		# world edges (never when bumping into furniture/walls/trees).
+		boundary_layer = self._optional_tmx_layer(tmx_data, 'MapBoundary')
+		if boundary_layer is not None:
+			for x, y, surf in boundary_layer.tiles():
+				boundary = Generic(
+					(x * TILE_SIZE, y * TILE_SIZE),
+					pygame.Surface((TILE_SIZE, TILE_SIZE)),
+					self.collision_sprites,
+				)
+				boundary.is_map_boundary = True
 
 		# Player
 		# Keep the post-Mission-06 Carter reveal anchored to the current
@@ -773,6 +797,17 @@ class Level:
 		self.display_surface.blit(line1, (24, 18))
 		self.display_surface.blit(line2, (24, 49))
 
+	def draw_map_boundary_warning(self):
+		"""Draw the edge warning while its Player-owned timer is active."""
+		if pygame.time.get_ticks() >= getattr(self.player, 'map_boundary_warning_until', 0):
+			return
+		backdrop = self.map_boundary_warning_rect.inflate(10, 10)
+		pygame.draw.rect(self.display_surface, 'white', backdrop, 0, 2)
+		self.display_surface.blit(
+			self.map_boundary_warning_surf,
+			self.map_boundary_warning_rect,
+		)
+
 	def handle_quest_tracker_shortcut(self):
 		"""Toggle the student quest tracker with Q during free exploration."""
 		keys = pygame.key.get_pressed()
@@ -841,6 +876,7 @@ class Level:
 			self.quest_tracker.draw_hint(
 				show_final_results=self.can_reopen_final_results(),
 			)
+		self.draw_map_boundary_warning()
 
 		# A menu may have just closed using ENTER. Re-arm map interaction only
 		# after RETURN/KP_ENTER are physically released.

@@ -24,6 +24,13 @@ from campaign import (
 # jumping completely across a thin collision region (collision tunnelling).
 MAX_COLLISION_STEP = 16.0
 
+# Map-edge feedback is deliberately non-blocking: Level draws the same small
+# white bottom-of-screen style used by transient messages while movement keeps
+# updating normally. Repeated contact is throttled so holding a direction
+# against the edge cannot spam/restart the message every collision substep.
+MAP_BOUNDARY_WARNING_DURATION_MS = 1100
+MAP_BOUNDARY_WARNING_COOLDOWN_MS = 1800
+
 MISSION_START_INTERACTIONS = {
     'Mission01', 'Mission02', 'Mission03', 'Mission07', 'Mission11',
     'Mission16', 'Mission21', 'Mission23', 'Mission25', 'Mission27',
@@ -98,6 +105,8 @@ class Player(pygame.sprite.Sprite):
         # collision
         self.hitbox = self.rect.copy().inflate((-126,-70)) # tuplo w,h
         self.collision_sprites = collision_sprites
+        self.map_boundary_warning_until = 0
+        self.map_boundary_warning_last_at = -MAP_BOUNDARY_WARNING_COOLDOWN_MS
 
         # Área de interação independente da hitbox
         self.interaction_area = pygame.Rect(25,25, 50, 50)  # Tamanho pequeno para detectar objetos próximos
@@ -691,10 +700,21 @@ class Player(pygame.sprite.Sprite):
             self.rect.centery = self.hitbox.centery
             self.collision('vertical')
 
+    def trigger_map_boundary_warning(self):
+        """Arm a short non-blocking edge warning, throttled during held input."""
+        now = pygame.time.get_ticks()
+        if now - self.map_boundary_warning_last_at < MAP_BOUNDARY_WARNING_COOLDOWN_MS:
+            return False
+        self.map_boundary_warning_last_at = now
+        self.map_boundary_warning_until = now + MAP_BOUNDARY_WARNING_DURATION_MS
+        return True
+
     def collision(self, direction):
         for sprite in self.collision_sprites.sprites():
             if hasattr(sprite, 'hitbox'):
                 if sprite.hitbox.colliderect(self.hitbox):
+                    if getattr(sprite, 'is_map_boundary', False):
+                        self.trigger_map_boundary_warning()
                     if direction == 'horizontal':
                         if self.direction.x > 0: #moving right
                             self.hitbox.right = sprite.hitbox.left
