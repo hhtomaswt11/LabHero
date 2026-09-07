@@ -146,3 +146,6 @@ code/player_history/data.txt
 code/player_history/results.txt
 code/player_history/simulation_file.txt
 .DS_Store
+
+# Pygbag-generated asset optimizations; original assets remain tracked.
+*-pygbag.*

@@ -150,6 +150,9 @@ The browser version persists the selected student campaign in namespaced `localS
 
 The save includes campaign identity/progression, score state, hint usage, keys, skin, position and one-time exploration state. Starting an explicit New Game clears the LabHero student namespace without affecting unrelated browser storage.
 
+Desktop saves and mission evidence use atomic file replacement: a failed write
+preserves the previous complete file.
+
 At the end of a student campaign, Final Results report the student name, campaign mode, score, completed missions, hints and incorrect final-answer submissions. After closing the screen, press **F** while exploring to reopen it.
 
 ## Teacher Preview
@@ -248,6 +251,11 @@ python3 tests/test_golden_egg_easter_egg.py
 
 Automated tests complement, rather than replace, manual playthrough QA. In particular, the curated Easy route and Teacher Preview should be validated end-to-end on the production Web deployment before a classroom release.
 
+The `Regression tests` GitHub Actions workflow runs dependency checks, Python
+compilation and the complete suite on pushes to `main` and pull requests.
+See [the release audit](planning/release_audit_2026-09-06.md) for the latest local
+verification, remaining deployment checks and maintenance priorities.
+
 ## Repository layout
 
 ```text
@@ -264,7 +272,6 @@ tests/         regression and scientific-consistency tests
 planning/      development/design history; not part of the runtime bundle
 ```
 
-Historical patch manifests, old test plans and roadmaps are kept out of the repository root and, when retained, live under `planning/archive/` so they cannot be mistaken for current release instructions.
 
 ## Citation
 

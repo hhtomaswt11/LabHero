@@ -139,7 +139,7 @@ class Mission06RegressionTests(unittest.TestCase):
             simulation,
             '_read_selected_production_fluxes',
             return_value=[simulation.MISSION06_TARGET_FLUX],
-        ) as selected_reader:
+        ) as selected_reader, patch.object(simulation, 'save_challenge_score') as save_score:
             report = simulation._build_mission06_challenge_data(
                 simulation.MISSION06_METHOD,
                 simulation.MISSION06_GROWTH_OBJECTIVE,
@@ -152,6 +152,7 @@ class Mission06RegressionTests(unittest.TestCase):
             )
 
         selected_reader.assert_called_once_with()
+        save_score.assert_called_once_with(report)
         self.assertTrue(report['baseline_recorded'])
         self.assertTrue(report['current_run_valid'], report['current_issues'])
 

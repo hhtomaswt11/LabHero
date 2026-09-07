@@ -84,10 +84,13 @@ class Podman1ADarwinDeployTests(unittest.TestCase):
 
     def test_docs_keep_docker_local_and_podman_production_distinct(self):
         readme = (ROOT / 'deploy' / 'README.md').read_text(encoding='utf-8')
-        self.assertIn('Darwin / Podman production path', readme)
-        self.assertIn('deploy/docker-compose.yml', readme)
+        self.assertIn('Production (CEB/UMinho Darwin)', readme)
+        self.assertIn('Podman', readme)
+        self.assertIn('Development/local validation', readme)
+        self.assertIn('Docker Compose', readme)
         self.assertIn('./deploy.sh', readme)
         self.assertIn('deploy/nginx.podman.conf', readme)
+        self.assertIn('Docker Compose remains available for local development', readme)
 
 
 if __name__ == '__main__':

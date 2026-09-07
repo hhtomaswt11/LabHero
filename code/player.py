@@ -70,7 +70,7 @@ def _movement_substep_plan(distance, max_step=MAX_COLLISION_STEP):
     return steps, distance / steps
 
 class Player(pygame.sprite.Sprite):
-    def __init__(self, pos, group, collision_sprites, tree_sprites, interaction, soil_layer, toggle_shop, desk_menu, yeast_simulator, books, ecoli, inventory2, talk_1, talk_2, talk_3, talk_7, talk_11, talk_16, talk_21, talk_23, talk_25, talk_27, talk_29, talk_32, talk_35, talk_36, talk_37, talk_38, talk_39, talk_40, dialogues, student_registration, skin_manager=None):
+    def __init__(self, pos, group, collision_sprites, tree_sprites, interaction, soil_layer, toggle_shop, desk_menu, yeast_simulator, books, ecoli, inventory2, talk_1, talk_2, talk_3, talk_7, talk_11, talk_16, talk_21, talk_23, talk_25, talk_27, talk_29, talk_32, talk_35, talk_36, talk_37, talk_38, talk_39, talk_40, dialogues, student_registration, skin_manager=None, yeast_microscope=None):
         super().__init__(group)
 
         self.skin_manager = skin_manager
@@ -93,7 +93,7 @@ class Player(pygame.sprite.Sprite):
         # movement 
         self.direction = pygame.math.Vector2()
         self.pos = pygame.math.Vector2(self.rect.center)
-        self.speed = 750
+        self.speed = PLAYER_SPEED_DEFAULT
 
         # collision
         self.hitbox = self.rect.copy().inflate((-126,-70)) # tuplo w,h
@@ -178,6 +178,7 @@ class Player(pygame.sprite.Sprite):
         self.yeast_simulator = yeast_simulator
         self.books = books
         self.ecoli = ecoli
+        self.yeast_microscope = yeast_microscope
         self.dialogues = dialogues
         self.student_registration = student_registration
         self.character = None
@@ -197,6 +198,14 @@ class Player(pygame.sprite.Sprite):
         coffee_path = get_resource_path('audio/coffee.ogg')
         self.coffee = pygame.mixer.Sound(coffee_path)
         self.coffee.set_volume(0.05)
+
+        lamp_switch_path = get_resource_path('audio/lamp_switch.ogg')
+        self.lamp_switch = pygame.mixer.Sound(lamp_switch_path)
+        self.lamp_switch.set_volume(0.05)
+
+        book_sound_path = get_resource_path('audio/book.ogg')
+        self.book_sound = pygame.mixer.Sound(book_sound_path)
+        self.book_sound.set_volume(0.65)
 
 
     def _unpack_save_data(self, data):
@@ -618,16 +627,23 @@ class Player(pygame.sprite.Sprite):
                     elif collided_interaction_sprite[0].name == 'YeastSimulator':
                         self.yeast_simulator()
                     elif collided_interaction_sprite[0].name == 'Books':
+                        self.book_sound.play()
                         self.books()
                     elif collided_interaction_sprite[0].name == 'Ecoli':
                         self.ecoli()
+                    elif collided_interaction_sprite[0].name == 'Yeast':
+                        if self.yeast_microscope is not None:
+                            self.yeast_microscope()
                     else:
                         # Deteta colisão apenas com objetos dentro da área de interação
                         for sprite in self.interaction:
                             if self.interaction_area.colliderect(sprite.hitbox):
                                 if sprite.name == 'Coffee':
                                     self.coffee.play()
-                                    self.speed = 900
+                                    self.speed = PLAYER_SPEED_COFFEE
+                                elif sprite.name == 'Lamp':
+                                    self.lamp_switch.play()
+                                    self.speed = PLAYER_SPEED_SLEEPY
                                 if sprite.name in (
                                     'Sequeira', 'Pacheco', 'Nuno', 'Fernanda', 'Emanuel',
                                     'Alexandre', 'Capela', 'Marta', 'Oscar', 'Miguel',

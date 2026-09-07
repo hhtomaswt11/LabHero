@@ -188,6 +188,7 @@ def simulate(req: SimulateRequest) -> SimulateResponse:
             ) from None
 
         environmental_constraints = {k: tuple(v) for k, v in req.env_conditions.items()}
+        exchange_ids = {reaction.id for reaction in template.exchanges}
         for reaction_id in environmental_constraints:
             try:
                 template.reactions.get_by_id(reaction_id)
@@ -195,6 +196,10 @@ def simulate(req: SimulateRequest) -> SimulateResponse:
                 raise ValueError(
                     f'Environmental reaction {reaction_id} is not available in model {model_id}.'
                 ) from None
+            if reaction_id not in exchange_ids:
+                raise ValueError(
+                    f'Environmental reaction {reaction_id} is not an exchange in model {model_id}.'
+                )
 
         known_gene_ids = {str(gene.id) for gene in template.genes}
         requested_knockouts = [str(gene_id) for gene_id in req.gene_knockouts]

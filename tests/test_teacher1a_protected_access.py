@@ -123,7 +123,8 @@ class Teacher1AProtectedAccessTests(unittest.TestCase):
         self.assertIn('/teacher/?mission=17', readme)
         self.assertIn("LABHERO_TEACHER_PASSWORD", readme)
         self.assertIn('/?teacher=1&mission=17', readme)
-        self.assertIn('does **not** activate Teacher Mode', readme)
+        self.assertIn('The public root must not activate Teacher Preview', readme)
+        self.assertIn('is not a valid Teacher entry point', readme)
 
 
 if __name__ == '__main__':

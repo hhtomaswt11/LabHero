@@ -33,19 +33,17 @@ jobs:
   build:
     name: Build (${{ matrix.asset_suffix }})
     runs-on: ${{ matrix.runner }}
-    # Intel runners (macos-13) are often queue-bound for hours. Mark Intel as
-    # non-blocking so the workflow succeeds on arm64 alone; Intel attaches if
-    # and when it eventually completes.
+    # Intel remains optional; use supported explicit architecture labels.
     continue-on-error: ${{ matrix.continue_on_error }}
     strategy:
       fail-fast: false
       matrix:
         include:
-          - runner: macos-13
+          - runner: macos-15-intel
             arch: x86_64
             asset_suffix: macos-intel
             continue_on_error: true
-          - runner: macos-14
+          - runner: macos-15
             arch: arm64
             asset_suffix: macos-arm64
             continue_on_error: false
@@ -101,13 +99,19 @@ jobs:
 
       - name: Determine version tag
         id: version
+        env:
+          VERSION_TAG: ${{ inputs.version_tag }}
         run: |
           case "${{ github.event_name }}" in
             push)
               echo "tag=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
               ;;
             workflow_dispatch)
-              echo "tag=${{ github.event.inputs.version_tag }}" >> "$GITHUB_OUTPUT"
+              if [[ ! "$VERSION_TAG" =~ ^[A-Za-z0-9][A-Za-z0-9._-]*$ ]]; then
+                echo "Invalid version label" >&2
+                exit 1
+              fi
+              echo "tag=${VERSION_TAG}" >> "$GITHUB_OUTPUT"
               ;;
             *)
               echo "tag=dev" >> "$GITHUB_OUTPUT"

@@ -3,6 +3,7 @@ import os
 import sys
 import copy
 import shutil
+import tempfile
 
 from utils import *
 from settings import DEFAULT_PLAYER_STATE
@@ -17,6 +18,26 @@ _MEMSTORE = {}
 # unavailable (privacy mode/quota/browser policy).
 _WEB_STORAGE_PREFIX = 'labhero:v1:'
 _WEB_STORAGE_WARNING_EMITTED = False
+
+
+def _write_desktop_json(filename, data):
+    """Replace a complete save atomically, preserving it if writing fails."""
+    payload = json.dumps(data)
+    path = get_save_path(filename)
+    temporary_path = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            mode='w', encoding='utf-8', dir=os.path.dirname(path),
+            prefix=f'.{filename}.', suffix='.tmp', delete=False,
+        ) as handle:
+            temporary_path = handle.name
+            handle.write(payload)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temporary_path, path)
+    finally:
+        if temporary_path is not None and os.path.exists(temporary_path):
+            os.unlink(temporary_path)
 
 
 def _browser_local_storage():
@@ -282,8 +303,7 @@ def save_file(data):
     if _IS_WEB:
         _web_store_set('data', data)
         return
-    with open(get_save_path('data.txt'), 'w') as test_file:
-        json.dump(data, test_file)
+    _write_desktop_json('data.txt', data)
 
 def load_file(filename):
     """Load one persisted artifact without applying the player-save schema to it.
@@ -312,8 +332,7 @@ def save_simulation_file(data):
     if _IS_WEB:
         _web_store_set('simulation_file', data)
         return
-    with open(get_save_path('simulation_file.txt'), 'w') as test_file:
-        json.dump(data, test_file)
+    _write_desktop_json('simulation_file.txt', data)
 
 
 def clear_memstore():
@@ -338,17 +357,14 @@ def save_results(data):
         results.close()
     except:
         pass
-    with open(get_save_path('results.txt'), 'w') as results_file:
-        json.dump(data, results_file)
-        results_file.close()
+    _write_desktop_json('results.txt', data)
 
 
 def save_challenge_score(data):
     if _IS_WEB:
         _web_store_set('challenge_score', data)
         return
-    with open(get_save_path('challenge_score.txt'), 'w') as score_file:
-        json.dump(data, score_file)
+    _write_desktop_json('challenge_score.txt', data)
 
 
 def load_challenge_score():
@@ -370,8 +386,7 @@ def save_mission03_gene_screen_check(data):
     if _IS_WEB:
         _web_store_set('mission03_gene_screen_check', data)
         return
-    with open(get_save_path('mission03_gene_screen_check.txt'), 'w') as report_file:
-        json.dump(data, report_file)
+    _write_desktop_json('mission03_gene_screen_check.txt', data)
 
 
 def load_mission03_gene_screen_check():
@@ -394,8 +409,7 @@ def save_mission04_production_check(data):
     if _IS_WEB:
         _web_store_set('mission04_production_check', data)
         return
-    with open(get_save_path('mission04_production_check.txt'), 'w') as production_file:
-        json.dump(data, production_file)
+    _write_desktop_json('mission04_production_check.txt', data)
 
 
 def load_mission04_production_check():
@@ -418,8 +432,7 @@ def save_mission05_production_check(data):
     if _IS_WEB:
         _web_store_set('mission05_production_check', data)
         return
-    with open(get_save_path('mission05_production_check.txt'), 'w') as production_file:
-        json.dump(data, production_file)
+    _write_desktop_json('mission05_production_check.txt', data)
 
 
 def load_mission05_production_check():
@@ -441,8 +454,7 @@ def save_mission07_objective_check(data):
     if _IS_WEB:
         _web_store_set('mission07_objective_check', data)
         return
-    with open(get_save_path('mission07_objective_check.txt'), 'w') as objective_file:
-        json.dump(data, objective_file)
+    _write_desktop_json('mission07_objective_check.txt', data)
 
 
 def load_mission07_objective_check():
@@ -461,8 +473,7 @@ def save_mission08_constraint_check(data):
     if _IS_WEB:
         _web_store_set('mission08_constraint_check', data)
         return
-    with open(get_save_path('mission08_constraint_check.txt'), 'w') as objective_file:
-        json.dump(data, objective_file)
+    _write_desktop_json('mission08_constraint_check.txt', data)
 
 
 def load_mission08_constraint_check():
@@ -480,8 +491,7 @@ def save_mission09_design_check(data):
     if _IS_WEB:
         _web_store_set('mission09_design_check', data)
         return
-    with open(get_save_path('mission09_design_check.txt'), 'w') as design_file:
-        json.dump(data, design_file)
+    _write_desktop_json('mission09_design_check.txt', data)
 
 
 def load_mission09_design_check():
@@ -500,8 +510,7 @@ def save_mission10_robust_design_check(data):
     if _IS_WEB:
         _web_store_set('mission10_robust_design_check', data)
         return
-    with open(get_save_path('mission10_robust_design_check.txt'), 'w') as design_file:
-        json.dump(data, design_file)
+    _write_desktop_json('mission10_robust_design_check.txt', data)
 
 
 def load_mission10_robust_design_check():
@@ -520,8 +529,7 @@ def save_mission11_flux_fingerprint_check(data):
     if _IS_WEB:
         _web_store_set('mission11_flux_fingerprint_check', data)
         return
-    with open(get_save_path('mission11_flux_fingerprint_check.txt'), 'w') as fingerprint_file:
-        json.dump(data, fingerprint_file)
+    _write_desktop_json('mission11_flux_fingerprint_check.txt', data)
 
 
 def load_mission11_flux_fingerprint_check():
@@ -540,8 +548,7 @@ def save_mission12_byproduct_check(data):
     if _IS_WEB:
         _web_store_set('mission12_byproduct_check', data)
         return
-    with open(get_save_path('mission12_byproduct_check.txt'), 'w') as byproduct_file:
-        json.dump(data, byproduct_file)
+    _write_desktop_json('mission12_byproduct_check.txt', data)
 
 
 def load_mission12_byproduct_check():
@@ -560,8 +567,7 @@ def save_mission13_method_check(data):
     if _IS_WEB:
         _web_store_set('mission13_method_check', data)
         return
-    with open(get_save_path('mission13_method_check.txt'), 'w') as method_file:
-        json.dump(data, method_file)
+    _write_desktop_json('mission13_method_check.txt', data)
 
 
 def load_mission13_method_check():
@@ -581,8 +587,7 @@ def save_mission14_reduction_check(data):
     if _IS_WEB:
         _web_store_set('mission14_reduction_check', data)
         return
-    with open(get_save_path('mission14_reduction_check.txt'), 'w') as reduction_file:
-        json.dump(data, reduction_file)
+    _write_desktop_json('mission14_reduction_check.txt', data)
 
 
 def load_mission14_reduction_check():
@@ -601,8 +606,7 @@ def save_mission15_diagnostic_report_check(data):
     if _IS_WEB:
         _web_store_set('mission15_diagnostic_report_check', data)
         return
-    with open(get_save_path('mission15_diagnostic_report_check.txt'), 'w') as report_file:
-        json.dump(data, report_file)
+    _write_desktop_json('mission15_diagnostic_report_check.txt', data)
 
 
 def load_mission15_diagnostic_report_check():
@@ -622,8 +626,7 @@ def save_mission16_medium_report_check(data):
     if _IS_WEB:
         _web_store_set('mission16_medium_report_check', data)
         return
-    with open(get_save_path('mission16_medium_report_check.txt'), 'w') as report_file:
-        json.dump(data, report_file)
+    _write_desktop_json('mission16_medium_report_check.txt', data)
 
 
 def load_mission16_medium_report_check():
@@ -642,8 +645,7 @@ def save_mission17_essential_medium_check(data):
     if _IS_WEB:
         _web_store_set('mission17_essential_medium_check', data)
         return
-    with open(get_save_path('mission17_essential_medium_check.txt'), 'w') as report_file:
-        json.dump(data, report_file)
+    _write_desktop_json('mission17_essential_medium_check.txt', data)
 
 
 def load_mission17_essential_medium_check():
@@ -662,8 +664,7 @@ def save_mission18_export_bottleneck_check(data):
     if _IS_WEB:
         _web_store_set('mission18_export_bottleneck_check', data)
         return
-    with open(get_save_path('mission18_export_bottleneck_check.txt'), 'w') as report_file:
-        json.dump(data, report_file)
+    _write_desktop_json('mission18_export_bottleneck_check.txt', data)
 
 
 def load_mission18_export_bottleneck_check():
@@ -682,8 +683,7 @@ def save_mission19_perturbation_check(data):
     if _IS_WEB:
         _web_store_set('mission19_perturbation_check', data)
         return
-    with open(get_save_path('mission19_perturbation_check.txt'), 'w') as report_file:
-        json.dump(data, report_file)
+    _write_desktop_json('mission19_perturbation_check.txt', data)
 
 
 def load_mission19_perturbation_check():
@@ -760,8 +760,7 @@ def save_mission20_robustness_report_check(data):
     if _IS_WEB:
         _web_store_set('mission20_robustness_report_check', data)
         return
-    with open(get_save_path('mission20_robustness_report_check.txt'), 'w') as report_file:
-        json.dump(data, report_file)
+    _write_desktop_json('mission20_robustness_report_check.txt', data)
 
 
 def load_mission20_robustness_report_check():
@@ -785,8 +784,7 @@ def save_mission02_source_comparison_check(data):
     if _IS_WEB:
         _web_store_set('mission02_source_comparison_check', data)
         return
-    with open(get_save_path('mission02_source_comparison_check.txt'), 'w') as report_file:
-        json.dump(data, report_file)
+    _write_desktop_json('mission02_source_comparison_check.txt', data)
 
 
 def load_mission02_source_comparison_check():
@@ -812,8 +810,7 @@ def save_mission01_comparison_check(data):
     if _IS_WEB:
         _web_store_set('mission01_comparison_check', data)
         return
-    with open(get_save_path('mission01_comparison_check.txt'), 'w') as report_file:
-        json.dump(data, report_file)
+    _write_desktop_json('mission01_comparison_check.txt', data)
 
 
 def load_mission01_comparison_check():
@@ -844,8 +841,7 @@ def save_compare_runs(data):
     if _IS_WEB:
         _web_store_set('compare_runs', data)
         return
-    with open(get_save_path('compare_runs.txt'), 'w') as compare_file:
-        json.dump(data, compare_file)
+    _write_desktop_json('compare_runs.txt', data)
 
 
 def load_compare_runs():
@@ -868,8 +864,7 @@ def save_mission21_comparison_check(data):
     if _IS_WEB:
         _web_store_set('mission21_comparison_check', data)
         return
-    with open(get_save_path('mission21_comparison_check.txt'), 'w') as report_file:
-        json.dump(data, report_file)
+    _write_desktop_json('mission21_comparison_check.txt', data)
 
 
 def load_mission21_comparison_check():
@@ -894,8 +889,7 @@ def save_mission22_comparison_check(data):
     if _IS_WEB:
         _web_store_set('mission22_comparison_check', data)
         return
-    with open(get_save_path('mission22_comparison_check.txt'), 'w') as report_file:
-        json.dump(data, report_file)
+    _write_desktop_json('mission22_comparison_check.txt', data)
 
 
 def load_mission22_comparison_check():
@@ -918,8 +912,7 @@ def save_mission23_comparison_check(data):
     if _IS_WEB:
         _web_store_set('mission23_comparison_check', data)
         return
-    with open(get_save_path('mission23_comparison_check.txt'), 'w') as report_file:
-        json.dump(data, report_file)
+    _write_desktop_json('mission23_comparison_check.txt', data)
 
 
 def load_mission23_comparison_check():
@@ -942,8 +935,7 @@ def save_mission24_comparison_check(data):
     if _IS_WEB:
         _web_store_set('mission24_comparison_check', data)
         return
-    with open(get_save_path('mission24_comparison_check.txt'), 'w') as report_file:
-        json.dump(data, report_file)
+    _write_desktop_json('mission24_comparison_check.txt', data)
 
 
 def load_mission24_comparison_check():
@@ -966,8 +958,7 @@ def save_mission25_comparison_check(data):
     if _IS_WEB:
         _web_store_set('mission25_comparison_check', data)
         return
-    with open(get_save_path('mission25_comparison_check.txt'), 'w') as report_file:
-        json.dump(data, report_file)
+    _write_desktop_json('mission25_comparison_check.txt', data)
 
 
 def load_mission25_comparison_check():
@@ -992,8 +983,7 @@ def save_bound_sweep(data):
     if _IS_WEB:
         _web_store_set('bound_sweep', data)
         return
-    with open(get_save_path('bound_sweep.txt'), 'w') as sweep_file:
-        json.dump(data, sweep_file)
+    _write_desktop_json('bound_sweep.txt', data)
 
 
 def load_bound_sweep():
@@ -1016,8 +1006,7 @@ def save_mission26_bound_sweep_check(data):
     if _IS_WEB:
         _web_store_set('mission26_bound_sweep_check', data)
         return
-    with open(get_save_path('mission26_bound_sweep_check.txt'), 'w') as report_file:
-        json.dump(data, report_file)
+    _write_desktop_json('mission26_bound_sweep_check.txt', data)
 
 
 def load_mission26_bound_sweep_check():
@@ -1040,8 +1029,7 @@ def save_mission27_rescue_check(data):
     if _IS_WEB:
         _web_store_set('mission27_rescue_check', data)
         return
-    with open(get_save_path('mission27_rescue_check.txt'), 'w') as report_file:
-        json.dump(data, report_file)
+    _write_desktop_json('mission27_rescue_check.txt', data)
 
 
 def load_mission27_rescue_check():
@@ -1080,8 +1068,7 @@ def save_mission28_dependency_check(data):
     if _IS_WEB:
         _web_store_set('mission28_dependency_check', data)
         return
-    with open(get_save_path('mission28_dependency_check.txt'), 'w') as report_file:
-        json.dump(data, report_file)
+    _write_desktop_json('mission28_dependency_check.txt', data)
 
 
 def load_mission28_dependency_check():
@@ -1119,8 +1106,7 @@ def save_mission29_redundancy_check(data):
     if _IS_WEB:
         _web_store_set('mission29_redundancy_check', data)
         return
-    with open(get_save_path('mission29_redundancy_check.txt'), 'w') as report_file:
-        json.dump(data, report_file)
+    _write_desktop_json('mission29_redundancy_check.txt', data)
 
 
 def load_mission29_redundancy_check():
@@ -1143,8 +1129,7 @@ def save_mission30_redundancy_threshold_check(data):
     if _IS_WEB:
         _web_store_set('mission30_redundancy_threshold_check', data)
         return
-    with open(get_save_path('mission30_redundancy_threshold_check.txt'), 'w') as report_file:
-        json.dump(data, report_file)
+    _write_desktop_json('mission30_redundancy_threshold_check.txt', data)
 
 
 def load_mission30_redundancy_threshold_check():
@@ -1170,8 +1155,7 @@ def save_mission31_environmental_suppression_check(data):
     if _IS_WEB:
         _web_store_set('mission31_environmental_suppression_check', data)
         return
-    with open(get_save_path('mission31_environmental_suppression_check.txt'), 'w') as report_file:
-        json.dump(data, report_file)
+    _write_desktop_json('mission31_environmental_suppression_check.txt', data)
 
 
 def load_mission31_environmental_suppression_check():
@@ -1197,8 +1181,7 @@ def save_mission32_respiratory_cut_set_check(data):
     if _IS_WEB:
         _web_store_set('mission32_respiratory_cut_set_check', data)
         return
-    with open(get_save_path('mission32_respiratory_cut_set_check.txt'), 'w') as report_file:
-        json.dump(data, report_file)
+    _write_desktop_json('mission32_respiratory_cut_set_check.txt', data)
 
 
 def load_mission32_respiratory_cut_set_check():
@@ -1224,8 +1207,7 @@ def save_mission33_reference_adjustment_check(data):
     if _IS_WEB:
         _web_store_set('mission33_reference_adjustment_check', data)
         return
-    with open(get_save_path('mission33_reference_adjustment_check.txt'), 'w') as report_file:
-        json.dump(data, report_file)
+    _write_desktop_json('mission33_reference_adjustment_check.txt', data)
 
 
 def load_mission33_reference_adjustment_check():
@@ -1251,8 +1233,7 @@ def save_mission34_shared_subunit_check(data):
     if _IS_WEB:
         _web_store_set('mission34_shared_subunit_check', data)
         return
-    with open(get_save_path('mission34_shared_subunit_check.txt'), 'w') as report_file:
-        json.dump(data, report_file)
+    _write_desktop_json('mission34_shared_subunit_check.txt', data)
 
 
 def load_mission34_shared_subunit_check():
@@ -1279,8 +1260,7 @@ def save_mission35_final_certification(data):
     if _IS_WEB:
         _web_store_set('mission35_final_certification', data)
         return
-    with open(get_save_path('mission35_final_certification.txt'), 'w') as report_file:
-        json.dump(data, report_file)
+    _write_desktop_json('mission35_final_certification.txt', data)
 
 
 def load_mission35_final_certification():
@@ -1306,8 +1286,7 @@ def save_mission36_fermentation_onset(data):
     if _IS_WEB:
         _web_store_set('mission36_fermentation_onset', data)
         return
-    with open(get_save_path('mission36_fermentation_onset.txt'), 'w') as report_file:
-        json.dump(data, report_file)
+    _write_desktop_json('mission36_fermentation_onset.txt', data)
 
 
 def load_mission36_fermentation_onset():
@@ -1329,8 +1308,7 @@ def save_mission37_fermentation_cut_set(data):
     if _IS_WEB:
         _web_store_set('mission37_fermentation_cut_set', data)
         return
-    with open(get_save_path('mission37_fermentation_cut_set.txt'), 'w') as report_file:
-        json.dump(data, report_file)
+    _write_desktop_json('mission37_fermentation_cut_set.txt', data)
 
 
 def load_mission37_fermentation_cut_set():
@@ -1355,8 +1333,7 @@ def save_mission38_background_dependency(data):
     if _IS_WEB:
         _web_store_set('mission38_background_dependency', data)
         return
-    with open(get_save_path('mission38_background_dependency.txt'), 'w') as report_file:
-        json.dump(data, report_file)
+    _write_desktop_json('mission38_background_dependency.txt', data)
 
 
 def load_mission38_background_dependency():
@@ -1381,8 +1358,7 @@ def save_mission39_bypass_rescue(data):
     if _IS_WEB:
         _web_store_set('mission39_bypass_rescue', data)
         return
-    with open(get_save_path('mission39_bypass_rescue.txt'), 'w') as report_file:
-        json.dump(data, report_file)
+    _write_desktop_json('mission39_bypass_rescue.txt', data)
 
 
 def load_mission39_bypass_rescue():
@@ -1407,8 +1383,7 @@ def save_mission40_final_certification(data):
     if _IS_WEB:
         _web_store_set('mission40_final_certification', data)
         return
-    with open(get_save_path('mission40_final_certification.txt'), 'w') as report_file:
-        json.dump(data, report_file)
+    _write_desktop_json('mission40_final_certification.txt', data)
 
 
 def load_mission40_final_certification():

@@ -20,6 +20,12 @@ MUSIC_NAME = MUSIC['Hope']
 DEFAULT_MUSIC_VOLUME_PERCENT = 15
 MUSIC_VOLUME_SCALE = 0.14
 
+# Temporary exploration speed states. Interactions replace the current speed
+# rather than stacking modifiers, and speed is intentionally not persisted.
+PLAYER_SPEED_DEFAULT = 750
+PLAYER_SPEED_SLEEPY = 600
+PLAYER_SPEED_COFFEE = 900
+
 
 # Relative URL: the frontend hits /api/... on whatever origin it is served from,
 # which an nginx reverse proxy forwards to the backend container. For local dev

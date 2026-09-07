@@ -24,6 +24,12 @@ with the registered `e_coli_core.xml.gz` and `iMM904.xml.gz` models. It accepts
 `model_id`, the simulation method, objective reaction, gene knockouts and
 environmental conditions, then returns a method-aware structured result with an `ok`, `infeasible` or `error` status.
 
+Environmental bounds must be finite and ordered (`lower <= upper`). Invalid
+numeric bounds are rejected with HTTP 422 before the solver runs. Environmental
+edits may target exchange reactions only; internal reactions must not be altered
+through `env_conditions`. Unknown model-scoped identifiers and internal-reaction
+edits return the existing `status: error` response contract.
+
 The model is selected explicitly with:
 
 ```json

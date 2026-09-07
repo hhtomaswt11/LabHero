@@ -11,6 +11,7 @@ from menu_2 import *
 from window import Window
 from books import Books
 from ecoli import Ecoli
+from yeast_microscope import YeastMicroscope
 from dialogues import Dialogues
 from save_load import save_file
 from functions import *
@@ -76,6 +77,7 @@ class Level:
 		self.yeast_simulator_active = False
 		self.books_active = False
 		self.ecoli_active = False
+		self.yeast_microscope_active = False
 		self.talk_1_active = False
 		self.talk_1 = None
 		self.talk_2_active = False
@@ -121,6 +123,7 @@ class Level:
 		self.yeast_window = None
 		self.books = Books(self.read_books)
 		self.ecoli = Ecoli(self.see_ecoli)
+		self.yeast_microscope = YeastMicroscope(self.see_yeast)
 		self.dialogues = Dialogues(self.toggle_dialogue, self.player)
 		self.dialogues_active = False
 		self.student_registration_active = False
@@ -280,6 +283,7 @@ class Level:
 					yeast_simulator = self.yeast_simulator_menu,
 					books = self.read_books,
 					ecoli = self.see_ecoli,
+					yeast_microscope = self.see_yeast,
 					# inventory = self.load_game,
 					inventory2 = self.load_game,
 					talk_1 = self.toggle_talk_1,
@@ -379,6 +383,9 @@ class Level:
 			if obj.name == 'Ecoli':
 				Interaction((obj.x, obj.y), (obj.width, obj.height), self.interaction_sprites, obj.name)	
 
+			if obj.name == 'Yeast':
+				Interaction((obj.x, obj.y), (obj.width, obj.height), self.interaction_sprites, obj.name)
+
 			if obj.name in ('Sequeira', 'Pacheco', 'Nuno', 'Fernanda', 'Emanuel', 'Alexandre', 'Capela', 'Marta', 'Oscar', 'Miguel'):
 				Interaction((obj.x, obj.y), (obj.width, obj.height), self.interaction_sprites, obj.name)
 
@@ -414,6 +421,9 @@ class Level:
 			# 	Interaction((obj.x, obj.y), (obj.width, obj.height), self.interaction_sprites, obj.name)
 				
 			if obj.name == 'Coffee':
+				Interaction((obj.x, obj.y), (obj.width, obj.height), self.interaction_sprites, obj.name)
+
+			if obj.name == 'Lamp':
 				Interaction((obj.x, obj.y), (obj.width, obj.height), self.interaction_sprites, obj.name)
 
 		# The Golden Egg is authored as a tile object on the Player layer. It is
@@ -468,6 +478,11 @@ class Level:
 	def player_add(self, item):
 		self.player.item_inventory[item] += 1
 		self.success.play()
+		# Picking an apple restores the canonical movement speed, replacing any
+		# temporary coffee boost or lamp-induced slowdown. Repeated apples are
+		# therefore idempotent for movement speed.
+		if item == 'apple':
+			self.player.speed = PLAYER_SPEED_DEFAULT
 
 	def toggle_shop(self):
 		self.menu_active = not self.menu_active
@@ -681,6 +696,9 @@ class Level:
 	def see_ecoli(self):
 		self.ecoli_active = not self.ecoli_active
 
+	def see_yeast(self):
+		self.yeast_microscope_active = not self.yeast_microscope_active
+
 	def any_modal_active(self):
 		return (
 			self.menu_active or
@@ -688,6 +706,7 @@ class Level:
 			self.yeast_simulator_active or
 			self.books_active or
 			self.ecoli_active or
+			self.yeast_microscope_active or
 			self.talk_1_active or
 			self.talk_2_active or
 			self.talk_3_active or
@@ -918,6 +937,9 @@ class Level:
 
 		elif self.ecoli_active:
 			await self.ecoli.update()
+
+		elif self.yeast_microscope_active:
+			await self.yeast_microscope.update()
 
 		elif self.dialogues_active:
 			self.dialogues.choosing_character(self.player.character)

@@ -96,7 +96,10 @@ class CheckpointD3BHttpCacheTests(unittest.TestCase):
     def test_deploy_docs_describe_versioned_archive_rollout(self):
         readme = (ROOT / 'deploy' / 'README.md').read_text(encoding='utf-8')
         self.assertIn('src.<sha256>.tar.gz', readme)
-        self.assertIn('content-addressed game archive', readme)
+        self.assertIn('fingerprinted archives', readme)
+        self.assertIn('long immutable cache lifetime', readme)
+        self.assertIn('index.html', readme)
+        self.assertIn('revalidation / no-cache semantics', readme)
         self.assertNotIn(
             'players will keep loading the cached bundle from their browser',
             readme,

@@ -1,5 +1,6 @@
+from math import isfinite
 from typing import Literal
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, validator
 
 
 ModelId = Literal['ecoli_core', 'yeast_iMM904']
@@ -23,6 +24,17 @@ class SimulateRequest(BaseModel):
         default_factory=dict,
         description='Exchange-reaction bounds: reaction_id -> (lower_bound, upper_bound).',
     )
+
+    @validator('env_conditions')
+    def validate_environment_bounds(cls, conditions):
+        # Reject invalid numbers before they reach a native solver. JSON clients
+        # can send strings such as "NaN", which float coercion otherwise accepts.
+        for reaction_id, (lower, upper) in conditions.items():
+            if not isfinite(lower) or not isfinite(upper):
+                raise ValueError(f'Bounds for {reaction_id} must be finite.')
+            if lower > upper:
+                raise ValueError(f'Lower bound exceeds upper bound for {reaction_id}.')
+        return conditions
 
 
 class SimulateResponse(BaseModel):
