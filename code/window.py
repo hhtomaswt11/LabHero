@@ -1183,6 +1183,7 @@ class Window:
             # search/clear/reset navigation pattern used by the Genes menu.
             menu_reactions.add.label(
                 'Search by exchange reaction id or name. Examples: EX_o2_e, oxygen, acetate. '
+                'Type your search, then press Enter or use Search / Refresh. '
                 'Reset Environment restores every lower/upper bound to the model-default state.',
                 wordwrap=True,
                 padding=(20, 20, 20, 20),
@@ -1251,7 +1252,6 @@ class Window:
                 input_underline='_',
                 maxchar=40,
                 maxwidth=40,
-                onchange=apply_reaction_search,
                 onreturn=apply_reaction_search,
                 textinput_id='reaction_search',
                 background_color='white',
@@ -1482,7 +1482,9 @@ class Window:
             )
         else:
             menu_genes.add.label(
-                "Search by gene id, number or name. Examples: b1241, 1241, adhE, pta. Use Reset Genes to reactivate all genes.",
+                "Search by gene id, number or name. Examples: b1241, 1241, adhE, pta. "
+                "Type your search, then press Enter or use Search / Refresh. "
+                "Use Reset Genes to reactivate all genes.",
                 wordwrap=True,
                 padding=(20, 20, 20, 20),
                 background_color="white",
@@ -1537,7 +1539,6 @@ class Window:
                 input_underline='_',
                 maxchar=30,
                 maxwidth=30,
-                onchange=apply_gene_search,
                 onreturn=apply_gene_search,
                 textinput_id='gene_search',
                 background_color="white",

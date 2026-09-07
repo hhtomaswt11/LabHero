@@ -55,6 +55,11 @@ def _sections(is_web=False):
             "ENTER to apply it, and E or ESC to close.",
         ),
         (
+            "Quest Tracker",
+            "Press Q during exploration to view the current mission or the next researcher "
+            "to visit. Press Q or ESC to close the tracker.",
+        ),
+        (
             "Menus",
             "Use the mouse to press dialogue and menu buttons. ENTER is also used to "
             "confirm actions in overlays such as the Inventory.",

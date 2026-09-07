@@ -24,6 +24,7 @@ from student_registration import StudentRegistrationMenu
 from easy_mission_npc import EasyMissionNPC
 from final_results import FinalResultsMenu
 from teacher_mission_launcher import TeacherMissionLauncher
+from quest_tracker import QuestTrackerOverlay
 
 class Level:
 	def __init__(self, load_game, teacher_target_mission=None, teacher_preview=False):
@@ -146,6 +147,11 @@ class Level:
 		self.skin_menu_active = False
 		self.skin_menu = SkinSelectionMenu(self.skin_manager, self.player)
 		self.skin_open_key_locked = False
+		# Q opens a lightweight, read-only mission guide during exploration.
+		# It derives everything from existing campaign/save state and is never persisted.
+		self.quest_tracker_active = False
+		self.quest_tracker = QuestTrackerOverlay(self.player)
+		self.quest_tracker_open_key_locked = False
 		# Track modal -> map transitions. If a modal was confirmed with ENTER,
 		# the same held key must not trigger a nearby world interaction.
 		self._map_modal_was_active = False
@@ -727,7 +733,8 @@ class Level:
 			self.talk_40_active or
 			self.dialogues_active or
 			self.student_registration_active or
-			self.final_results_active
+			self.final_results_active or
+			self.quest_tracker_active
 		)
 
 	def suppress_enter_after_modal_close(self):
@@ -765,6 +772,26 @@ class Level:
 		)
 		self.display_surface.blit(line1, (24, 18))
 		self.display_surface.blit(line2, (24, 49))
+
+	def handle_quest_tracker_shortcut(self):
+		"""Toggle the student quest tracker with Q during free exploration."""
+		keys = pygame.key.get_pressed()
+		q_pressed = keys[pygame.K_q]
+
+		if not q_pressed:
+			self.quest_tracker_open_key_locked = False
+			return
+
+		if (
+			not self.quest_tracker_open_key_locked
+			and not self.teacher_preview
+			and not self.any_modal_active()
+			and not self.skin_menu_active
+		):
+			self.quest_tracker.open()
+			self.quest_tracker_active = True
+
+		self.quest_tracker_open_key_locked = True
 
 	def handle_skin_menu_shortcut(self):
 		keys = pygame.key.get_pressed()
@@ -810,6 +837,10 @@ class Level:
 		self.display_surface.fill('black')
 		self.all_sprites.custom_draw(self.player)
 		self.draw_teacher_preview_banner()
+		if not self.teacher_preview and not self.quest_tracker_active:
+			self.quest_tracker.draw_hint(
+				show_final_results=self.can_reopen_final_results(),
+			)
 
 		# A menu may have just closed using ENTER. Re-arm map interaction only
 		# after RETURN/KP_ENTER are physically released.
@@ -845,6 +876,14 @@ class Level:
 			and self.should_show_final_results()
 		):
 			self.final_results_active = True
+
+		self.handle_quest_tracker_shortcut()
+		if self.quest_tracker_active:
+			if self.quest_tracker.update() == 'close':
+				self.quest_tracker_active = False
+			else:
+				self.quest_tracker.draw()
+				return
 
 		if self.skin_menu_active:
 			result = self.skin_menu.update()
