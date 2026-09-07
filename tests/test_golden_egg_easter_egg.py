@@ -182,6 +182,31 @@ class GoldenEggEasterEggTests(unittest.TestCase):
         self.assertIn('if self.collect_golden_egg():', source)
         self.assertIn('collided_interaction_sprite[0].kill()', source)
 
+    def test_easter_egg_gates_reuse_neutral_boundary_feedback(self):
+        source = (CODE / 'level.py').read_text(encoding='utf-8')
+        self.assertIn("{'EggGate', 'EggGate_2'}", source)
+        self.assertIn('gate.is_map_boundary = True', source)
+        self.assertIn("You can't go any further this way.", source)
+
+    def test_easter_gate_tiles_are_not_permanent_map_boundaries(self):
+        root = ET.parse(ROOT / 'data' / 'map_lb.tmx').getroot()
+        width = int(root.get('width'))
+        boundary = next(
+            layer for layer in root.findall('layer')
+            if layer.get('name') == 'MapBoundary'
+        )
+        values = [
+            int(value)
+            for value in boundary.find('data').text.replace('\n', '').split(',')
+            if value.strip()
+        ]
+        # These six tiles were temporarily copied over EggGate / EggGate_2 in
+        # Tiled. Keeping them would permanently block the passage even after
+        # the actual progression gate unlocks.
+        for x, y in ((12, 23), (13, 23), (14, 23), (13, 35), (14, 35), (15, 35)):
+            self.assertEqual(values[y * width + x], 0)
+
+
 
 if __name__ == '__main__':
     unittest.main()

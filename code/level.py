@@ -159,7 +159,7 @@ class Level:
 		boundary_font_path = get_resource_path('font/LycheeSoda.ttf')
 		self.map_boundary_warning_surf = pygame.font.Font(
 			boundary_font_path, 30
-		).render('Turn around.', False, 'black')
+		).render("You can't go any further this way.", False, 'black')
 		self.map_boundary_warning_rect = self.map_boundary_warning_surf.get_rect(
 			midbottom=(SCREEN_WIDTH / 2, SCREEN_HEIGHT - 20)
 		)
@@ -216,7 +216,7 @@ class Level:
 				height = max(1, round(float(getattr(obj, 'height', TILE_SIZE) or TILE_SIZE)))
 				surf = pygame.Surface((width, height), pygame.SRCALPHA)
 
-			ProgressionGate(
+			gate = ProgressionGate(
 				pos=(obj.x, obj.y),
 				surf=surf,
 				groups=[self.all_sprites, self.dynamic_sprites,
@@ -227,6 +227,11 @@ class Level:
 				unlock_when=unlock_when,
 				name=getattr(obj, 'name', None),
 			)
+			# The two hidden easter-egg barriers use the exact same neutral
+			# feedback as world boundaries. The message does not reveal whether a
+			# barrier is permanent, temporary, or related to hidden content.
+			if getattr(obj, 'name', None) in {'EggGate', 'EggGate_2'}:
+				gate.is_map_boundary = True
 
 	def setup(self):
 		
