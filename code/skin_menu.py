@@ -147,7 +147,8 @@ class SkinSelectionMenu:
         overlay.fill((0, 0, 0, 120))
         self.display_surface.blit(overlay, (0, 0))
 
-        panel = pygame.Rect(36, 28, 640, 318)
+        panel = pygame.Rect(0, 0, 640, 318)
+        panel.center = (SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2)
         pygame.draw.rect(self.display_surface, (240, 240, 240), panel, border_radius=8)
         pygame.draw.rect(self.display_surface, (40, 40, 40), panel, 4, border_radius=8)
 

@@ -6,7 +6,7 @@ and never inspects mission evidence/answers; it only tells the player which
 researcher owns the current/next mission.
 """
 
-from campaign import normalize_mission_id
+from campaign import normalize_mission_id, teacher_interaction_for_mission
 
 MISSION_TITLES = {
     '01': 'Into the Microbial World',
@@ -162,6 +162,90 @@ def build_quest_tracker_snapshot(player):
         'total': len(sequence),
         'mode': context.mode,
     }
+
+
+def get_active_npc_interaction(player):
+    """Return the Tiled NPC that is actionable during free exploration.
+
+    Before student registration, Dr. Melo is the real first interaction.
+    Once a campaign is underway, the marker only points to the next mission
+    that can be started. Active missions deliberately have no marker: the
+    player should perform the experiment instead of being sent back to the
+    issuing NPC prematurely. After delivery, the next available mission
+    naturally becomes the new target.
+    """
+    if not getattr(player, 'name_confirmed', True):
+        return 'Alves'
+
+    snapshot = build_quest_tracker_snapshot(player)
+    if snapshot.get('status') != 'available':
+        return None
+
+    mission_id = snapshot.get('mission_id')
+    if not mission_id:
+        return None
+    return teacher_interaction_for_mission(mission_id)
+
+
+class ActiveNpcMarker:
+    """Draw a small world-space marker over the next actionable mission NPC."""
+
+    def __init__(self, player, npc_positions):
+        import pygame
+
+        from settings import SCREEN_HEIGHT, SCREEN_WIDTH
+        from utils import get_resource_path
+
+        self.player = player
+        self.npc_positions = npc_positions
+        self.screen_width = SCREEN_WIDTH
+        self.screen_height = SCREEN_HEIGHT
+        self.font = pygame.font.Font(
+            get_resource_path('font/LycheeSoda.ttf'), 34
+        )
+        # Render once: this is intentionally a static marker with only a tiny
+        # positional bob, so it adds no per-frame font/layout work.
+        self.shadow = self.font.render('!', False, (35, 35, 35))
+        self.glyph = self.font.render('!', False, (255, 255, 255))
+
+    def target_interaction_name(self):
+        """Return the Tiled NPC interaction that should be highlighted now."""
+        return get_active_npc_interaction(self.player)
+
+    def draw(self, camera_offset, enabled=True):
+        import math
+        import pygame
+
+        if not enabled:
+            return
+
+        interaction_name = self.target_interaction_name()
+        if interaction_name is None:
+            return
+
+        world_pos = self.npc_positions.get(interaction_name)
+        if world_pos is None:
+            return
+
+        screen_x = world_pos[0] - camera_offset.x
+        screen_y = world_pos[1] - camera_offset.y
+        marker_rect = self.glyph.get_rect(midbottom=(round(screen_x), round(screen_y - 8)))
+
+        # Only draw while the NPC is inside the actual camera viewport.
+        if (
+            marker_rect.right < 0
+            or marker_rect.left > self.screen_width
+            or marker_rect.bottom < 0
+            or marker_rect.top > self.screen_height
+        ):
+            return
+
+        bob = round(math.sin(pygame.time.get_ticks() / 260.0) * 2)
+        marker_rect.y += bob
+        shadow_rect = marker_rect.move(2, 2)
+        self.display_surface = pygame.display.get_surface()
+        self.display_surface.blit(self.shadow, shadow_rect)
+        self.display_surface.blit(self.glyph, marker_rect)
 
 
 class QuestTrackerOverlay:

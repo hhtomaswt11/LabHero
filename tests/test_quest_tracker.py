@@ -12,6 +12,7 @@ from quest_tracker import (
     MISSION_RESEARCHERS,
     MISSION_TITLES,
     build_quest_tracker_snapshot,
+    get_active_npc_interaction,
 )
 
 
@@ -82,6 +83,27 @@ class QuestTrackerSnapshotTests(unittest.TestCase):
         self.assertEqual(snapshot['status'], 'active')
         self.assertEqual(snapshot['mission_id'], '03')
         self.assertEqual(snapshot['researcher'], 'Dr. Silva')
+
+
+    def test_active_npc_points_to_registration_npc_before_campaign_starts(self):
+        player = FakePlayer()
+        player.name_confirmed = False
+        self.assertEqual(get_active_npc_interaction(player), 'Alves')
+
+    def test_active_npc_points_to_next_mission_npc(self):
+        player = FakePlayer(activated=['01'], completed=['01'])
+        player.name_confirmed = True
+        self.assertEqual(get_active_npc_interaction(player), 'Mission01')
+
+    def test_active_mission_does_not_pull_player_back_to_npc(self):
+        player = FakePlayer(activated=['01'], completed=[])
+        player.name_confirmed = True
+        self.assertIsNone(get_active_npc_interaction(player))
+
+    def test_easy_active_npc_uses_curated_route(self):
+        player = FakePlayer(mode='easy', activated=['01'], completed=['01'])
+        player.name_confirmed = True
+        self.assertEqual(get_active_npc_interaction(player), 'Mission02')
 
     def test_completed_campaign_has_no_next_researcher(self):
         context = CampaignContext('easy')

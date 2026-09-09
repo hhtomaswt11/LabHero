@@ -1183,7 +1183,7 @@ class Window:
             # search/clear/reset navigation pattern used by the Genes menu.
             menu_reactions.add.label(
                 'Search by exchange reaction id or name. Examples: EX_o2_e, oxygen, acetate. '
-                'Type your search, then press Enter or use Search / Refresh. '
+                'Type your search, then press Enter or use Search. '
                 'Reset Environment restores every lower/upper bound to the model-default state.',
                 wordwrap=True,
                 padding=(20, 20, 20, 20),
@@ -1259,7 +1259,7 @@ class Window:
             )
             menu_reactions.add.vertical_margin(10)
             menu_reactions.add.button(
-                'Search / Refresh',
+                'Search',
                 apply_reaction_search,
                 font_color='white',
                 background_color=(20, 100, 100),
@@ -1483,7 +1483,7 @@ class Window:
         else:
             menu_genes.add.label(
                 "Search by gene id, number or name. Examples: b1241, 1241, adhE, pta. "
-                "Type your search, then press Enter or use Search / Refresh. "
+                "Type your search, then press Enter or use Search. "
                 "Use Reset Genes to reactivate all genes.",
                 wordwrap=True,
                 padding=(20, 20, 20, 20),
@@ -1545,7 +1545,7 @@ class Window:
                 font_color=(20, 0, 150)
             )
             menu_genes.add.vertical_margin(10)
-            menu_genes.add.button('Search / Refresh', apply_gene_search, font_color='white', background_color=(20, 100, 100))
+            menu_genes.add.button('Search', apply_gene_search, font_color='white', background_color=(20, 100, 100))
             menu_genes.add.button('Clear Search', clear_gene_search, font_color='white', background_color=(70, 70, 70))
             menu_genes.add.button('Reset Genes', reset_gene_toggles, font_color='white', background_color=(150, 40, 40))
             menu_genes.add.vertical_margin(20)

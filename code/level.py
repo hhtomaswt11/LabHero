@@ -1,7 +1,7 @@
 import pygame 
 from bisect import bisect_left, bisect_right
 from settings import *
-from player import Player, GOLDEN_LAB_DIALOGUE_INTERACTIONS
+from player import Player, GOLDEN_LAB_DIALOGUE_INTERACTIONS, MISSION_START_INTERACTIONS
 from sprites import *
 import pytmx
 from pytmx.util_pygame import load_pygame # pytmx map loader
@@ -24,7 +24,7 @@ from student_registration import StudentRegistrationMenu
 from easy_mission_npc import EasyMissionNPC
 from final_results import FinalResultsMenu
 from teacher_mission_launcher import TeacherMissionLauncher
-from quest_tracker import QuestTrackerOverlay
+from quest_tracker import QuestTrackerOverlay, ActiveNpcMarker
 
 class Level:
 	def __init__(self, load_game, teacher_target_mission=None, teacher_preview=False):
@@ -50,6 +50,10 @@ class Level:
 		self.tree_sprites = pygame.sprite.Group()
 		self.interaction_sprites = pygame.sprite.Group()
 		self.progression_gate_sprites = pygame.sprite.Group()
+
+		# World-space marker positions are populated from the Tiled Player layer
+		# during setup. Keep the registry ready before setup() runs.
+		self.npc_marker_positions = {}
 
 		# Character skin system: load all skin sprite frames once.
 		self.skin_manager = SkinManager()
@@ -152,6 +156,10 @@ class Level:
 		self.quest_tracker_active = False
 		self.quest_tracker = QuestTrackerOverlay(self.player)
 		self.quest_tracker_open_key_locked = False
+		# World-space marker for the next actionable mission NPC. Positions come
+		# directly from the same Tiled interaction objects used by Player, so the
+		# marker cannot drift away from the actual interaction target.
+		self.active_npc_marker = ActiveNpcMarker(self.player, self.npc_marker_positions)
 
 		# Non-blocking map-edge feedback. This intentionally mirrors the small
 		# white transient-message style without using animation_text_save(), whose
@@ -305,6 +313,18 @@ class Level:
 		carter_reveal_pos = None
 		golden_egg_obj = None
 		for obj in tmx_data.get_layer_by_name('Player'):
+			if obj.name in MISSION_START_INTERACTIONS:
+				self.npc_marker_positions[obj.name] = (
+					obj.x + (obj.width / 2),
+					obj.y,
+				)
+
+			if obj.name == 'Alves':
+				self.npc_marker_positions[obj.name] = (
+					obj.x + (obj.width / 2),
+					obj.y,
+				)
+
 			if obj.name == 'Start':
 				self.player = Player(
 					pos = (obj.x,obj.y),
@@ -876,6 +896,15 @@ class Level:
 		# drawing logic
 		self.display_surface.fill('black')
 		self.all_sprites.custom_draw(self.player)
+		self.active_npc_marker.draw(
+			self.all_sprites.offset,
+			enabled=(
+				not self.teacher_preview
+				and not self.quest_tracker_active
+				and not self.skin_menu_active
+				and not self.any_modal_active()
+			),
+		)
 		self.draw_teacher_preview_banner()
 		if not self.teacher_preview and not self.quest_tracker_active:
 			self.quest_tracker.draw_hint(
