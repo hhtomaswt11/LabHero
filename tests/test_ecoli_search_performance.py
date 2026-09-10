@@ -32,11 +32,11 @@ class EcoliSearchPerformanceTests(unittest.TestCase):
         self.assertIn("onreturn=apply_reaction_search", block)
 
     def test_search_buttons_remain_available(self):
-        self.assertIn("menu_genes.add.button('Search / Refresh', apply_gene_search", self.source)
-        self.assertIn("'Search / Refresh',\n                apply_reaction_search", self.source)
+        self.assertIn("menu_genes.add.button('Search', apply_gene_search", self.source)
+        self.assertIn("'Search',\n                apply_reaction_search", self.source)
 
     def test_help_text_explains_when_filtering_runs(self):
-        self.assertIn("Type your search, then press Enter or use Search / Refresh.", self.source)
+        self.assertIn("Type your search, then press Enter or use Search.", self.source)
 
 
 if __name__ == '__main__':

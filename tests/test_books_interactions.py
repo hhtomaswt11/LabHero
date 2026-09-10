@@ -46,7 +46,7 @@ class BooksInteractionTests(unittest.TestCase):
         self.assertEqual(BOOK_AUDIO.read_bytes()[:4], b'OggS')
         self.assertIn("get_resource_path('audio/book.ogg')", source)
         self.assertIn('self.book_sound = pygame.mixer.Sound(book_sound_path)', source)
-        self.assertIn('self.book_sound.set_volume(0.05)', source)
+        self.assertIn('self.book_sound.set_volume(0.65)', source)
 
     def test_books_interaction_plays_sound_then_opens_existing_menu(self):
         source = PLAYER.read_text(encoding='utf-8')

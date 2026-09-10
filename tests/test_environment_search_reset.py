@@ -43,7 +43,7 @@ class EnvironmentalSearchResetTests(unittest.TestCase):
 
     def test_small_model_environment_has_gene_style_search_controls(self):
         self.assertIn("'Search exchange: '", self.source)
-        self.assertIn("'Search / Refresh'", self.source)
+        self.assertIn("'Search'", self.source)
         self.assertIn("'Clear Search'", self.source)
         self.assertIn("'Reset Environment'", self.source)
         self.assertIn("textinput_id='reaction_search'", self.source)

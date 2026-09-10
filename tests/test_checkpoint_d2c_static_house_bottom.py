@@ -19,17 +19,17 @@ class CheckpointD2CStaticHouseBottomTests(unittest.TestCase):
         self.level_source = (CODE / 'level.py').read_text(encoding='utf-8')
         self.level_tree = ast.parse(self.level_source)
 
-    def test_current_house_bottom_layers_account_for_1410_static_tiles(self):
+    def test_current_house_bottom_layers_account_for_1414_static_tiles(self):
         root = ET.parse(TMX).getroot()
         layers = {layer.get('name'): layer for layer in root.findall('layer')}
         counts = {
             name: sum(1 for gid in _csv_values(layers[name]) if (gid & 0x1FFFFFFF) != 0)
             for name in ('HouseFloor', 'HouseFurnitureBottom')
         }
-        self.assertEqual(1189, counts['HouseFloor'])
-        # The current microscope layout adds one static furniture tile.
-        self.assertEqual(221, counts['HouseFurnitureBottom'])
-        self.assertEqual(1410, sum(counts.values()))
+        self.assertEqual(1188, counts['HouseFloor'])
+        # Updated after a deliberate Tiled map edit (map_lb.tmx).
+        self.assertEqual(226, counts['HouseFurnitureBottom'])
+        self.assertEqual(1414, sum(counts.values()))
 
     def test_setup_keeps_exact_pytmx_surfaces_without_generic_sprites(self):
         setup = next(
