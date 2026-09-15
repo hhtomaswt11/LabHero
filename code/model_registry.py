@@ -128,7 +128,7 @@ def parse_gene_knockout_text(value, gene_ids, gene_names=None):
             name_matches.setdefault(common.upper(), []).append(gene_id)
 
     text = str(value or '').strip()
-    raw_tokens = re.split(r'[,;\s]+', text) if text else []
+    raw_tokens = re.split(r'[,+;\s]+', text) if text else []
     knocked_out = []
     unknown = []
     ambiguous = []
@@ -186,6 +186,88 @@ def build_gene_knockout_preview(value, gene_ids, gene_names=None):
         else:
             labels.append(gene_id)
     return 'Registered knockouts:\n' + '\n'.join(f'- {label}' for label in labels)
+
+
+def _normalise_exchange_search_text(value):
+    """Normalise exchange search text so ids can be found without punctuation.
+
+    This deliberately removes underscores and other punctuation.  A browser or
+    keyboard layout that makes ``_`` awkward can therefore search for
+    ``acald`` or ``acetaldehyde`` and still select ``EX_acald_e``.
+    """
+    return ''.join(
+        char.lower()
+        for char in str(value or '')
+        if char.isalnum()
+    )
+
+
+def find_exchange_matches(exchanges, search_text, limit=None):
+    """Return exchange rows matching an id/name fragment, best matches first.
+
+    The helper is model-agnostic and intentionally works with the lightweight
+    dictionaries returned by :func:`build_ui_context`.  Empty searches return
+    no rows so the compact large-model menu never expands into a 164-item list.
+    """
+    query = _normalise_exchange_search_text(search_text)
+    if not query:
+        return []
+
+    ranked = []
+    for row in exchanges or []:
+        reaction_id = str(row.get('id', '') or '')
+        reaction_name = str(row.get('name', '') or '')
+        normal_id = _normalise_exchange_search_text(reaction_id)
+        normal_name = _normalise_exchange_search_text(reaction_name)
+
+        if query not in normal_id and query not in normal_name:
+            continue
+
+        if query == normal_id or query == normal_name:
+            rank = 0
+        elif normal_id.startswith(query) or normal_name.startswith(query):
+            rank = 1
+        else:
+            rank = 2
+
+        ranked.append((rank, reaction_id.lower(), reaction_name.lower(), row))
+
+    ranked.sort(key=lambda item: item[:3])
+    matches = [item[3] for item in ranked]
+    if limit is None:
+        return matches
+    return matches[:max(0, int(limit))]
+
+
+def add_exchange_id_to_text(value, reaction_id):
+    """Append an exchange id to a compact field without creating duplicates.
+
+    Existing tokens (including currently invalid/manual ones) are preserved so
+    using the finder never silently deletes what the player typed.  Delimiters
+    are canonicalised to spaces, which the existing parser already accepts.
+    """
+    tokens = [
+        token for token in re.split(r'[,;\s]+', str(value or '').strip())
+        if token
+    ]
+    candidate = str(reaction_id or '').strip()
+    if not candidate:
+        return ' '.join(tokens)
+    if candidate.upper() not in {token.upper() for token in tokens}:
+        tokens.append(candidate)
+    return ' '.join(tokens)
+
+
+def remove_exchange_id_from_text(value, reaction_id):
+    """Remove one exchange id from a compact field, case-insensitively."""
+    candidate = str(reaction_id or '').strip().upper()
+    tokens = [
+        token for token in re.split(r'[,;\s]+', str(value or '').strip())
+        if token
+    ]
+    if not candidate:
+        return ' '.join(tokens)
+    return ' '.join(token for token in tokens if token.upper() != candidate)
 
 
 def parse_exchange_id_text(value, exchange_ids):

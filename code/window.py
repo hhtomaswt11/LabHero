@@ -20,6 +20,9 @@ from model_registry import (
     build_gene_knockout_preview,
     build_compact_environment_payload,
     build_compact_environment_preview,
+    find_exchange_matches,
+    add_exchange_id_to_text,
+    remove_exchange_id_from_text,
 )
 
 
@@ -1077,7 +1080,7 @@ class Window:
         if self.model_context.get('environment_ui_mode') == 'compact_text':
             menu_reactions.add.label(
                 f"Large-model mode: {len(self.model_context.get('exchanges') or [])} exchange reactions are available. "
-                "The model-default medium is preserved unless you list an exact exchange id below.",
+                "The model-default medium is preserved unless you add exchange ids below, manually or with the finder.",
                 wordwrap=True,
                 padding=(20, 20, 20, 20),
                 background_color='white',
@@ -1148,6 +1151,244 @@ class Window:
             )
             menu_reactions.add.vertical_margin(10)
 
+            # Generic exchange finder for large models. Keep it in its own
+            # submenu so text-input focus is isolated from the bound fields and
+            # the Genes menu (important for browser/WASM keyboard handling).
+            menu_exchange_finder = pygame_menu.Menu(
+                height=720,
+                center_content=False,
+                onclose=pygame_menu.events.BACK,
+                theme=mytheme,
+                title='Exchange Reaction Finder',
+                width=1280,
+            )
+            menu_exchange_finder.add.vertical_margin(30)
+            menu_exchange_finder.add.label(
+                'Search by any fragment of the exchange id or reaction name. '
+                'Underscores are not required: for example, "acald" or "acetaldehyde" finds EX_acald_e.',
+                wordwrap=True,
+                padding=(15, 15, 15, 15),
+                background_color='white',
+                font_size=22,
+            )
+
+            exchange_finder_matches = []
+            selected_exchange = {'id': '', 'name': ''}
+            exchange_result_buttons = []
+            exchange_search_input = None
+
+            exchange_finder_status = menu_exchange_finder.add.label(
+                'Search for an exchange reaction to insert it into a bound field.',
+                wordwrap=True,
+                padding=(10, 10, 10, 10),
+                background_color='white',
+                font_size=20,
+                font_color=(20, 0, 150),
+            )
+            selected_exchange_label = menu_exchange_finder.add.label(
+                'Selected exchange: none',
+                wordwrap=True,
+                padding=(10, 10, 10, 10),
+                background_color='white',
+                font_size=20,
+            )
+
+            def clear_selected_exchange():
+                selected_exchange['id'] = ''
+                selected_exchange['name'] = ''
+                selected_exchange_label.set_title('Selected exchange: none')
+
+            def select_exchange_result(result_index):
+                if result_index < 0 or result_index >= len(exchange_finder_matches):
+                    return
+                row = exchange_finder_matches[result_index]
+                reaction_id = str(row.get('id', '') or '')
+                reaction_name = str(row.get('name', '') or reaction_id)
+                selected_exchange['id'] = reaction_id
+                selected_exchange['name'] = reaction_name
+                selected_exchange_label.set_title(
+                    f'Selected exchange: {reaction_name} ({reaction_id})'
+                )
+                exchange_finder_status.set_title(
+                    f'{reaction_id} selected. Choose the bound field below.'
+                )
+
+            def apply_exchange_finder_search(search_text=None, **_kwargs):
+                current_search = '' if search_text is None else str(search_text)
+                if search_text is None and exchange_search_input is not None:
+                    current_search = str(exchange_search_input.get_value())
+
+                clear_selected_exchange()
+                all_matches = find_exchange_matches(
+                    self.model_context.get('exchanges') or [],
+                    current_search,
+                )
+                exchange_finder_matches[:] = all_matches[:8]
+
+                for index, button in enumerate(exchange_result_buttons):
+                    if index < len(exchange_finder_matches):
+                        button.set_title(str(exchange_finder_matches[index].get('id', '')))
+                        button.show()
+                    else:
+                        button.hide()
+
+                if not current_search.strip():
+                    exchange_finder_status.set_title(
+                        'Type an id/name fragment (for example: acald, o2, glucose).'
+                    )
+                elif all_matches:
+                    shown = len(exchange_finder_matches)
+                    suffix = f' Showing the first {shown}.' if len(all_matches) > shown else ''
+                    exchange_finder_status.set_title(
+                        f'Found {len(all_matches)} exchange reaction(s).{suffix}'
+                    )
+                else:
+                    exchange_finder_status.set_title(
+                        f'No exchange reaction matches "{current_search}".'
+                    )
+
+            def clear_exchange_finder(*_args, **_kwargs):
+                if exchange_search_input is not None:
+                    exchange_search_input.set_value('')
+                exchange_finder_matches[:] = []
+                clear_selected_exchange()
+                for button in exchange_result_buttons:
+                    button.hide()
+                exchange_finder_status.set_title(
+                    'Search for an exchange reaction to insert it into a bound field.'
+                )
+
+            def add_selected_exchange(target_input, target_label):
+                reaction_id = selected_exchange.get('id', '')
+                if not reaction_id:
+                    exchange_finder_status.set_title(
+                        'Select an exchange reaction from the search results first.'
+                    )
+                    return
+                target_input.set_value(
+                    add_exchange_id_to_text(target_input.get_value(), reaction_id)
+                )
+                refresh_environment_preview()
+                exchange_finder_status.set_title(
+                    f'{reaction_id} added to {target_label}.'
+                )
+
+            def remove_selected_exchange(*_args, **_kwargs):
+                reaction_id = selected_exchange.get('id', '')
+                if not reaction_id:
+                    exchange_finder_status.set_title(
+                        'Select an exchange reaction from the search results first.'
+                    )
+                    return
+                for target_input in compact_environment_inputs:
+                    target_input.set_value(
+                        remove_exchange_id_from_text(target_input.get_value(), reaction_id)
+                    )
+                refresh_environment_preview()
+                exchange_finder_status.set_title(
+                    f'{reaction_id} removed from all four bound fields.'
+                )
+
+            def reset_compact_environment(*_args, **_kwargs):
+                for target_input in compact_environment_inputs:
+                    target_input.set_value('')
+                refresh_environment_preview()
+                exchange_finder_status.set_title(
+                    'Environment restored to the model-default bounds.'
+                )
+
+            exchange_search_input = menu_exchange_finder.add.text_input(
+                'Search exchange: ',
+                default='',
+                input_underline='_',
+                input_underline_len=36,
+                maxchar=80,
+                maxwidth=36,
+                maxwidth_dynamically_update=False,
+                onreturn=apply_exchange_finder_search,
+                textinput_id='compact_exchange_search',
+                background_color='white',
+                font_color=(20, 0, 150),
+            )
+            menu_exchange_finder.add.button(
+                'Search',
+                apply_exchange_finder_search,
+                font_color='white',
+                background_color=(20, 100, 100),
+            )
+            menu_exchange_finder.add.button(
+                'Clear Search',
+                clear_exchange_finder,
+                font_color='white',
+                background_color=(70, 70, 70),
+            )
+
+            for result_index in range(8):
+                button = menu_exchange_finder.add.button(
+                    'exchange result',
+                    lambda index=result_index: select_exchange_result(index),
+                    font_color=(20, 0, 150),
+                    background_color='white',
+                )
+                button.hide()
+                exchange_result_buttons.append(button)
+
+            menu_exchange_finder.add.vertical_margin(8)
+            menu_exchange_finder.add.label(
+                'Add selected reaction to:',
+                font_size=20,
+                font_color=(20, 0, 150),
+            )
+            menu_exchange_finder.add.button(
+                'Lower Open',
+                lambda: add_selected_exchange(lower_open_input, 'Lower Open'),
+                font_color='white',
+                background_color=(20, 100, 100),
+            )
+            menu_exchange_finder.add.button(
+                'Lower Close',
+                lambda: add_selected_exchange(lower_close_input, 'Lower Close'),
+                font_color='white',
+                background_color=(20, 100, 100),
+            )
+            menu_exchange_finder.add.button(
+                'Upper Open',
+                lambda: add_selected_exchange(upper_open_input, 'Upper Open'),
+                font_color='white',
+                background_color=(20, 100, 100),
+            )
+            menu_exchange_finder.add.button(
+                'Upper Close',
+                lambda: add_selected_exchange(upper_close_input, 'Upper Close'),
+                font_color='white',
+                background_color=(20, 100, 100),
+            )
+            menu_exchange_finder.add.button(
+                'Remove Selected Reaction',
+                remove_selected_exchange,
+                font_color='white',
+                background_color=(110, 70, 20),
+            )
+            menu_exchange_finder.add.button(
+                'Reset Environment',
+                reset_compact_environment,
+                font_color='white',
+                background_color=(150, 40, 40),
+            )
+            menu_exchange_finder.add.button(
+                'Back',
+                pygame_menu.events.BACK,
+                background_color=(70, 70, 70),
+            )
+
+            menu_reactions.add.button(
+                'Exchange Reaction Finder',
+                menu_exchange_finder,
+                font_color='white',
+                background_color=(20, 100, 100),
+            )
+            menu_reactions.add.vertical_margin(10)
+
             environment_preview_label = menu_reactions.add.label(
                 'Registered environmental changes: none (model defaults).',
                 wordwrap=True,
@@ -1163,7 +1404,7 @@ class Window:
                 background_color=(20, 100, 100),
             )
             menu_reactions.add.label(
-                'After editing a field, press Enter or use Validate / Preview Environment to refresh the registered-change preview.',
+                'Manual entry is still supported. After editing a field, press Enter or use Validate / Preview Environment to refresh the registered-change preview.',
                 wordwrap=True,
                 padding=(15, 15, 15, 15),
                 background_color='white',
@@ -1470,6 +1711,18 @@ class Window:
                 refresh_gene_preview,
                 font_color='white',
                 background_color=(20, 100, 100),
+            )
+
+            def reset_text_genes(*_args, **_kwargs):
+                if yeast_knockout_input is not None:
+                    yeast_knockout_input.set_value('')
+                refresh_gene_preview()
+
+            menu_genes.add.button(
+                'Reset Genes',
+                reset_text_genes,
+                font_color='white',
+                background_color=(150, 40, 40),
             )
             menu_genes.add.vertical_margin(10)
             menu_genes.add.label(

@@ -174,6 +174,84 @@ class MultiModelYeastRegressionTests(unittest.TestCase):
         self.assertEqual(errors, [])
         self.assertTrue(payload[f'reaction_{closed_index}_lb'])
 
+    def test_compact_environment_finder_searches_ids_and_names_without_underscores(self):
+        context = model_registry.build_ui_context('yeast_iMM904')
+        exchanges = context['exchanges']
+
+        by_id_fragment = model_registry.find_exchange_matches(exchanges, 'acald')
+        by_name_fragment = model_registry.find_exchange_matches(exchanges, 'acetaldehyde')
+        oxygen_matches = model_registry.find_exchange_matches(exchanges, 'o2')
+        glucose_matches = model_registry.find_exchange_matches(exchanges, 'glucose')
+
+        self.assertEqual(by_id_fragment[0]['id'], 'EX_acald_e')
+        self.assertEqual(by_name_fragment[0]['id'], 'EX_acald_e')
+        self.assertIn('EX_o2_e', [row['id'] for row in oxygen_matches])
+        self.assertIn('EX_glc__D_e', [row['id'] for row in glucose_matches])
+        self.assertEqual(model_registry.find_exchange_matches(exchanges, ''), [])
+
+    def test_compact_environment_finder_preserves_manual_text_and_payload_contract(self):
+        context = model_registry.build_ui_context('yeast_iMM904')
+        exchanges = context['exchanges']
+
+        value = model_registry.add_exchange_id_to_text(
+            'MANUAL_TOKEN; EX_o2_e', 'EX_acald_e'
+        )
+        self.assertEqual(value, 'MANUAL_TOKEN EX_o2_e EX_acald_e')
+        self.assertEqual(
+            model_registry.add_exchange_id_to_text(value, 'ex_ACALD_e'),
+            value,
+        )
+        self.assertEqual(
+            model_registry.remove_exchange_id_from_text(
+                'EX_o2_e EX_acald_e EX_glc__D_e', 'ex_ACALD_e'
+            ),
+            'EX_o2_e EX_glc__D_e',
+        )
+
+        lower_open = model_registry.add_exchange_id_to_text('', 'EX_acald_e')
+        payload, errors = model_registry.build_compact_environment_payload(
+            exchanges, lower_open_text=lower_open
+        )
+        self.assertEqual(errors, [])
+        index = [row['id'] for row in exchanges].index('EX_acald_e')
+        self.assertTrue(payload[f'reaction_{index}_lb'])
+        self.assertEqual(len(payload), len(exchanges) * 2)
+
+    def test_large_model_environment_ui_keeps_manual_fields_and_adds_generic_finder(self):
+        window_source = (PROJECT_ROOT / 'code' / 'window.py').read_text(encoding='utf-8')
+        for widget_id in (
+            'env_lower_open', 'env_lower_close', 'env_upper_open', 'env_upper_close'
+        ):
+            self.assertIn(f"textinput_id='{widget_id}'", window_source)
+        self.assertIn("title='Exchange Reaction Finder'", window_source)
+        self.assertIn("textinput_id='compact_exchange_search'", window_source)
+        self.assertIn('find_exchange_matches(', window_source)
+        self.assertIn('add_exchange_id_to_text(', window_source)
+        self.assertIn('remove_exchange_id_from_text(', window_source)
+        self.assertIn('Reset Environment', window_source)
+        self.assertIn('Reset Genes', window_source)
+
+    def test_mission40_gene_notation_and_exchange_edit_are_independent(self):
+        context = model_registry.build_ui_context('yeast_iMM904')
+
+        _gene_payload, knockouts, unknown, ambiguous = model_registry.parse_gene_knockout_text(
+            'PDC1 + PDC5 + PDC6 + FRD1',
+            context['genes'],
+            context['gene_names'],
+        )
+        self.assertEqual(unknown, [])
+        self.assertEqual(ambiguous, [])
+        self.assertEqual(len(knockouts), 4)
+
+        environment_payload, environment_errors = model_registry.build_compact_environment_payload(
+            context['exchanges'],
+            lower_open_text='EX_acald_e',
+        )
+        self.assertEqual(environment_errors, [])
+        exchange_index = [row['id'] for row in context['exchanges']].index('EX_acald_e')
+        self.assertTrue(environment_payload[f'reaction_{exchange_index}_lb'])
+        self.assertNotIn('EX_acald_e', knockouts)
+
     def test_compact_environment_editor_rejects_unknown_and_conflicting_edits(self):
         context = model_registry.build_ui_context('yeast_iMM904')
         exchanges = context['exchanges']
