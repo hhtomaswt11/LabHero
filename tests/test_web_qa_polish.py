@@ -23,11 +23,11 @@ class WebQaPolishTests(unittest.TestCase):
         source = MENU.read_text(encoding="utf-8")
         self.assertIn("Game developed by Monica Leiras and Tomas Melo", source)
 
-    def test_music_starts_at_slider_value_15(self):
+    def test_music_starts_at_slider_value_50(self):
         settings = SETTINGS.read_text(encoding="utf-8")
         player = PLAYER.read_text(encoding="utf-8")
         menu = MENU.read_text(encoding="utf-8")
-        self.assertIn("DEFAULT_MUSIC_VOLUME_PERCENT = 15", settings)
+        self.assertIn("DEFAULT_MUSIC_VOLUME_PERCENT = 50", settings)
         self.assertIn("DEFAULT_MUSIC_VOLUME_PERCENT / 100.0", player)
         self.assertIn("DEFAULT_MUSIC_VOLUME_PERCENT / 100.0", menu)
         self.assertIn("MUSIC_VOLUME_SCALE", player)

@@ -206,11 +206,11 @@ class Player(pygame.sprite.Sprite):
 
         coffee_path = get_resource_path('audio/coffee.ogg')
         self.coffee = pygame.mixer.Sound(coffee_path)
-        self.coffee.set_volume(0.05)
+        self.coffee.set_volume(0.6)
 
         lamp_switch_path = get_resource_path('audio/lamp_switch.ogg')
         self.lamp_switch = pygame.mixer.Sound(lamp_switch_path)
-        self.lamp_switch.set_volume(0.05)
+        self.lamp_switch.set_volume(0.6)
 
         book_sound_path = get_resource_path('audio/book.ogg')
         self.book_sound = pygame.mixer.Sound(book_sound_path)

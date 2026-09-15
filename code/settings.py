@@ -17,7 +17,7 @@ MUSIC = {
 MUSIC_NAME = MUSIC['Hope']
 
 # Audio defaults shared by Player and Settings UI.
-DEFAULT_MUSIC_VOLUME_PERCENT = 15
+DEFAULT_MUSIC_VOLUME_PERCENT = 50
 MUSIC_VOLUME_SCALE = 0.14
 
 # Temporary exploration speed states. Interactions replace the current speed

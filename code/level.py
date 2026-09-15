@@ -178,7 +178,7 @@ class Level:
 		# sounds
 		success_path = get_resource_path('audio/success.ogg')
 		self.success = pygame.mixer.Sound(success_path) 
-		self.success.set_volume(0.1)
+		self.success.set_volume(0.6)
 
 		# music
 		# self.music_bg = pygame.mixer.Sound(MUSIC_NAME)
