@@ -9,6 +9,78 @@ from button import Button
 from utils import *
 from async_menu import run_menu
 from mission02 import Mission02_info
+from scientific_display import format_flux, format_growth_rate
+
+
+def _build_mission01_evidence_report_text(report_data):
+    """Render the persisted Mission 01 comparison evidence in Dr. Martinez's menu.
+
+    This mirrors the Mission 01 evidence already shown in New Results; it does
+    not run simulations or alter mission state.
+    """
+    if not report_data:
+        return (
+            'Mission 01 Anaerobic Growth\n\n'
+            'Run two simulations to generate the controlled comparison.'
+        )
+
+    if report_data.get('error') and not report_data.get('run_a'):
+        return f"Mission 01 Anaerobic Growth\n\n{report_data.get('error')}"
+
+    baseline_status = (
+        'Baseline: valid aerobic FBA run found.'
+        if report_data.get('baseline_run_found')
+        else 'Baseline: missing. Run FBA with biomass objective and the unchanged default environment.'
+    )
+    anaerobic_status = (
+        'Anaerobic run: valid oxygen-blocked run found.'
+        if report_data.get('anaerobic_run_found')
+        else 'Anaerobic run: missing. Keep the setup unchanged and close only the oxygen lower bound.'
+    )
+    viability_status = (
+        'Viability: the model still predicts growth without oxygen.'
+        if report_data.get('anaerobic_growth_viable')
+        else 'Viability: anaerobic growth is not yet positive/viable.'
+    )
+    growth_status = (
+        'Comparison: anaerobic growth is lower than aerobic growth.'
+        if report_data.get('growth_decreased')
+        else 'Comparison: a clear growth decrease has not been demonstrated yet.'
+    )
+    oxygen_status = (
+        'Oxygen evidence: baseline uptake is positive and anaerobic uptake is zero.'
+        if report_data.get('baseline_uses_oxygen') and report_data.get('anaerobic_oxygen_blocked')
+        else 'Oxygen evidence: inspect EX_o2_e in the Exchange Flux Report.'
+    )
+    final_status = (
+        'Mission comparison ready. Return to Dr. Martinez and deliver the results.'
+        if report_data.get('ready_to_deliver')
+        else 'Not ready yet. Run the aerobic baseline first, then change only oxygen.'
+    )
+
+    return (
+        'Mission 01 Anaerobic Growth\n\n'
+        f"Method: {report_data.get('target_method')}\n"
+        f"Objective: {report_data.get('growth_objective')}\n"
+        f"Oxygen exchange: {report_data.get('oxygen_reaction')}\n\n"
+        'Growth comparison:\n'
+        f"- Aerobic baseline: {format_growth_rate(report_data.get('baseline_growth'))}\n"
+        f"- Anaerobic growth: {format_growth_rate(report_data.get('anaerobic_growth'))}\n"
+        f"- Growth-rate decrease: {format_growth_rate(report_data.get('growth_drop'))}\n\n"
+        'Oxygen uptake magnitude:\n'
+        f"- Aerobic baseline: {format_flux(report_data.get('baseline_oxygen_uptake'))}\n"
+        f"- Anaerobic run: {format_flux(report_data.get('anaerobic_oxygen_uptake'))}\n"
+        '  (Uptake is shown as a positive magnitude; raw EX_o2_e flux is negative when oxygen is consumed.)\n\n'
+        f"{baseline_status}\n"
+        f"{anaerobic_status}\n"
+        f"{viability_status}\n"
+        f"{growth_status}\n"
+        f"{oxygen_status}\n\n"
+        'FBA interpretation: the mission validates growth and oxygen evidence, not one unique byproduct profile; '
+        'alternative optimal flux distributions may exist.\n\n'
+        f"{final_status}"
+    )
+
 
 class Mission01: 
     def __init__(self, toggle_menu, player) -> None:
@@ -530,6 +602,17 @@ class Mission_info:
         menu.add.vertical_margin(50)
 
         if self.mission01:
+            report_data = load_mission01_comparison_check()
+            menu.add.label(
+                _build_mission01_evidence_report_text(report_data),
+                wordwrap=True,
+                align=pygame_menu.locals.ALIGN_LEFT,
+                padding=(20, 20, 20, 20),
+                background_color='white',
+                font_size=23,
+            )
+            menu.add.vertical_margin(25)
+
             menu.add.button('Deliver Results', action=self.deliver_results, background_color=(50,100,100))
             menu.add.vertical_margin(50)
             menu.add.label('Mission Activated', font_color=(150, 150, 150))

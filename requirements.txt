@@ -58,3 +58,4 @@ typing_extensions==4.12.2
 pygame==2.6.0
 pytmx==3.32
 pygame-menu==4.4.3
+pygbag==0.9.3
